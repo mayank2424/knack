@@ -1,0 +1,32 @@
+{
+  "name": "knack",
+  "owner": { "name": "Mayank Gupta", "url": "https://github.com/mayank2424" },
+  "metadata": {
+    "description": "Agent skills that verify, not just advise: motion video, demo recording, responsive QA, accessibility, design-token drift and visual PR diffs.",
+    "version": "0.1.0",
+    "homepage": "https://mayank2424.github.io/knack/"
+  },
+  "plugins": [
+    {
+      "name": "knack",
+      "description": "All Knack skills: motion-video, demo-recorder, responsive-qa, a11y-audit, token-drift, pr-visual-diff.",
+      "version": "0.1.0",
+      "source": "./",
+      "strict": false,
+      "author": { "name": "Mayank Gupta", "url": "https://github.com/mayank2424" },
+      "homepage": "https://mayank2424.github.io/knack/",
+      "repository": "https://github.com/mayank2424/knack",
+      "license": "MIT",
+      "keywords": ["skills", "video", "motion-design", "accessibility", "design-systems", "qa", "playwright"],
+      "category": "productivity",
+      "skills": [
+        "./skills/motion-video",
+        "./skills/demo-recorder",
+        "./skills/responsive-qa",
+        "./skills/a11y-audit",
+        "./skills/token-drift",
+        "./skills/pr-visual-diff"
+      ]
+    }
+  ]
+}

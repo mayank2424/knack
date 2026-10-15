@@ -1,0 +1,20 @@
+name: Skill request
+description: Suggest a new skill for Knack
+labels: [skill-request]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What job should the skill do?
+      description: Describe the task and who it's for (developers, designers…).
+    validations:
+      required: true
+  - type: textarea
+    id: verify
+    attributes:
+      label: How could it verify its own work?
+      description: Knack skills ship scripts that measure, render or check something real. What would that be?
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Existing skills or tools you've tried

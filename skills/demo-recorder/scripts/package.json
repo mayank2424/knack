@@ -1,0 +1,9 @@
+{
+  "name": "knack-demo-recorder-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Recorder for the Knack demo-recorder skill",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

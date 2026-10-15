@@ -1,0 +1,140 @@
+<!doctype html>
+<!--
+  The same page as inaccessible-page.html, fixed. Each numbered fix matches a planted bug:
+   1. <html lang="en">                            9. visible <label for> on every field
+   2. viewport allows zoom                       10. <select> labelled
+   3. header/nav/main/footer landmarks + skip    11. natural DOM order, no positive tabindex
+   4. logo alt="" (name is in the text next to it) 12. image link has alt describing the destination
+   5. real <a href> and <button> elements         13. no aria-hidden on focusable content
+   6. text colors darkened to ≥ 4.5:1             14. mobile menu uses the hidden attribute
+   7. :focus-visible ring on every control        15. newsletter fields Tab normally
+   8. icon button has aria-label; h1 → h2 → h3    16. feature cards are links (whole card clickable via ::after)
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Brightly – Project management for small teams</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 16px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2330; background: #fff; }
+    :focus-visible { outline: 3px solid #4f2fd8; outline-offset: 2px; border-radius: 6px; }
+    .wrap { max-width: 1120px; margin: 0 auto; padding: 0 24px; }
+    .skip { position: absolute; left: 16px; top: -48px; background: #1f2330; color: #fff; padding: 8px 14px; border-radius: 8px; z-index: 10; }
+    .skip:focus { top: 12px; }
+    .top { display: flex; align-items: center; justify-content: space-between; height: 72px; border-bottom: 1px solid #eef0f4; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: inherit; text-decoration: none; }
+    .nav ul { display: flex; gap: 28px; list-style: none; margin: 0; padding: 0; }
+    .nav a { color: #4b5161; text-decoration: none; }
+    .nav a:hover { color: #5a35f0; text-decoration: underline; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 10px; padding: 12px 20px; font: inherit; font-weight: 650; cursor: pointer; text-decoration: none; }
+    .btn-primary { background: #5a35f0; color: #fff; }
+    .btn-ghost { background: #f3f1ff; color: #4f2fd8; }
+    .icon-btn { width: 40px; height: 40px; border-radius: 10px; border: 1px solid #c9ccd6; background: #fff; display: grid; place-items: center; cursor: pointer; }
+    .hero { display: grid; grid-template-columns: 1.1fr .9fr; gap: 48px; align-items: center; padding: 72px 0 56px; }
+    .hero h1 { font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 18px; }
+    .hero .lede { color: #555b6b; font-size: 19px; margin: 0 0 28px; }
+    .hero-art { border-radius: 20px; background: linear-gradient(135deg, #efeaff, #e3f4ff); height: 320px; display: grid; place-items: center; }
+    .features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 24px 0 56px; list-style: none; margin: 0; }
+    .card { position: relative; border: 1px solid #eef0f4; border-radius: 16px; padding: 22px; transition: box-shadow .2s; }
+    .card:hover, .card:focus-within { box-shadow: 0 10px 30px #1f23301a; }
+    .card h3 { margin: 8px 0 6px; font-size: 18px; }
+    .card a { color: inherit; text-decoration: none; }
+    .card a::after { content: ""; position: absolute; inset: 0; border-radius: 16px; }
+    .card a:focus-visible { outline: none; }
+    .card:has(a:focus-visible) { outline: 3px solid #4f2fd8; outline-offset: 2px; }
+    .card p { margin: 0; color: #5d6375; }
+    .signup { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; background: #f8f8fb; border-radius: 20px; padding: 36px; margin-bottom: 56px; }
+    .signup h2 { margin: 0 0 8px; }
+    label { display: block; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+    .field { display: block; width: 100%; padding: 12px 14px; border: 1px solid #8a90a0; border-radius: 10px; font: inherit; margin-bottom: 14px; background: #fff; }
+    .foot { border-top: 1px solid #eef0f4; padding: 28px 0 40px; display: flex; justify-content: space-between; align-items: end; gap: 24px; color: #5d6375; font-size: 14px; }
+    .foot a { color: #4b5161; }
+    .news { display: flex; gap: 8px; align-items: end; }
+    .news input { padding: 8px 10px; border: 1px solid #8a90a0; border-radius: 8px; font: inherit; }
+    .news label { font-size: 12px; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to main content</a>
+  <div class="wrap">
+    <header class="top">
+      <a class="logo" href="#">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Crect width='32' height='32' rx='9' fill='%236d4aff'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23fff'/%3E%3C/svg%3E" width="32" height="32" alt="">
+        Brightly
+      </a>
+      <nav class="nav" aria-label="Main">
+        <ul>
+          <li><a href="#features">Features</a></li>
+          <li><a href="#pricing">Pricing</a></li>
+          <li><a href="#customers">Customers</a></li>
+        </ul>
+      </nav>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="icon-btn" type="button" aria-label="Toggle dark mode" aria-pressed="false" onclick="this.setAttribute('aria-pressed', document.body.classList.toggle('dark'))">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1f2330" stroke-width="2" aria-hidden="true" focusable="false"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        </button>
+        <a class="btn btn-ghost" href="#signin">Sign in</a>
+      </div>
+      <div class="mobile-menu" hidden>
+        <a href="#features">Features</a>
+        <a href="#pricing">Pricing</a>
+      </div>
+    </header>
+
+    <main id="main" tabindex="-1">
+      <section class="hero" aria-labelledby="hero-title">
+        <div>
+          <h1 id="hero-title">Plan less. Ship more.</h1>
+          <p class="lede">Brightly keeps your roadmap, tasks and docs in one calm place, so a team of five moves like a team of fifty.</p>
+          <a class="btn btn-primary" href="#pricing">Start free trial</a>
+          <a class="btn btn-ghost" href="#demo">Watch demo</a>
+        </div>
+        <div class="hero-art">
+          <svg width="220" height="160" viewBox="0 0 220 160" aria-hidden="true" focusable="false"><rect x="10" y="10" width="200" height="140" rx="14" fill="#fff"/><rect x="28" y="32" width="90" height="10" rx="5" fill="#6d4aff"/><rect x="28" y="56" width="160" height="8" rx="4" fill="#e3e5ea"/><rect x="28" y="74" width="130" height="8" rx="4" fill="#e3e5ea"/><rect x="28" y="104" width="60" height="26" rx="8" fill="#ffd166"/></svg>
+        </div>
+      </section>
+
+      <section id="features" aria-labelledby="features-title">
+        <h2 id="features-title" class="visually-hidden">Features</h2>
+        <ul class="features">
+          <li class="card"><h3><a href="#roadmaps">Roadmaps</a></h3><p>Drag-and-drop timelines everyone actually reads.</p></li>
+          <li class="card"><h3><a href="#tasks">Tasks</a></h3><p>Lightweight boards with smart due dates.</p></li>
+          <li class="card"><h3><a href="#docs">Docs</a></h3><p>Specs that stay next to the work they describe.</p></li>
+        </ul>
+      </section>
+
+      <section class="signup" id="pricing" aria-labelledby="signup-title">
+        <div>
+          <h2 id="signup-title">Try Brightly free for 14 days</h2>
+          <p style="color:#5d6375">No credit card. Cancel any time.</p>
+          <p><a href="https://example.com/case-study">Read the Acme case study</a></p>
+          <a href="#customers"><img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='28'%3E%3Crect width='120' height='28' rx='6' fill='%231f2330'/%3E%3C/svg%3E" width="120" height="28" alt="See all customer stories"></a>
+        </div>
+        <form onsubmit="event.preventDefault()">
+          <label for="name">Full name</label>
+          <input class="field" id="name" name="name" type="text" autocomplete="name" required>
+          <label for="email">Work email</label>
+          <input class="field" id="email" name="email" type="email" autocomplete="email" required>
+          <label for="size">Team size</label>
+          <select class="field" id="size" name="size">
+            <option>1–5</option><option>6–20</option><option>21+</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Create account</button>
+        </form>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div>© 2026 Brightly Inc. · <a href="#terms">Terms</a></div>
+      <form class="news" aria-label="Newsletter" onsubmit="event.preventDefault()">
+        <div><label for="news-name">Name</label><input id="news-name" name="news-name" autocomplete="name"></div>
+        <div><label for="news-email">Email for updates</label><input id="news-email" name="news-email" type="email" autocomplete="email"></div>
+      </form>
+      <div><a href="#privacy">Privacy</a> · <a href="#status">Status</a></div>
+    </footer>
+  </div>
+</body>
+</html>

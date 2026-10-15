@@ -1,0 +1,8 @@
+{
+  "name": "acme-dashboard",
+  "private": true,
+  "description": "Fixture for the token-drift skill: a tiny app with planted design-token drift.",
+  "devDependencies": {
+    "tailwindcss": "3.4.17"
+  }
+}

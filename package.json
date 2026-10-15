@@ -1,0 +1,17 @@
+{
+  "name": "knack",
+  "private": true,
+  "type": "module",
+  "description": "Agent skills that verify, not just advise. Tooling for validating skills and building the website.",
+  "license": "MIT",
+  "scripts": {
+    "validate": "node tools/validate.mjs",
+    "build:site": "node tools/build-site.mjs",
+    "dev": "node tools/build-site.mjs && npx --yes serve@14.2.4 site -l 3150"
+  },
+  "devDependencies": {
+    "marked": "18.0.14",
+    "yaml": "2.9.1"
+  },
+  "engines": { "node": ">=18" }
+}

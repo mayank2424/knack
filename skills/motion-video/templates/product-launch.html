@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Feature/product announcement: hook, UI card reveal, 3 feature callouts, CTA (16:9, 12s)" />
+<title>Product launch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  :root {
+    --bg: #07080c; --panel: #11131a; --line: #23262f;
+    --ink: #eef0f5; --muted: #8b90a0; --brand: #6d5cff; --brand-2: #22d3ee;
+  }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'Geist', sans-serif; }
+  .glow { position: absolute; width: 1400px; height: 1400px; left: 260px; top: -420px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(109,92,255,.35), rgba(34,211,238,.10) 55%, transparent 70%); filter: blur(20px); }
+  .grid { position: absolute; inset: 0; opacity: .5;
+    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: 80px 80px; mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 70%); }
+
+  /* Scene 1: hook */
+  .hook { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .pill { display: inline-flex; gap: 10px; align-items: center; padding: 10px 20px; border: 1px solid var(--line); border-radius: 999px;
+    font: 500 26px 'Geist Mono', monospace; color: var(--muted); background: rgba(17,19,26,.7); }
+  .pill b { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-2); box-shadow: 0 0 16px var(--brand-2); }
+  .hook h1 { margin: 34px 0 0; font-size: 120px; line-height: 1.02; letter-spacing: -0.045em; font-weight: 700; }
+  .hook h1 .grad { display: inline-block; padding: 0 .04em .08em; background: linear-gradient(90deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
+    /* --r drives a left-to-right wipe; background-clip:text can't be split into per-char spans. */
+    clip-path: inset(-10% calc(100% - var(--r, 100%)) -10% 0); }
+
+  /* Scene 2: product card */
+  .card { position: absolute; left: 50%; top: 50%; width: 1180px; height: 700px; margin: -350px 0 0 -590px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 28px; overflow: hidden;
+    box-shadow: 0 60px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03) inset; }
+  .card .top { height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 24px; border-bottom: 1px solid var(--line); }
+  .card .top i { width: 14px; height: 14px; border-radius: 50%; background: #2b2e38; display: block; }
+  .card .body { display: grid; grid-template-columns: 300px 1fr; height: calc(100% - 64px); }
+  .side { border-right: 1px solid var(--line); padding: 28px 22px; display: grid; gap: 14px; align-content: start; }
+  .side span { height: 22px; border-radius: 6px; background: #1b1e27; }
+  .side span.on { background: rgba(109,92,255,.35); }
+  .main { padding: 40px; display: grid; gap: 22px; align-content: start; }
+  .row { height: 92px; border-radius: 16px; background: #161922; border: 1px solid var(--line); display: flex; align-items: center; gap: 20px; padding: 0 26px; }
+  .row .ic { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
+  .row .tx { flex: 1; display: grid; gap: 10px; }
+  .row .tx b { height: 16px; width: 60%; border-radius: 4px; background: #2a2e3a; display: block; }
+  .row .tx s { height: 12px; width: 35%; border-radius: 4px; background: #1f222c; display: block; }
+  .row em { font: 500 22px 'Geist Mono', monospace; color: var(--brand-2); font-style: normal; }
+
+  /* Scene 3: callouts */
+  .callout { position: absolute; display: flex; align-items: center; gap: 16px; padding: 18px 26px; border-radius: 18px;
+    background: rgba(17,19,26,.92); border: 1px solid var(--line); font-size: 34px; font-weight: 600; letter-spacing: -0.02em;
+    box-shadow: 0 20px 50px rgba(0,0,0,.5); }
+  .callout .k { font: 500 24px 'Geist Mono', monospace; color: var(--bg); background: var(--brand-2); padding: 6px 10px; border-radius: 8px; }
+
+  /* Scene 4: CTA */
+  .cta { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .cta h2 { margin: 0; font-size: 112px; letter-spacing: -0.045em; font-weight: 700; }
+  .cta .url { margin-top: 30px; display: inline-block; font: 500 40px 'Geist Mono', monospace; padding: 16px 30px;
+    border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="grid"></div>
+  <div class="glow" id="glow"></div>
+
+  <div class="hook" id="hook"><div>
+    <div class="pill" id="pill"><b></b>Introducing v2.0</div>
+    <h1 id="h1">Your workflow,<br /><span class="grad">10× faster.</span></h1>
+  </div></div>
+
+  <div class="card" id="card">
+    <div class="top"><i></i><i></i><i></i></div>
+    <div class="body">
+      <div class="side"><span class="on"></span><span></span><span></span><span></span><span></span></div>
+      <div class="main">
+        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em id="m1">0ms</em></div>
+        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>synced</em></div>
+        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>AI</em></div>
+        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>live</em></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout" id="c1" style="left:150px; top:250px"><span class="k">01</span>Instant search</div>
+  <div class="callout" id="c2" style="right:60px; top:430px"><span class="k">02</span>Real-time sync</div>
+  <div class="callout" id="c3" style="left:190px; bottom:200px"><span class="k">03</span>AI that ships</div>
+
+  <div class="cta" id="cta"><div>
+    <h2 id="cta-h">Try it free today.</h2>
+    <div class="url" id="url">yourproduct.com</div>
+  </div></div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 12, background: '#07080c' });
+
+  // Ambient: the glow drifts slowly the whole time (never fully still).
+  Motion.on((t) => {
+    const g = document.getElementById('glow');
+    g.style.transform = `translate(${Math.sin(t * 0.5) * 60}px, ${Math.cos(t * 0.4) * 40}px)`;
+  });
+
+  // ── Scene 1 · Hook (0–3s)
+  Motion.from('#pill', { opacity: 0, y: 20 }, { start: 0.2, duration: 0.6, ease: 'outCubic' });
+  Motion.from('#h1', { opacity: 0, y: 40, blur: 10 }, { start: 0.4, duration: 0.9, ease: 'snappy' });
+  Motion.to('#h1 .grad', { start: 1.0, duration: 0.9, ease: 'smooth', from: { '--r': '0%', x: -24 }, to: { '--r': '100%', x: 0 } });
+  Motion.to('#hook', { start: 2.9, duration: 0.5, ease: 'inCubic', to: { opacity: 0, scale: 0.94, blur: 8 } });
+
+  // ── Scene 2 · Product card (3–8s): rise in 3D, then a slow push-in.
+  Motion.to('#card', { start: 3.1, duration: 1.2, ease: { stiffness: 90, damping: 16 },
+    from: { opacity: 0, y: 220, rotateX: 28, scale: 0.86 }, to: { opacity: 1, y: 0, rotateX: 0, scale: 1 } });
+  Motion.to('#card', { start: 4.3, duration: 4.5, ease: 'smooth', to: { scale: 1.06 } });
+  Motion.from('.row', { opacity: 0, x: -30 }, { start: 3.6, duration: 0.6, stagger: 0.09, ease: 'outCubic' });
+  Motion.counter('#m1', { from: 480, to: 12, start: 4.0, duration: 1.4, format: (n) => Math.round(n) + 'ms' });
+  document.getElementById('card').parentElement.style.perspective = '1600px';
+
+  // ── Scene 3 · Callouts (5–8.5s): one idea at a time, ~1s apart.
+  ['#c1', '#c2', '#c3'].forEach((sel, i) => {
+    Motion.from(sel, { opacity: 0, scale: 0.8, y: 20 }, { start: 5.0 + i * 0.9, duration: 0.7, ease: { stiffness: 220, damping: 20 } });
+    Motion.to(sel, { start: 8.4 + i * 0.05, duration: 0.35, ease: 'inCubic', to: { opacity: 0, y: -16 } });
+  });
+  Motion.to('#card', { start: 8.5, duration: 0.6, ease: 'inCubic', to: { opacity: 0, y: -80, scale: 0.98 } });
+
+  // ── Scene 4 · CTA (9–12s): hold at least 2.5s so it can be read twice.
+  Motion.from('#cta-h', { opacity: 0, y: 40 }, { start: 9.1, duration: 0.8, ease: 'snappy' });
+  Motion.from('#url', { opacity: 0, y: 20, scale: 0.96 }, { start: 9.4, duration: 0.7, ease: 'outCubic' });
+</script>
+</body>
+</html>

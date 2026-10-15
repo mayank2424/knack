@@ -1,0 +1,201 @@
+---
+name: pr-visual-diff
+description: >-
+  Captures before/after screenshots of the pages a frontend change touches, pixel-diffs
+  them at several viewport widths, and writes a ready-to-paste "Visual changes" section
+  for the pull request with side-by-side base | head | diff images. Brings up the base
+  branch in a throwaway git worktree (never touches the working tree), maps changed files
+  to routes (Next.js, Remix / React Router, SvelteKit, Nuxt, Astro, plain HTML), and flags
+  unintended visual regressions. Use when the user says "add before/after screenshots to
+  my PR", "visual diff this branch", "did my CSS refactor change anything visually?",
+  "screenshot the UI changes for review", "check for visual regressions before I merge",
+  or is opening or updating a PR that changes UI, styles or components.
+license: MIT
+argument-hint: "[base-ref] [pages]"
+metadata:
+  title: PR Visual Diff
+  category: dev
+  tags: visual-regression, screenshots, pull-request, playwright, pixelmatch, code-review
+  version: 0.1.0
+  author: Mayank Gupta
+---
+
+# PR Visual Diff
+
+Reviewers can't see what a frontend PR looks like. This skill builds the evidence: the
+same pages, same viewports, base vs head, pixel-diffed, with a plain-language description
+of what changed and what looks unintended.
+
+Scripts live in `${CLAUDE_SKILL_DIR}/scripts/`. Every script supports `--help`. Output goes
+to `./.knack/pr-visual-diff/` in the user's project.
+
+## Ground rules
+
+- **Never modify the user's working tree.** The base build runs in a temp git worktree.
+  Don't stash, checkout, or reset.
+- **Ask before anything leaves the machine**: pushing a branch, editing a PR body,
+  posting a comment. Show the markdown first and get a clear yes for each action.
+- **Never type the user's passwords.** For logged-in pages, ask them to create a
+  storage-state file themselves (step 4).
+- Don't stop servers you didn't start. Clean up the ones you did (step 8).
+
+## Workflow
+
+### 1. Setup (once per machine)
+
+```bash
+bash "${CLAUDE_SKILL_DIR}/scripts/setup.sh"
+```
+
+### 2. Decide the base and the pages
+
+```bash
+# If a PR already exists, its base branch is the right base:
+gh pr view --json baseRefName -q .baseRefName 2>/dev/null
+node "${CLAUDE_SKILL_DIR}/scripts/affected-pages.mjs" [--base origin/<base>] [--dir apps/web]
+```
+
+It prints candidate routes with confidence (high / medium / low) and the reason chain,
+then a `PAGES=` line. Use it as a starting point, not gospel:
+
+- Dynamic routes (`/blog/[slug]`, `/users/:id`) need a real value. Find one from seed
+  data, fixtures, or links on the index page, or ask the user.
+- "Global change" (Tailwind config, global CSS, root layout) means every page can move.
+  Capture a representative set: home, one form-heavy page, one list/table page.
+- If nothing maps (SPA with unusual routing), read the diff and pick pages yourself.
+- Widths: default `375,1280`. Add `768` when breakpoint or grid code changed.
+- Keep it to about 3-8 pages. More is slow and buries the signal.
+
+### 3. Bring up head (the PR's version)
+
+Head should include uncommitted work, so it runs from the user's tree.
+
+1. **Reuse a running dev server** if there is one (ask, or check
+   `lsof -nP -iTCP -sTCP:LISTEN | grep -E 'node|bun|deno'`).
+2. Otherwise start one: `node "${CLAUDE_SKILL_DIR}/scripts/worktree-serve.mjs" serve` → prints `HEAD_URL=`.
+3. Deployed preview URLs (Vercel/Netlify per-PR previews) work too, for both sides.
+
+### 4. Bring up base (the "before" version)
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/worktree-serve.mjs" start [--ref origin/main] [--dir apps/web] [--copy-env]
+```
+
+It creates a worktree of the merge-base in the OS temp dir, installs deps (lockfile
+decides pnpm / yarn / npm / bun), starts the dev server on a free port (4100+), waits until
+it answers, and prints `BASE_URL=`. Notes:
+
+- Run `--dry-run` first if unsure; it prints the plan without executing.
+- The worktree lacks untracked `.env` files. If the app needs them, tell the user, then
+  re-run with `--copy-env` (copies `.env*` into the temp worktree only).
+- Lockfile unchanged since base? `--link-node-modules` skips the install by symlinking.
+- If it can't start, it prints exactly what to run instead. Follow that, or pass
+  `--cmd "pnpm dev --port {port}"`. Port flags per framework: `references/frameworks.md`.
+- Static sites without package.json are served by a built-in static server. Plain folders
+  or `file://` URLs also work directly in step 5.
+- Logged-in pages: ask the user to run `npx playwright codegen --save-storage=auth.json <HEAD_URL>/login`,
+  log in themselves, close the window. Pass `--storage-state auth.json` to capture.
+  Cookies on `localhost` are shared across ports; localStorage is per port.
+
+### 5. Capture and diff
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/capture.mjs" \
+  --base "$BASE_URL" --head "$HEAD_URL" \
+  --pages /,/pricing,/settings --widths 375,1280 \
+  --freeze-time --label-base "main @ a1b2c3d" --label-head "feat/new-nav"
+```
+
+Useful flags: `--full-page` (whole scroll height; use when the change is below the fold),
+`--mask ".timestamp,.avatar"` (paint over dynamic regions), `--hide` (visibility:hidden),
+`--wait-for <selector|networkidle|ms>`, `--threshold 0.1` (% of pixels separating "minor"
+from "changed"), `--color-scheme dark`, `--fail-on-change` (exit 2, for CI).
+
+Output per page × width: `base.png`, `head.png`, `diff.png` (changes in red, regions boxed
+in blue), `compare.png` (all three side by side, labelled), plus `summary.md` and
+`summary.json` (change %, region boxes, size changes, content shifts, HTTP status,
+new console errors, stability).
+
+### 6. Look at the evidence (do not skip)
+
+Read **every** `compare.png` the script lists (changed and minor). For each:
+
+1. **Is it noise?** Clocks, avatars, ads, carousels, randomized content, "unstable"
+   warnings. Fix with `--mask`, `--hide`, `--freeze-time` or `--wait-for` and re-run.
+   See `references/stabilization.md`. Don't report noise as a change.
+2. **Describe it in plain words**: "Primary button is now a pink gradient pill",
+   "Hero CTA wraps to two lines at 375px". Use `shift` in summary.json ("content below
+   y≈360 shifted down 70px") to explain cascades instead of listing every moved element.
+3. **Intended or not?** Compare against the PR's purpose and `git diff`. Anything the
+   PR didn't set out to change (other pages affected by shared CSS, overflow at mobile
+   widths, missing styles, a page that now 404s or throws new console errors) is a
+   **possible regression**. Open `base.png`/`head.png` at full size if the compare is too
+   small to judge.
+
+If you find regressions, tell the user first, before writing PR text, and offer to fix
+them. After a fix, re-run step 5 for the affected pages and look again.
+
+### 7. Write the PR section
+
+Write `.knack/pr-visual-diff/pr-section.md` from `summary.md`:
+
+```markdown
+<!-- pr-visual-diff:start -->
+## Visual changes
+<one-sentence summary>
+
+**Intended**
+- `/` (all widths): primary CTA restyled as a gradient pill; copy now "Start your free trial".
+
+**Please check** (possibly unintended)
+- `/pricing` (375 & 1280): plan buttons no longer stretch full width. Cause: `.card .btn` rule removed in `styles.css`.
+
+<the summary.md table and images>
+<!-- pr-visual-diff:end -->
+```
+
+Show it to the user. Images are relative paths until hosted; pick a hosting option with
+the user (details and trade-offs: `references/pr-images.md`):
+
+- **Drag and drop (default, works for private repos):** the user drags the compare PNGs
+  into the PR description on github.com, which uploads them. Open the folder for them
+  (`open .knack/pr-visual-diff/pages` on macOS).
+- **Assets branch (scriptable):** pushes images to an orphan branch and rewrites links.
+  Dry run first, push only after a clear yes:
+  ```bash
+  node "${CLAUDE_SKILL_DIR}/scripts/publish-assets.mjs" --prefix pr-123          # plan only
+  node "${CLAUDE_SKILL_DIR}/scripts/publish-assets.mjs" --prefix pr-123 --push   # → summary.pr.md
+  ```
+  Then rebuild `pr-section.md` with the absolute URLs from `summary.pr.md`.
+- GitHub has no API for image uploads into PR bodies, and `gh gist create` rejects
+  binary files. Don't promise either.
+
+Updating the PR (only when asked): fetch the body with `gh pr view <n> --json body -q .body`,
+replace the block between the `pr-visual-diff` markers (or append it), write it to a file,
+and run `gh pr edit <n> --body-file <file>`. Or post it with `gh pr comment <n> --body-file <file>`.
+Never commit screenshots to the PR branch.
+
+### 8. Clean up
+
+```bash
+node "${CLAUDE_SKILL_DIR}/scripts/worktree-serve.mjs" stop --all   # kills servers it started, removes worktrees
+```
+
+Suggest adding `.knack/` to `.gitignore` if it isn't there yet.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Every pixel differs | Different data on each side (dev DB vs seed), or a font failed to load. Compare `base.png`/`head.png`; mask data regions or point both at the same backend. |
+| "page kept changing" | Animation/video/live data. `--freeze-time`, `--mask`, `--wait-for <ms>`. |
+| HTTP 404 on both sides | Wrong path. Check routes with `affected-pages.mjs --all`. |
+| Base won't start | Read the log tail it prints. Usually env vars (`--copy-env`), a monorepo (`--dir`), or a compound dev script (`--cmd`). |
+| Login wall in screenshots | `--storage-state` (step 4). |
+| Change at one width only | Breakpoint issue. Often a real regression; add 768 to confirm. |
+
+## References
+
+- `references/stabilization.md`: flake sources and fixes, when to mask vs freeze.
+- `references/frameworks.md`: dev-server port flags and file-to-route rules per framework.
+- `references/pr-images.md`: image hosting options for PR descriptions, honestly compared.

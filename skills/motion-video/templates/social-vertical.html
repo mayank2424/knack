@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Vertical social promo for Reels/Shorts/TikTok: hook in 1s, 3 tips, CTA; respects platform UI safe zones (9:16, 12s)" />
+<title>Social vertical</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  :root { --bg: #111; --ink: #fff; --pop: #c6ff3d; --pop-ink: #111; }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'Bricolage Grotesque', sans-serif; }
+  /* Safe zone: platforms overlay UI top ~220px, bottom ~420px, right ~140px. Keep text inside. */
+  .safe { position: absolute; left: 90px; right: 150px; top: 250px; bottom: 440px; }
+  .hook { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; }
+  .hook h1 { margin: 0; font-size: 150px; line-height: .95; letter-spacing: -0.045em; font-weight: 800; }
+  .hook h1 .hl { background: var(--pop); color: var(--pop-ink); padding: 0 .12em; border-radius: .12em; display: inline-block; }
+  .tip { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 36px; }
+  .num { width: 150px; height: 150px; border-radius: 50%; background: var(--pop); color: var(--pop-ink); display: grid; place-items: center; font-size: 84px; font-weight: 800; }
+  .tip h2 { margin: 0; font-size: 104px; line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
+  .tip p { margin: 0; font-size: 52px; line-height: 1.2; font-weight: 600; opacity: .75; }
+  .cta { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 40px; }
+  .cta h2 { margin: 0; font-size: 120px; line-height: 1; letter-spacing: -0.045em; font-weight: 800; }
+  .btn { font-size: 56px; font-weight: 800; background: var(--pop); color: var(--pop-ink); padding: 26px 44px; border-radius: 999px; }
+  .progress { position: absolute; left: 90px; right: 150px; top: 200px; height: 10px; border-radius: 5px; background: rgba(255,255,255,.15); overflow: hidden; }
+  .progress b { display: block; height: 100%; width: 100%; background: var(--pop); transform-origin: left; }
+  .blob { position: absolute; width: 900px; height: 900px; border-radius: 50%; background: radial-gradient(closest-side, rgba(198,255,61,.22), transparent); right: -380px; top: 380px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="blob" id="blob"></div>
+  <div class="progress"><b id="prog"></b></div>
+  <div class="safe">
+    <div class="hook" id="hook"><h1 id="h1">Stop writing<br /><span class="hl" id="hl">boring</span><br />CSS.</h1></div>
+
+    <div class="tip" id="t1"><div class="num">1</div><h2>Use clamp()</h2><p>Fluid type with zero media queries.</p></div>
+    <div class="tip" id="t2"><div class="num">2</div><h2>Grid areas</h2><p>Name your layout. Read it like a map.</p></div>
+    <div class="tip" id="t3"><div class="num">3</div><h2>:has()</h2><p>Parent selectors are finally real.</p></div>
+
+    <div class="cta" id="cta"><h2>Follow for<br />daily tips.</h2><div class="btn" id="btn">@yourhandle</div></div>
+  </div>
+</div>
+<script>
+  Motion.config({ width: 1080, height: 1920, fps: 30, duration: 12, background: '#111' });
+
+  // Progress bar tells viewers how long they're committing to (helps retention).
+  Motion.to('#prog', { start: 0, duration: 12, ease: 'linear', from: { scaleX: 0 }, to: { scaleX: 1 } });
+  Motion.on((t) => { document.getElementById('blob').style.translate = `${Math.sin(t * 0.8) * 60}px ${Math.cos(t * 0.6) * 80}px`; });
+
+  // Hook must land inside the first second; vertical viewers swipe fast.
+  Motion.from('#h1', { opacity: 0, y: 80, scale: 1.08 }, { start: 0.0, duration: 0.6, ease: 'snappy' });
+  Motion.from('#hl', { rotate: -8, scale: 0.6 }, { start: 0.35, duration: 0.7, ease: { stiffness: 260, damping: 14 } });
+  Motion.to('#hook', { start: 2.2, duration: 0.35, ease: 'inCubic', to: { opacity: 0, y: -60 } });
+
+  // Tips: 2.4s each. Enter from below, exit upward (consistent direction = "scrolling" through ideas).
+  ['#t1', '#t2', '#t3'].forEach((sel, i) => {
+    const s = 2.5 + i * 2.4;
+    Motion.from(`${sel} .num`, { scale: 0, rotate: -90 }, { start: s, duration: 0.6, ease: { stiffness: 240, damping: 16 } });
+    Motion.from(`${sel} h2`, { opacity: 0, y: 60 }, { start: s + 0.1, duration: 0.55, ease: 'snappy' });
+    Motion.from(`${sel} p`, { opacity: 0, y: 40 }, { start: s + 0.25, duration: 0.55, ease: 'outCubic' });
+    Motion.to(sel, { start: s + 2.05, duration: 0.3, ease: 'inCubic', from: { opacity: 1, y: 0 }, to: { opacity: 0, y: -80 } });
+  });
+
+  // CTA holds ≥ 2s.
+  Motion.from('#cta h2', { opacity: 0, y: 60 }, { start: 9.8, duration: 0.6, ease: 'snappy' });
+  Motion.from('#btn', { opacity: 0, scale: 0.7 }, { start: 10.1, duration: 0.7, ease: { stiffness: 220, damping: 14 } });
+</script>
+</body>
+</html>

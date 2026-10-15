@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbit · Today</title>
+<style>
+  :root {
+    --bg: #f5f5f7; --panel: #ffffff; --ink: #18181b; --muted: #71717a; --line: #e7e7ea;
+    --accent: #6366f1; --accent-soft: #eef0ff; --done: #a1a1aa; --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px -8px rgba(24,24,27,.12);
+    --chip: #f4f4f5;
+  }
+  html.dark {
+    --bg: #0c0c10; --panel: #16161c; --ink: #f4f4f5; --muted: #8b8b95; --line: #26262e;
+    --accent: #818cf8; --accent-soft: #1e1f35; --done: #5b5b66; --shadow: 0 1px 2px rgba(0,0,0,.3), 0 18px 40px -10px rgba(0,0,0,.6);
+    --chip: #202028;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.45 ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+    transition: background-color .45s ease, color .45s ease; -webkit-font-smoothing: antialiased; }
+  .app { display: grid; grid-template-columns: 220px 1fr; height: 100%; }
+  aside { border-right: 1px solid var(--line); padding: 22px 14px; display: flex; flex-direction: column; gap: 4px; transition: border-color .45s; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; padding: 0 10px 18px; letter-spacing: -.01em; }
+  .logo { width: 26px; height: 26px; border-radius: 8px; background: conic-gradient(from 200deg, #6366f1, #ec4899, #f59e0b, #6366f1); position: relative; }
+  .logo::after { content: ""; position: absolute; inset: 7px; border-radius: 50%; background: var(--bg); transition: background-color .45s; }
+  .nav { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; color: var(--muted); font-weight: 500; cursor: pointer; }
+  .nav:hover { background: var(--chip); color: var(--ink); }
+  .nav.on { background: var(--accent-soft); color: var(--accent); }
+  .nav .n { margin-left: auto; font-size: 12px; font-variant-numeric: tabular-nums; opacity: .8; }
+  .kbd-hint { margin-top: auto; font-size: 12px; color: var(--muted); padding: 10px; border-radius: 10px; border: 1px dashed var(--line); }
+  kbd { font: 600 11px ui-monospace, Menlo, monospace; background: var(--chip); border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--ink); }
+  main { padding: 40px 56px; overflow: auto; }
+  .head { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 22px; }
+  h1 { margin: 0; font-size: 30px; letter-spacing: -.025em; }
+  .date { color: var(--muted); font-size: 14px; margin-top: 2px; }
+  .progress { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; background: var(--panel); border-radius: 999px; box-shadow: var(--shadow); transition: background-color .45s; }
+  .ring { --p: 0; width: 34px; height: 34px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--line) 0); display: grid; place-items: center; transition: --p .6s; }
+  .ring::after { content: ""; width: 24px; height: 24px; border-radius: 50%; background: var(--panel); transition: background-color .45s; }
+  @property --p { syntax: "<number>"; inherits: false; initial-value: 0; }
+  .progress b { font-variant-numeric: tabular-nums; }
+  .progress span { color: var(--muted); font-size: 13px; }
+  .card { background: var(--panel); border-radius: 16px; box-shadow: var(--shadow); overflow: hidden; transition: background-color .45s; }
+  .add { display: flex; align-items: center; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); transition: border-color .45s; }
+  .add .plus { width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  .add input { flex: 1; border: 0; outline: 0; background: transparent; font: inherit; font-size: 16px; color: var(--ink); }
+  .add input::placeholder { color: var(--muted); }
+  .add:focus-within { box-shadow: inset 0 -2px 0 var(--accent); }
+  ul { list-style: none; margin: 0; padding: 6px 0; }
+  li { display: flex; align-items: center; gap: 14px; padding: 12px 18px; transition: background-color .2s; }
+  li:hover { background: color-mix(in srgb, var(--chip) 70%, transparent); }
+  .check { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: grid; place-items: center; cursor: pointer; flex: none;
+    transition: background-color .25s, border-color .25s, transform .2s; background: transparent; padding: 0; }
+  .check:hover { border-color: var(--accent); }
+  .check svg { width: 12px; height: 12px; stroke: #fff; stroke-width: 3; fill: none; stroke-dasharray: 20; stroke-dashoffset: 20; transition: stroke-dashoffset .3s .05s; }
+  li.done .check { background: var(--accent); border-color: var(--accent); transform: scale(1.06); }
+  li.done .check svg { stroke-dashoffset: 0; }
+  .title { flex: 1; transition: color .3s; }
+  .title span { position: relative; }
+  .title span::after { content: ""; position: absolute; left: 0; top: 52%; height: 1.5px; width: 0; background: var(--done); transition: width .35s ease; }
+  li.done .title { color: var(--done); }
+  li.done .title span::after { width: 100%; }
+  .tag { font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: var(--chip); color: var(--muted); }
+  .tag.p1 { background: #fee2e2; color: #b91c1c; } html.dark .tag.p1 { background: #3b1518; color: #fca5a5; }
+  .tag.p2 { background: #fef3c7; color: #a16207; } html.dark .tag.p2 { background: #36290f; color: #fcd34d; }
+  .due { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+  /* Command palette */
+  .scrim { position: fixed; inset: 0; background: rgba(9,9,11,.35); backdrop-filter: blur(2px); opacity: 0; pointer-events: none; transition: opacity .2s; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .palette { position: fixed; left: 50%; top: 18%; width: 560px; transform: translate(-50%, -8px) scale(.98); opacity: 0; pointer-events: none;
+    background: var(--panel); border-radius: 14px; box-shadow: 0 30px 80px -10px rgba(0,0,0,.45), 0 0 0 1px var(--line); transition: opacity .18s, transform .22s cubic-bezier(.2,.9,.3,1.2); overflow: hidden; }
+  .palette.open { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+  .palette input { width: 100%; border: 0; outline: 0; padding: 18px 20px; font: inherit; font-size: 17px; background: transparent; color: var(--ink); border-bottom: 1px solid var(--line); }
+  .cmds { padding: 8px; max-height: 320px; }
+  .cmd { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 9px; color: var(--ink); cursor: pointer; }
+  .cmd .ic { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--chip); font-size: 15px; }
+  .cmd .sc { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .cmd.sel { background: var(--accent-soft); }
+  .cmd.sel .ic { background: var(--accent); color: #fff; }
+  .cmd mark { background: none; color: var(--accent); font-weight: 700; }
+  .empty { padding: 16px 12px; color: var(--muted); }
+  .toast { position: fixed; right: 24px; bottom: 24px; background: var(--ink); color: var(--bg); padding: 11px 16px; border-radius: 10px; font-weight: 600; font-size: 14px;
+    box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); transition: opacity .25s, transform .25s; }
+  .toast.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="logo"></div>Orbit</div>
+    <div class="nav">📥 Inbox <span class="n">12</span></div>
+    <div class="nav on">☀️ Today <span class="n" id="navCount">4</span></div>
+    <div class="nav">🗓️ Upcoming <span class="n">7</span></div>
+    <div class="nav">✅ Completed</div>
+    <div class="kbd-hint">Press <kbd>⌘</kbd> <kbd>K</kbd> for commands</div>
+  </aside>
+  <main>
+    <div class="head">
+      <div><h1>Today</h1><div class="date" id="date"></div></div>
+      <div class="progress" id="progress"><div class="ring" id="ring"></div><div><b id="doneCount">1 of 4</b><br><span>tasks done</span></div></div>
+    </div>
+    <div class="card">
+      <label class="add"><span class="plus">+</span><input id="new-task" placeholder="Add a task…" autocomplete="off"></label>
+      <ul id="list"></ul>
+    </div>
+  </main>
+</div>
+<div class="scrim" id="scrim"></div>
+<div class="palette" id="palette" role="dialog" aria-label="Command palette">
+  <input id="cmd-input" placeholder="Type a command…" autocomplete="off">
+  <div class="cmds" id="cmds"></div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+  const tasks = [
+    { title: 'Review PR #482: faster search index', tag: 'P1', due: '10:30', done: false },
+    { title: 'Write release notes for v2.4', tag: 'Docs', due: '13:00', done: true },
+    { title: 'Sync with design on onboarding flow', tag: 'P2', due: '15:00', done: false },
+    { title: 'Reply to Priya about the API limits', tag: 'Email', due: '17:30', done: false },
+  ];
+  const $ = (s) => document.querySelector(s);
+  $('#date').textContent = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  function li(t, i) {
+    const el = document.createElement('li');
+    el.className = t.done ? 'done' : '';
+    el.dataset.i = i;
+    el.innerHTML = `<button class="check" aria-label="Complete: ${t.title}"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></button>
+      <span class="title"></span>${t.tag ? `<span class="tag ${t.tag === 'P1' ? 'p1' : t.tag === 'P2' ? 'p2' : ''}">${t.tag}</span>` : ''}<span class="due">${t.due || ''}</span>`;
+    el.querySelector('.title').appendChild(document.createElement('span')).textContent = t.title;
+    el.querySelector('.check').onclick = () => { t.done = !t.done; el.classList.toggle('done', t.done); stats(); };
+    return el;
+  }
+  function render() { const ul = $('#list'); ul.innerHTML = ''; tasks.forEach((t, i) => ul.appendChild(li(t, i))); stats(); }
+  function stats() {
+    const d = tasks.filter((t) => t.done).length;
+    $('#doneCount').textContent = `${d} of ${tasks.length}`;
+    $('#ring').style.setProperty('--p', Math.round((d / tasks.length) * 100));
+    $('#navCount').textContent = tasks.length - d;
+  }
+  $('#new-task').addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.value.trim()) return;
+    const t = { title: e.target.value.trim(), tag: 'New', due: 'Now', done: false };
+    tasks.unshift(t);
+    e.target.value = '';
+    const el = li(t, 0);
+    $('#list').prepend(el);
+    el.animate([{ opacity: 0, transform: 'translateY(-10px)', background: 'var(--accent-soft)' }, { opacity: 1, transform: 'none', background: 'var(--accent-soft)', offset: .5 }, { opacity: 1, transform: 'none', background: 'transparent' }], { duration: 900, easing: 'ease-out' });
+    stats();
+    toast('Task added');
+  });
+  // Command palette
+  const commands = [
+    { ic: '🌙', name: 'Toggle dark mode', sc: '⇧⌘L', run: () => { document.documentElement.classList.toggle('dark'); toast(document.documentElement.classList.contains('dark') ? 'Dark mode on' : 'Light mode on'); } },
+    { ic: '🧹', name: 'Clear completed tasks', run: () => { for (let i = tasks.length - 1; i >= 0; i--) if (tasks[i].done) tasks.splice(i, 1); render(); toast('Cleared'); } },
+    { ic: '⚡', name: 'Sort by priority', run: () => { tasks.sort((a, b) => (a.tag || 'Z').localeCompare(b.tag || 'Z')); render(); } },
+    { ic: '📅', name: 'Plan tomorrow', run: () => toast('Opening planner…') },
+    { ic: '🔗', name: 'Copy share link', run: () => toast('Link copied') },
+  ];
+  let sel = 0, shown = commands;
+  function drawCmds() {
+    const q = $('#cmd-input').value.trim().toLowerCase();
+    shown = commands.filter((c) => c.name.toLowerCase().includes(q));
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    $('#cmds').innerHTML = shown.length ? shown.map((c, i) => {
+      const n = q ? c.name.replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'i'), '<mark>$1</mark>') : c.name;
+      return `<div class="cmd ${i === sel ? 'sel' : ''}" data-i="${i}"><span class="ic">${c.ic}</span><span>${n}</span>${c.sc ? `<span class="sc">${c.sc}</span>` : ''}</div>`;
+    }).join('') : '<div class="empty">No matching commands</div>';
+    $('#cmds').querySelectorAll('.cmd').forEach((el) => { el.onclick = () => exec(shown[+el.dataset.i]); el.onmousemove = () => { if (sel !== +el.dataset.i) { sel = +el.dataset.i; drawCmds(); } }; });
+  }
+  function openPalette() { $('#palette').classList.add('open'); $('#scrim').classList.add('open'); $('#cmd-input').value = ''; sel = 0; drawCmds(); $('#cmd-input').focus(); }
+  function closePalette() { $('#palette').classList.remove('open'); $('#scrim').classList.remove('open'); }
+  function exec(c) { closePalette(); if (c) setTimeout(c.run, 120); }
+  $('#cmd-input').addEventListener('input', () => { sel = 0; drawCmds(); });
+  $('#cmd-input').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { sel = (sel + 1) % shown.length; drawCmds(); e.preventDefault(); }
+    if (e.key === 'ArrowUp') { sel = (sel - 1 + shown.length) % shown.length; drawCmds(); e.preventDefault(); }
+    if (e.key === 'Enter') exec(shown[sel]);
+    if (e.key === 'Escape') closePalette();
+  });
+  $('#scrim').onclick = closePalette;
+  document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); openPalette(); } });
+  let tt;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(tt); tt = setTimeout(() => t.classList.remove('show'), 1600); }
+  render();
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knack: agent skills that verify their work</title>
+<meta name="description" content="Open-source agent skills for developers and designers. Motion video, demo recording, responsive QA, accessibility audits, design-token drift and visual PR diffs. Each one checks its own output." />
+<meta name="theme-color" content="#0b0b0e" />
+<meta property="og:title" content="Knack: give your agent a knack" />
+<meta property="og:description" content="Open-source agent skills that verify, not just advise. Works with Claude Code, Codex, Cursor and any Agent Skills–compatible agent." />
+<meta property="og:image" content="https://mayank2424.github.io/knack/assets/og.png" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<a class="skip" href="#skills">Skip to skills</a>
+
+<header class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top" aria-label="Knack home">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 100 100"><path d="M30 18 V82" /><path d="M74 20 L36 54 L74 82" /></svg></span>
+      Knack
+    </a>
+    <nav class="links" aria-label="Primary">
+      <a href="#skills">Skills</a>
+      <a href="#community">Popular skills</a>
+      <a href="#install">Install</a>
+      <a class="gh" data-gh href="https://github.com/mayank2424/knack">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+  <section class="hero wrap">
+    <p class="eyebrow"><span class="dot"></span>Open source · Agent Skills format · MIT</p>
+    <h1>Give your agent a <em>knack.</em></h1>
+    <p class="lede">Six skills for developers and designers. Each one ships scripts that render, measure and check its own work, so your agent can see the result before you do.</p>
+
+    <div class="install" id="install">
+      <div class="tabs" role="tablist" aria-label="Install method">
+        <button role="tab" aria-selected="true" aria-controls="tab-claude" id="t-claude">Claude Code</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-npx" id="t-npx" tabindex="-1">Any agent</button>
+        <button role="tab" aria-selected="false" aria-controls="tab-manual" id="t-manual" tabindex="-1">Manual</button>
+      </div>
+      <div class="panel" role="tabpanel" id="tab-claude" aria-labelledby="t-claude">
+        <div class="cmd"><span class="p">❯</span><code>/plugin marketplace add mayank2424/knack</code><button class="copy" aria-label="Copy command">Copy</button></div>
+        <div class="cmd"><span class="p">❯</span><code>/plugin install knack@knack</code><button class="copy" aria-label="Copy command">Copy</button></div>
+      </div>
+      <div class="panel" role="tabpanel" id="tab-npx" aria-labelledby="t-npx" hidden>
+        <div class="cmd"><span class="p">$</span><code>npx skills add mayank2424/knack</code><button class="copy" aria-label="Copy command">Copy</button></div>
+        <p class="hint">Works with Claude Code, Codex, Cursor, Gemini CLI, OpenCode and 40+ more. Add <code>--skill motion-video</code> to pick one.</p>
+      </div>
+      <div class="panel" role="tabpanel" id="tab-manual" aria-labelledby="t-manual" hidden>
+        <div class="cmd"><span class="p">$</span><code>git clone https://github.com/mayank2424/knack</code><button class="copy" aria-label="Copy command">Copy</button></div>
+        <div class="cmd"><span class="p">$</span><code>cp -r knack/skills/* ~/.claude/skills/</code><button class="copy" aria-label="Copy command">Copy</button></div>
+      </div>
+    </div>
+
+    <figure class="reel">
+      <div class="reel-bar"><i></i><i></i><i></i><span>knack-promo.mp4 · made with the motion-video skill</span></div>
+      <video id="reel" src="assets/knack-promo.mp4" poster="assets/knack-promo-poster.png" autoplay muted loop playsinline preload="metadata" aria-label="Knack promo video"></video>
+      <button class="reel-toggle" id="reelToggle" aria-label="Pause video">❚❚</button>
+    </figure>
+  </section>
+
+  <section class="principles wrap" aria-label="Why Knack">
+    <article>
+      <span class="num">01</span>
+      <h2>Verifies, not just advises</h2>
+      <p>Most skills are prose. Knack skills bundle deterministic tooling (Playwright, axe-core, ffmpeg, pixel diffs), so the agent looks at real evidence and iterates.</p>
+    </article>
+    <article>
+      <span class="num">02</span>
+      <h2>Works in your agent</h2>
+      <p>Plain <code>SKILL.md</code> files in the open Agent Skills format. Install as a Claude Code plugin, or with <code>npx skills</code> for any compatible agent.</p>
+    </article>
+    <article>
+      <span class="num">03</span>
+      <h2>No lock-in, no telemetry</h2>
+      <p>MIT licensed, pinned dependencies, local-only scripts. Read every line, fork it, ship your own. Outputs are plain HTML, PNG, JSON and MP4.</p>
+    </article>
+  </section>
+
+  <section class="section wrap" id="skills" aria-labelledby="skills-h">
+    <div class="section-head">
+      <div>
+        <p class="kicker">Knack skills</p>
+        <h2 id="skills-h">Built and maintained here</h2>
+      </div>
+      <div class="filters" role="group" aria-label="Filter Knack skills by category" data-filter="skills">
+        <button aria-pressed="true" data-cat="all">All</button>
+        <button aria-pressed="false" data-cat="media">Media</button>
+        <button aria-pressed="false" data-cat="design">Design</button>
+        <button aria-pressed="false" data-cat="dev">Dev</button>
+      </div>
+    </div>
+    <div class="grid" id="skillGrid" aria-live="polite"></div>
+  </section>
+
+  <section class="section wrap" id="community" aria-labelledby="community-h">
+    <div class="section-head">
+      <div>
+        <p class="kicker">Popular skills</p>
+        <h2 id="community-h">The best of the ecosystem</h2>
+        <p class="sub">A curated list of widely used skills from Anthropic, Vercel and the community. Star counts are refreshed on every deploy. Not affiliated with Knack.</p>
+      </div>
+      <div class="tools">
+        <label class="search"><span class="sr">Search popular skills</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="M20 20l-3.5-3.5" /></svg>
+          <input id="q" type="search" placeholder="Search skills…" autocomplete="off" />
+        </label>
+        <div class="filters" role="group" aria-label="Filter popular skills by category" data-filter="community">
+          <button aria-pressed="true" data-cat="all">All</button>
+          <button aria-pressed="false" data-cat="dev">Dev</button>
+          <button aria-pressed="false" data-cat="design">Design</button>
+          <button aria-pressed="false" data-cat="media">Media</button>
+          <button aria-pressed="false" data-cat="docs">Docs</button>
+          <button aria-pressed="false" data-cat="productivity">Productivity</button>
+        </div>
+      </div>
+    </div>
+    <ol class="list" id="communityList"></ol>
+    <p class="more" id="lists"></p>
+  </section>
+
+  <section class="cta wrap" aria-labelledby="cta-h">
+    <h2 id="cta-h">Have a skill with a <em>knack</em>?</h2>
+    <p>Knack accepts skills that ship real tooling. Read the contributing guide, open a PR, and your skill lands on this page.</p>
+    <div class="cta-actions">
+      <a class="btn primary" href="https://github.com/mayank2424/knack/blob/main/CONTRIBUTING.md">Contributing guide</a>
+      <a class="btn" href="https://github.com/mayank2424/knack/issues/new?labels=skill-request&title=Skill+request%3A+">Request a skill</a>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <span>Knack · MIT License · Built by <a href="https://github.com/mayank2424">Mayank Gupta</a></span>
+    <span><a href="https://agentskills.io">Agent Skills spec</a> · <a href="https://github.com/mayank2424/knack">Source</a></span>
+  </div>
+</footer>
+
+<dialog id="drawer" aria-labelledby="drawerTitle">
+  <div class="drawer-head">
+    <div>
+      <span class="chip" id="drawerCat"></span>
+      <h2 id="drawerTitle"></h2>
+      <p id="drawerTagline"></p>
+    </div>
+    <button class="close" id="drawerClose" aria-label="Close">✕</button>
+  </div>
+  <div class="drawer-install">
+    <div class="cmd"><span class="p">$</span><code id="drawerNpx"></code><button class="copy" aria-label="Copy command">Copy</button></div>
+    <div class="meta" id="drawerMeta"></div>
+  </div>
+  <article class="prose" id="drawerBody"></article>
+</dialog>
+
+<script src="data/catalog.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

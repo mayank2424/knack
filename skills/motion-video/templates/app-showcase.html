@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="App showcase: real screenshot in a browser frame with camera push/pan to highlighted regions (16:9, 10s)" />
+<title>App showcase</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  :root { --bg1: #1a1240; --bg2: #0a3a52; --ink: #fff; --accent: #ffd166; }
+  #stage { background: linear-gradient(135deg, var(--bg1), var(--bg2)); color: var(--ink); font-family: 'Manrope', sans-serif; }
+  /* The camera is a wrapper we scale/translate; content inside never moves on its own. */
+  #camera { position: absolute; inset: 0; transform-origin: 0 0; }
+  .window { position: absolute; left: 260px; top: 150px; width: 1400px; height: 860px; border-radius: 18px; overflow: hidden;
+    background: #fff; box-shadow: 0 50px 120px rgba(0,0,0,.45); }
+  .chrome { height: 46px; background: #eef0f3; display: flex; align-items: center; gap: 8px; padding: 0 16px; }
+  .chrome i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .chrome .addr { margin-left: 18px; flex: 1; max-width: 520px; height: 26px; border-radius: 8px; background: #fff; font: 500 14px/26px 'Manrope'; color: #667; padding: 0 12px; }
+  .shot { width: 100%; height: calc(100% - 46px); object-fit: cover; object-position: top; display: block; }
+  /* Placeholder UI so the template renders without a screenshot. Replace with <img class="shot" src="your.png">. */
+  .fake { height: calc(100% - 46px); display: grid; grid-template-columns: 240px 1fr; background: #f7f8fa; color: #1d2230; }
+  .fake nav { background: #fff; border-right: 1px solid #e7e9ee; padding: 26px 20px; display: grid; gap: 14px; align-content: start; font-weight: 700; }
+  .fake nav span { padding: 10px 12px; border-radius: 10px; color: #5a6275; }
+  .fake nav span.on { background: #eef0ff; color: #3b3bd6; }
+  .fake main { padding: 34px; display: grid; gap: 24px; grid-template-rows: auto auto 1fr; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .kpi { background: #fff; border: 1px solid #e7e9ee; border-radius: 14px; padding: 22px; }
+  .kpi b { display: block; font-size: 40px; font-weight: 800; letter-spacing: -0.03em; }
+  .kpi span { color: #7a8194; font-weight: 600; }
+  .panel { background: #fff; border: 1px solid #e7e9ee; border-radius: 14px; padding: 22px; }
+  .spark { height: 220px; }
+  .label { position: absolute; padding: 14px 22px; border-radius: 14px; background: rgba(10,10,20,.82); backdrop-filter: blur(6px);
+    font-size: 36px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
+  .label::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); margin-right: 14px; vertical-align: middle; }
+  .title { position: absolute; left: 0; right: 0; top: 64px; text-align: center; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="title" id="title">Everything at a glance.</div>
+  <div id="camera">
+    <div class="window" id="win" data-knack-ignore>
+      <div class="chrome"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><div class="addr">app.yourproduct.com/dashboard</div></div>
+      <!-- <img class="shot" src="screenshot.png" /> -->
+      <div class="fake">
+        <nav><span class="on">Overview</span><span>Projects</span><span>Team</span><span>Billing</span></nav>
+        <main>
+          <div class="kpis" id="kpis">
+            <div class="kpi"><b id="k1">0</b><span>Active users</span></div>
+            <div class="kpi"><b>99.98%</b><span>Uptime</span></div>
+            <div class="kpi"><b>4m 12s</b><span>Avg. session</span></div>
+          </div>
+          <div class="panel"><svg class="spark" viewBox="0 0 1000 220" preserveAspectRatio="none" width="100%"><path id="spark" d="M0 190 C 120 170, 180 120, 260 140 S 420 60, 520 90 S 700 30, 780 50 S 920 10, 1000 20" fill="none" stroke="#3b3bd6" stroke-width="5" /></svg></div>
+        </main>
+      </div>
+    </div>
+  </div>
+  <div class="label" id="lab1" style="left: 1120px; top: 330px">Live user counts</div>
+  <div class="label" id="lab2" style="left: 210px; top: 760px">Trends, not tables</div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 10 });
+
+  // Camera helper: frame a rectangle (in stage px) so it fills `fill` of the frame.
+  // Animating one wrapper keeps every move coherent, like a real camera.
+  const W = 1920, H = 1080;
+  const shot = (x, y, w, h, fill = 0.8) => {
+    const s = Math.min((W * fill) / w, (H * fill) / h);
+    return { scale: s, x: W / 2 - (x + w / 2) * s, y: H / 2 - (y + h / 2) * s };
+  };
+  const wide = { scale: 1, x: 0, y: 0 };
+  const kpi = shot(260 + 240 + 34, 150 + 46 + 34, 360, 130, 0.55);
+  const chartShot = shot(260 + 240 + 34, 150 + 46 + 34 + 130 + 24, 1092, 270, 0.75);
+
+  // 1 · Establish (0–2.5s): window floats up, title above.
+  Motion.from('#title', { opacity: 0, y: -20 }, { start: 0.2, duration: 0.7, ease: 'outCubic' });
+  Motion.from('#win', { opacity: 0, y: 120, scale: 0.92 }, { start: 0.3, duration: 1.2, ease: { stiffness: 90, damping: 18 } });
+  Motion.counter('#k1', { from: 0, to: 12480, start: 1.0, duration: 1.6 });
+  Motion.draw('#spark', { start: 1.2, duration: 1.4 });
+  Motion.to('#title', { start: 2.4, duration: 0.4, ease: 'inCubic', to: { opacity: 0, y: -20 } });
+
+  // 2 · Push in on the KPI (2.6–5s), callout appears once the camera settles.
+  Motion.to('#camera', { start: 2.6, duration: 1.1, ease: 'smooth', from: wide, to: kpi });
+  Motion.from('#lab1', { opacity: 0, x: -20 }, { start: 3.6, duration: 0.5, ease: 'outCubic' });
+  Motion.to('#lab1', { start: 4.9, duration: 0.3, ease: 'inCubic', to: { opacity: 0 } });
+
+  // 3 · Pan to the chart (5–7.6s); redraw the line so motion has a purpose.
+  Motion.to('#camera', { start: 5.0, duration: 1.2, ease: 'smooth', to: chartShot });
+  Motion.from('#lab2', { opacity: 0, y: 20 }, { start: 6.1, duration: 0.5, ease: 'outCubic' });
+  Motion.to('#lab2', { start: 7.5, duration: 0.3, ease: 'inCubic', to: { opacity: 0 } });
+
+  // 4 · Pull back to wide and hold (7.8–10s).
+  Motion.to('#camera', { start: 7.8, duration: 1.2, ease: 'smooth', to: wide });
+  Motion.to('#title', { start: 8.6, duration: 0.6, ease: 'outCubic', to: { opacity: 1, y: 0 } });
+</script>
+</body>
+</html>

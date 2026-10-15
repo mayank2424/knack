@@ -1,0 +1,23 @@
+{
+  // Records the bundled Orbit demo app. Run from the skill folder:
+  //   node scripts/record.mjs examples/flow.json
+  "name": "orbit-demo",
+  "url": "./app.html",
+  "viewport": "1024x680",
+  "format": ["mp4", "gif"],
+  "frame": { "background": "aurora", "title": "orbit.app/today" },
+  "steps": [
+    { "caption": "Add a task in one keystroke", "duration": 2600 },
+    { "type": "Ship the demo GIF for the README", "into": "#new-task" },
+    { "press": "Enter", "pause": 900 },
+    { "zoom": { "to": "#list li:nth-child(2)", "scale": 1.4, "follow": true }, "pause": 100 },
+    { "click": "role=button[name=\"Complete: Review PR #482: faster search index\"]", "pause": 900 },
+    { "zoom": "out", "pause": 200 },
+    { "cursor": [820, 560], "pause": 150 },
+    { "caption": "⌘K runs any command", "duration": 2600 },
+    { "press": "Meta+K", "pause": 500 },
+    { "type": "dark", "pause": 500 },
+    { "press": "Enter", "pause": 1200 },
+    { "highlight": "#progress", "duration": 1200 }
+  ]
+}

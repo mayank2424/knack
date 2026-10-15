@@ -1,0 +1,9 @@
+{
+  "name": "knack-responsive-qa-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Viewport sweep + layout bug detector for the Knack responsive-qa skill",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}

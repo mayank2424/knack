@@ -1,0 +1,38 @@
+@use '../styles/variables' as *;
+
+.card {
+  padding: 24px;
+  border-radius: 12px;
+  color: #111827;
+  background: #f9fafb;
+  box-shadow: 0 4px 12px rgba(17, 24, 39, 0.12);
+
+  &__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+  }
+
+  &__meta {
+    color: #6c7280;
+    gap: 11px;
+  }
+
+  &--featured {
+    border: 2px solid #f59e0b;
+    transition: box-shadow 0.3s;
+    margin: 0 $space-gutter;
+  }
+
+  &__badge {
+    background: #e9e3d8;
+    border-radius: 9999px;
+    padding: 4px 13px;
+    // padding: 99px; <- commented out, ignored
+  }
+}
+
+.marketing-hero {
+  padding: 20px;
+  color: $color-ink;
+}

@@ -1,0 +1,13 @@
+{
+  "name": "knack-token-drift-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Design-token drift scanner for the Knack token-drift skill (zero dependencies)",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "tokens": "node tokens.mjs",
+    "scan": "node scan.mjs"
+  }
+}

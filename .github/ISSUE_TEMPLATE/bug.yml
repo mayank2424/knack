@@ -1,0 +1,23 @@
+name: Bug report
+description: Something in a Knack skill doesn't work
+labels: [bug]
+body:
+  - type: dropdown
+    id: skill
+    attributes:
+      label: Skill
+      options: [motion-video, demo-recorder, responsive-qa, a11y-audit, token-drift, pr-visual-diff, website, other]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Include the command or prompt, the output, and what you expected.
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: "macOS 15, Node 22, Claude Code 2.1, ffmpeg 8.1"

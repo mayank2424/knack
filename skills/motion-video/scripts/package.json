@@ -1,0 +1,9 @@
+{
+  "name": "knack-motion-video-scripts",
+  "private": true,
+  "type": "module",
+  "description": "Renderer for the Knack motion-video skill",
+  "dependencies": {
+    "playwright": "1.63.0"
+  }
+}
