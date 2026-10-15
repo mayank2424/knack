@@ -134,7 +134,7 @@
 
   // ── GitHub star count for this repo (best-effort)
   fetch(`https://api.github.com/repos/${data.repo}`).then((r) => (r.ok ? r.json() : null)).then((j) => {
-    if (j && typeof j.stargazers_count === 'number') $('[data-gh]').insertAdjacentHTML('beforeend', `<span class="count">${fmt(j.stargazers_count)}</span>`);
+    if (j && j.stargazers_count > 0) $('[data-gh]').insertAdjacentHTML('beforeend', `<span class="count">${fmt(j.stargazers_count)}</span>`);
   }).catch(() => {});
 
   renderSkills('all');
