@@ -158,7 +158,10 @@ When you open the HTML in a browser, a control bar is added:
 ```
 node scripts/render.mjs comp.html [-o out.mp4|.webm|.gif|.mov|frames/]
   --still [t]          one PNG frame (default: middle); add --motion-blur N to preview blur
-  --filmstrip [n]      contact sheet of n frames (default 12)
+  --stills a,b,c       several exact moments on one sheet
+  --filmstrip [n]      contact sheet of n frames (default 12, ≤1600px wide; --filmstrip-width N)
+  --cuts [n]           ±n frames (default 2) around every Motion.cue(), one row per cue
+  --score-only         write just the synthesized score (-o score.wav); --no-score renders silent
   --check              layout + timing lint (exit code 2 if issues)
   --fps N  --scale N  --from S  --to S  --workers N  --crf N
   --motion-blur N  --shutter DEG     sub-frame motion blur (default shutter 180)
@@ -187,3 +190,23 @@ What the `--check` lint reports:
 - page errors
 
 Text inside `[data-knack-ignore]` is skipped.
+
+## Showreel kit
+
+These helpers are for creative-freedom pieces. See `references/showreel.md` for how to use them together.
+
+| Helper | What it does |
+|---|---|
+| `Motion.beats({ bpm, offset, perBar })` → `B` | `B(n)` is the time of beat n, `B.bar(n)` the start of bar n, `B.index(t)` the beat position at t, and `B.pulse(t)` an envelope that's 1 on each beat and decays. It also sets the BPM for the score |
+| `stagger: { each, from, grid, ease, seed }` | Use in any `Motion.to`. `from`: `'start'`, `'center'`, `'end'`, `'edges'`, `'random'` or a cell index. `grid: [cols, rows]` ripples out by 2D distance. Delay = distance × `each` |
+| `Motion.noise(x, y, z)` / `Motion.makeNoise(seed)` | Seeded 3D simplex noise in [-1, 1], for organic drift, blobs and flow fields |
+| `Motion.canvas([opts,] (ctx, t, { w, h }) => {})` | Full-stage canvas redrawn every frame at the render's pixel ratio (stays sharp with `--scale 2`). It goes inside `#cam` when that wrapper exists, so camera moves apply to it. `opts`: `parent`, `zIndex`, `id`, `el` (an existing canvas is positioned for you), `width`, `height` |
+| `Motion.textPoints(text, { font, cx, cy, step })` | Rasterizes text into an array of `{ x, y }` points, for particles that form type. Call it inside `Motion.ready()` |
+| `Motion.morph(target, { start, duration, hold, ease, shapes, points })` | Morphs an SVG `<path>` through any closed shapes, played back to back. Point counts don't need to match |
+| `Motion.samplePath(d, n)` | Resamples a path into `n` evenly spaced `[x, y]` points |
+| `Motion.ready(fn)` | Runs `fn` once after fonts and images have loaded and before frame 0. Use it for anything that measures text or layout |
+| `Motion.score({ bpm, key, scale, mood, drums, start, end, gain, sections })` | Declares the synthesized music bed. `mood`: `driving`, `minimal` or `cinematic`. `sections: [{ at, drums, bass, arp, pad, filter }]` arranges breakdowns, builds (the filter glides into the next section) and drops. `from`/`to` are accepted as aliases for `start`/`end` |
+| `Motion.cue(t, type, { gain, length })` | Places a sound effect: `whoosh`, `impact`, `hit`, `drop`, `riser`, `swell`, `pop`, `tick` or `glitch`. Risers and swells end at `t`; `whoosh` peaks just before `t`. Cue times also drive `render.mjs --cuts` |
+| `Motion.spring({ stiffness, damping, mass })`, `Motion.resolveEase(e)`, `Motion.bezier(...)` | Ease functions for custom code in `Motion.on()`: each returns `p → value` |
+
+When a composition calls `score()` or `cue()`, `render.mjs` synthesizes the audio with `scripts/score.mjs` and muxes it in. Loudness is measured per ITU-R BS.1770 and normalized to -14 LUFS, with a -1 dBFS sample-peak ceiling. Pass `--no-score` to render silently, or `--audio file` to use your own track.

@@ -1,0 +1,97 @@
+{
+  "examples": [
+    {
+      "id": "hero-cta-regression",
+      "title": "A CTA restyle that quietly breaks the pricing buttons",
+      "prompt": "Add before/after screenshots to my PR and check for visual regressions.",
+      "summary": "The PR restyles the hero CTA as a gradient pill, but the same stylesheet edit drops the rule that made pricing-card buttons full width. The hero change is the intended one. The /pricing close-up shows every plan button shrinking to fit its label, which the PR never meant to do. On mobile the longer CTA also pushes \"How it works\" onto its own line, moving the rest of the page down 71px. /about stays at 0 pixels.",
+      "input": [
+        "before",
+        "after"
+      ],
+      "command": "node scripts/capture.mjs --base examples/before --head examples/after --pages /,/pricing,/about --full-page --label-base main --label-head feat/hero-cta",
+      "result": "4 changed (1 intended, 1 regression on /pricing at both widths), 2 unchanged",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/hero-cta-regression/pricing-375-focus.png",
+          "alt": "Close-up of /pricing at 375px, base vs head: the full-width 'Get started', 'Start free trial' and 'Talk to sales' buttons become shrink-wrapped pills.",
+          "caption": "focus.png for /pricing at 375px: the plan buttons lost their full width. The PR didn't set out to change this page."
+        },
+        {
+          "type": "image",
+          "src": "output/hero-cta-regression/home-375-compare.png",
+          "alt": "Base, head and diff of the home page at 375px. The diff boxes the restyled CTA in red and washes everything below it in blue.",
+          "caption": "compare.png for / at 375px: the CTA change in red, then a blue band because the rest of the page only moved down 71px."
+        }
+      ],
+      "excerpt": "Captured 3 pages at 375 / 1280px (full page): **4 changed**, 0 minor, 2 unchanged. Base: main · Head: feat/hero-cta.\n\n| Page | Width | Result | Pixels changed | Notes |\n|---|---:|---|---:|---|\n| `/` | 375px | **changed** | 3.08% (5.98% moved) | height 969 → 1039px; 2 changed regions; content from y≈482px moved down 71px |\n| `/` | 1280px | **changed** | 0.99% (0.85% moved) | 1 changed region; content from y≈406px moved down 7px |\n| `/pricing` | 375px | **changed** | 3.02% (3.53% moved) | height 1249 → 1271px; 3 changed regions; content from y≈555px moved down 7px; content from y≈886px moved down 16px |\n| `/pricing` | 1280px | **changed** | 1.23% (0.20% moved) | 3 changed regions; content from y≈576px moved down 7px |\n| `/about` | 375px | unchanged | 0% |  |\n| `/about` | 1280px | unchanged | 0% |  |"
+    },
+    {
+      "id": "theme-token-refresh",
+      "title": "A design-token tweak too faint to see by eye",
+      "prompt": "Did my theme token change affect anything I didn't expect?",
+      "summary": "One edit to tokens.css moves the neutrals from gray to slate (#6b7280 to #64748b for muted text, #e5e7eb to #e2e8f0 for borders) and rounds corners by 2px. affected-pages.mjs traced tokens.css to all four pages through their <link> tags and flagged it as a global change. The capture puts every app page in \"minor\" with the exact colour pair named and the faint pixels traced in amber. The sign-in page, which only uses the brand tokens, stays at 0 pixels, so the change is contained.",
+      "input": [
+        "theme-tokens/before",
+        "theme-tokens/after"
+      ],
+      "command": "node scripts/capture.mjs --base examples/theme-tokens/before --head examples/theme-tokens/after --pages /,/invoices,/settings,/login --label-base main --label-head theme/slate-neutrals",
+      "result": "0 changed, 6 minor (faint #e5e7eb → #e2e8f0), 2 unchanged (/login)",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/theme-token-refresh/home-375-compare.png",
+          "alt": "Base, head and diff of the dashboard at 375px. Base and head look identical. The diff traces muted text, card borders and table rules in amber.",
+          "caption": "compare.png for / at 375px: the two screenshots look the same to the eye. Amber marks every muted label, border and pill corner the token change touched."
+        },
+        {
+          "type": "image",
+          "src": "output/theme-token-refresh/home-375-focus.png",
+          "alt": "Close-up of the dashboard nav and cards at up to 2x, labelled 'faint change (mostly #e5e7eb → #e2e8f0)'.",
+          "caption": "focus.png: each close-up is labelled with the dominant colour pair, so the PR note can say exactly which token moved."
+        },
+        {
+          "type": "image",
+          "src": "output/theme-token-refresh/login-375-compare.png",
+          "alt": "Base, head and diff of the sign-in page at 375px with an empty diff panel and an UNCHANGED badge.",
+          "caption": "/login, which only uses the brand tokens, diffs at exactly 0 pixels."
+        }
+      ],
+      "excerpt": "Captured 4 pages at 375 / 1280px: **0 changed**, 6 minor, 2 unchanged. Base: main · Head: theme/slate-neutrals.\n\n| Page | Width | Result | Pixels changed | Notes |\n|---|---:|---|---:|---|\n| `/` | 375px | minor | 0% | faint change in 12048 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/` | 1280px | minor | 0% | faint change in 19190 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/invoices` | 375px | minor | <0.01% | 2 changed regions; faint change in 12066 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/invoices` | 1280px | minor | <0.01% | 2 changed regions; faint change in 19777 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/settings` | 375px | minor | 0% | faint change in 10656 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/settings` | 1280px | minor | 0% | faint change in 12590 px (below the visible threshold: a colour tweak or a pale element's edge; amber in diff); most common: #e5e7eb → #e2e8f0 |\n| `/login` | 375px | unchanged | 0% |  |\n| `/login` | 1280px | unchanged | 0% |  |"
+    },
+    {
+      "id": "banner-replaces-checklist",
+      "title": "A banner added, a card removed, and the page below just moved",
+      "prompt": "Visual diff this branch. I swapped the onboarding checklist for a trial banner.",
+      "summary": "The PR adds a trial banner under the header on every page and removes the \"Getting started\" checklist from home. A plain pixel diff would paint everything below the banner red. Row alignment instead reports a 50px block added, 303px of content removed, and the rest of the page as moved: down 50px, then up 254px. The headline change stays at 0%, with added, removed and moved pixels counted separately. Reviewers can see that the projects and activity feed below are untouched. On /projects the only change is the banner. Everything under it is a blue band.",
+      "input": [
+        "layout-shift/before",
+        "layout-shift/after"
+      ],
+      "command": "node scripts/capture.mjs --base examples/layout-shift/before --head examples/layout-shift/after --pages /,/projects --full-page --label-base main --label-head feat/trial-banner",
+      "result": "1 block added + 303px removed on /; everything else only moved",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/banner-replaces-checklist/home-375-compare.png",
+          "alt": "Base, head and diff of the home page at 375px. The diff shows the new banner in red, a dashed red bar where the checklist used to be, and a blue wash over everything below.",
+          "caption": "compare.png for / at 375px: red for the new banner, a dashed bar where the checklist was removed, and blue for content that only moved."
+        },
+        {
+          "type": "image",
+          "src": "output/banner-replaces-checklist/home-375-focus.png",
+          "alt": "Close-ups labelled 'new block, 50px tall' (the trial banner in head, with a 'new block inserted here' marker on base) and '303px of content removed' (the Getting started checklist in base, gone in head).",
+          "caption": "focus.png: the added banner and the removed checklist, each with base and head side by side. Base marks where the banner was inserted."
+        },
+        {
+          "type": "image",
+          "src": "output/banner-replaces-checklist/projects-375-compare.png",
+          "alt": "Base, head and diff of /projects at 375px. Only the banner is red. The table below is washed blue.",
+          "caption": "/projects: only the banner changed. The table is identical, just 50px lower."
+        }
+      ],
+      "excerpt": "Captured 2 pages at 375 / 1280px (full page): **4 changed**, 0 minor, 0 unchanged. Base: main · Head: feat/trial-banner.\n\n| Page | Width | Result | Pixels changed | Notes |\n|---|---:|---|---:|---|\n| `/` | 375px | **changed** | 0% (4.13% added, 20.31% removed, 4.37% moved) | height 1212 → 958px; 50px-tall block added at y≈61px; 303px of content removed at y≈220px; content from y≈111px moved down 50px; content from y≈222px moved up 254px |\n| `/` | 1280px | **changed** | 0% (5.56% added, 16.39% removed, 1.91% moved) | 50px-tall block added at y≈61px; 218px of content removed at y≈199px; content from y≈111px moved down 50px; content from y≈201px moved up 168px |\n| `/projects` | 375px | **changed** | 0% (5.56% added, 2.38% moved) | 50px-tall block added at y≈61px; content from y≈111px moved down 50px |\n| `/projects` | 1280px | **changed** | 0% (5.56% added, 0.97% moved) | 50px-tall block added at y≈61px; content from y≈111px moved down 50px |"
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 380px;
+  padding: 24px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  transition: transform 250ms ease-out;
+}
+
+.line {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid #e7e7e7;
+  font-size: 14px;
+  color: #343434;
+}
+
+.total {
+  margin-top: 16px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #323232;
+}
+
+.checkout {
+  margin-top: 24px;
+  padding: 12px 16px;
+  border-radius: 6px;
+  background: #e8590c;
+  color: #fff;
+  font-weight: 600;
+  transition: background 200ms ease;
+}
+
+.checkout:hover {
+  background: #d9480f;
+}

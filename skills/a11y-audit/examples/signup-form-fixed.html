@@ -1,0 +1,148 @@
+<!doctype html>
+<!--
+  Oatfield Coffee: the same signup form, fixed (same failed-submit state).
+   1. every field has a visible <label for>; placeholders are gone or only show an example
+   2. errors are text + icon in #cf474c (contrast.mjs suggestion, 4.5:1), marked aria-invalid and tied to the field with aria-describedby
+   3. the postcode error says what is wrong, not just a red border
+   4. password hint is #7e7570 (contrast.mjs suggestion, 4.5:1) and linked with aria-describedby
+   5. custom checkboxes draw a focus ring on the visible box (input:focus-visible + .box)
+   6. "Continue to payment" is a real <button type="submit">
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Start your subscription · Oatfield Coffee</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; color: #1c1917; background: #f6f2ea; }
+    a { color: #1f4d3a; }
+    .bar { background: #fff; border-bottom: 1px solid #e7e0d4; }
+    .bar-in { max-width: 1080px; margin: 0 auto; padding: 0 24px; height: 64px; display: flex; align-items: center; justify-content: space-between; }
+    .logo { display: flex; align-items: center; gap: 10px; font-weight: 750; font-size: 18px; letter-spacing: -0.01em; color: #1c1917; text-decoration: none; }
+    .secure { display: flex; align-items: center; gap: 6px; color: #57534e; font-size: 13px; }
+    .steps { display: flex; gap: 28px; font-size: 13px; color: #57534e; list-style: none; margin: 0; padding: 0; }
+    .steps li { display: flex; align-items: center; gap: 8px; }
+    .steps b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: #e7e0d4; color: #44403c; }
+    .steps .on { color: #1c1917; font-weight: 600; }
+    .steps .on b { background: #1f4d3a; color: #fff; }
+    main { max-width: 1080px; margin: 0 auto; padding: 36px 24px 64px; display: grid; grid-template-columns: 1fr 380px; gap: 32px; align-items: start; }
+    .card { background: #fff; border: 1px solid #e7e0d4; border-radius: 16px; padding: 28px 32px; }
+    h1 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 4px; }
+    .sub { margin: 0 0 24px; color: #57534e; }
+    h2 { font-size: 15px; margin: 26px 0 12px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .full { grid-column: 1 / -1; }
+    input[type=text], input[type=email], input[type=password] { width: 100%; padding: 12px 14px; border: 1px solid #d6cfc2; border-radius: 10px; font: inherit; background: #fff; color: #1c1917; }
+    input[type=text]:focus, input[type=email]:focus, input[type=password]:focus { outline: none; border-color: #1f4d3a; box-shadow: 0 0 0 3px #1f4d3a33; }
+    ::placeholder { color: #78716c; }
+    label.lbl { display: block; font-size: 13px; font-weight: 600; margin: 0 0 6px; color: #292524; }
+    [aria-invalid="true"] { border-color: #cf474c !important; }
+    .err { display: flex; align-items: center; gap: 6px; color: #cf474c; font-size: 13px; font-weight: 500; margin: 6px 0 0; }
+    .hint { color: #7e7570; font-size: 13px; margin: 6px 0 0; }
+    .plans { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .plan { position: relative; display: block; border: 1px solid #d6cfc2; border-radius: 12px; padding: 14px 16px; cursor: pointer; }
+    .plan input { position: absolute; opacity: 0; }
+    .plan:has(input:checked) { border-color: #1f4d3a; background: #f3f8f5; box-shadow: inset 0 0 0 1px #1f4d3a; }
+    .plan:has(input:focus-visible) { outline: 3px solid #1f4d3a; outline-offset: 2px; }
+    .plan strong { display: block; }
+    .plan span { color: #57534e; font-size: 13px; }
+    .check { display: flex; gap: 10px; align-items: flex-start; margin: 12px 0 0; cursor: pointer; }
+    .check input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+    .check input:focus-visible + .box { outline: 3px solid #1f4d3a; outline-offset: 2px; }
+    .box { flex: none; width: 20px; height: 20px; margin-top: 1px; border: 1.5px solid #a8a29e; border-radius: 6px; display: grid; place-items: center; background: #fff; }
+    .check input:checked + .box { background: #1f4d3a; border-color: #1f4d3a; }
+    .check input:checked + .box::after { content: ""; width: 10px; height: 6px; border: 2px solid #fff; border-top: 0; border-right: 0; transform: translateY(-1px) rotate(-45deg); }
+    .submit { margin-top: 24px; width: 100%; border: 0; font: inherit; display: flex; align-items: center; justify-content: center; gap: 8px; background: #1f4d3a; color: #fff; font-weight: 650; border-radius: 12px; padding: 14px 20px; cursor: pointer; }
+    .submit:hover { background: #173b2c; }
+    .submit:focus-visible { outline: 3px solid #1f4d3a; outline-offset: 3px; }
+    .fine { color: #57534e; font-size: 13px; text-align: center; margin: 12px 0 0; }
+    legend { padding: 0; }
+    .summary h2 { margin-top: 0; }
+    .item { display: flex; gap: 14px; align-items: center; padding-bottom: 18px; border-bottom: 1px solid #efe9df; }
+    .bag { width: 72px; height: 84px; border-radius: 12px; background: #efe6d6; display: grid; place-items: center; flex: none; }
+    .item strong { display: block; }
+    .item span { color: #57534e; font-size: 13px; }
+    .row { display: flex; justify-content: space-between; padding: 8px 0; color: #44403c; }
+    .row.total { border-top: 1px solid #efe9df; margin-top: 8px; padding-top: 14px; color: #1c1917; font-weight: 700; font-size: 17px; }
+    .perk { display: flex; gap: 10px; margin-top: 16px; padding: 12px 14px; background: #f3f8f5; border-radius: 10px; color: #1f4d3a; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <header class="bar">
+    <div class="bar-in">
+      <a class="logo" href="#home">
+        <svg width="28" height="28" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="8" fill="#1f4d3a"/><ellipse cx="14" cy="14" rx="5.5" ry="8" fill="#f6f2ea" transform="rotate(-30 14 14)"/><path d="M11 9.5c3 2 3 7 6 9" stroke="#1f4d3a" stroke-width="1.6" fill="none" transform="rotate(-30 14 14)"/></svg>
+        Oatfield Coffee
+      </a>
+      <ol class="steps" aria-label="Checkout steps">
+        <li class="on" aria-current="step"><b>1</b>Account &amp; delivery</li>
+        <li><b>2</b>Payment</li>
+      </ol>
+      <div class="secure"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Secure checkout</div>
+    </div>
+  </header>
+
+  <main>
+    <form class="card" onsubmit="return false" novalidate>
+      <h1>Start your subscription</h1>
+      <p class="sub">Fresh-roasted beans, delivered on your schedule. Pause or cancel anytime. Already a member? <a href="#signin">Sign in</a></p>
+
+      <h2>Account</h2>
+      <div class="grid">
+        <div class="full">
+          <label class="lbl" for="email">Email address</label>
+          <input type="email" id="email" autocomplete="email" value="maya.lin@example" aria-invalid="true" aria-describedby="email-error">
+          <p class="err" id="email-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 16.5v.5"/></svg>Enter an email like name@example.com</p>
+        </div>
+        <div class="full">
+          <label class="lbl" for="password">Password</label>
+          <input type="password" id="password" autocomplete="new-password" aria-describedby="password-hint">
+          <p class="hint" id="password-hint">At least 8 characters, including a number</p>
+        </div>
+      </div>
+
+      <h2>Delivery address</h2>
+      <div class="grid">
+        <div><label class="lbl" for="first">First name</label><input type="text" id="first" autocomplete="given-name" value="Maya"></div>
+        <div><label class="lbl" for="last">Last name</label><input type="text" id="last" autocomplete="family-name" value="Lin"></div>
+        <div class="full"><label class="lbl" for="street">Street address</label><input type="text" id="street" autocomplete="street-address" value="48 Orchard Lane"></div>
+        <div><label class="lbl" for="city">City</label><input type="text" id="city" autocomplete="address-level2" value="Portland"></div>
+        <div>
+          <label class="lbl" for="postcode">Postcode</label>
+          <input type="text" id="postcode" autocomplete="postal-code" value="972" aria-invalid="true" aria-describedby="postcode-error">
+          <p class="err" id="postcode-error"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 7v6M12 16.5v.5"/></svg>Postcode needs 5 digits</p>
+        </div>
+      </div>
+
+      <fieldset style="border:0;margin:0;padding:0;min-width:0">
+      <legend><h2>How often?</h2></legend>
+      <div class="plans">
+        <label class="plan"><input type="radio" name="freq" value="2w"><strong>Every 2 weeks</strong><span>Best for daily brewers</span></label>
+        <label class="plan"><input type="radio" name="freq" value="4w" checked><strong>Every 4 weeks</strong><span>Most popular</span></label>
+      </div>
+      </fieldset>
+
+      <label class="check"><input type="checkbox" id="guides" checked><span class="box"></span><span>Email me brewing guides and new roasts</span></label>
+      <label class="check"><input type="checkbox" id="terms"><span class="box"></span><span>I agree to the <a href="#terms">subscription terms</a></span></label>
+
+      <button type="submit" class="submit">Continue to payment
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+      </button>
+      <p class="fine">You won't be charged until your first bag ships.</p>
+    </form>
+
+    <aside class="card summary" aria-label="Order summary">
+      <h2>Your order</h2>
+      <div class="item">
+        <div class="bag"><svg width="40" height="54" viewBox="0 0 40 54" aria-hidden="true"><path d="M6 8h28l3 44H3z" fill="#1f4d3a"/><path d="M6 8l4-6h20l4 6" fill="#173b2c"/><rect x="11" y="22" width="18" height="16" rx="3" fill="#f6f2ea"/><ellipse cx="20" cy="30" rx="3.5" ry="5" fill="#1f4d3a" transform="rotate(-30 20 30)"/></svg></div>
+        <div><strong>House Blend</strong><span>Medium roast · 2 × 340 g</span></div>
+      </div>
+      <div class="row"><span>Subscription</span><span>$22.00</span></div>
+      <div class="row"><span>Delivery</span><span>Free</span></div>
+      <div class="row total"><span>Every 4 weeks</span><span>$22.00</span></div>
+      <div class="perk"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>Skip, swap or cancel any delivery from your account.</div>
+    </aside>
+  </main>
+</body>
+</html>

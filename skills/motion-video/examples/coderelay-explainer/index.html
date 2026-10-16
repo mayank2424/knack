@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="CodeRelay explainer: review comments on a pull request become one AI-ready prompt (16:9, 15s, scored)" />
+<title>CodeRelay explainer</title>
+<script src="motion.js"></script>
+<style>
+  /* Brand: CodeRelay's own site system (site/index.html). Fonts are the site's self-hosted subsets. */
+  @font-face { font-family: 'Sora'; src: url('assets/sora-var.woff2') format('woff2-variations'); font-weight: 300 700; font-display: block; }
+  @font-face { font-family: 'JetBrains Mono'; src: url('assets/jetbrains-var.woff2') format('woff2-variations'); font-weight: 400 700; font-display: block; }
+  :root {
+    --void: #020617; --line: #262f42; --line-lit: #364059;
+    --paper: #ffffff; --muted: #a1a8bd; --faint: #6b7590;
+    --human: #ffb454; --machine: #5fe3ff; --relay: #4d8dff; --relay-lit: #82b0ff;
+    --display: 'Sora', sans-serif; --mono: 'JetBrains Mono', monospace;
+  }
+  #stage { background: var(--void); color: var(--paper); font-family: var(--display); overflow: hidden; }
+  /* The site hero's three glows: amber (human) left, cyan (machine) right, relay blue centre. */
+  #glow { position: absolute; inset: 0; background:
+    radial-gradient(900px 520px at 14% 4%, rgba(255,180,84,.10), transparent 68%),
+    radial-gradient(900px 520px at 88% 0%, rgba(95,227,255,.09), transparent 68%),
+    radial-gradient(1400px 700px at 50% -12%, rgba(77,141,255,.18), transparent 72%); }
+  #mesh { opacity: .5; -webkit-mask-image: radial-gradient(120% 95% at 50% 20%, #000 35%, transparent 80%); mask-image: radial-gradient(120% 95% at 50% 20%, #000 35%, transparent 80%); }
+
+  .mono { font-family: var(--mono); font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+  .ln { display: block; overflow: hidden; padding: 0 0 .1em; margin-bottom: -.1em; }
+  .ln > span { display: inline-block; }
+  .said { color: var(--human); } .heard { color: var(--machine); }
+
+  /* 1 · hook */
+  #hook { position: absolute; left: 150px; top: 318px; font-size: 100px; font-weight: 600; line-height: 1.06; letter-spacing: -0.03em; }
+  .voice { position: absolute; width: 560px; box-sizing: border-box; border: 1px solid var(--line); border-left: 3px solid var(--human);
+    border-radius: 14px; padding: 18px 24px 20px; background: rgba(26,21,14,.86); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+  .voice-who { font-family: var(--mono); font-size: 22px; color: var(--human); font-weight: 600; letter-spacing: .04em; }
+  .voice-who span { color: var(--faint); font-weight: 400; }
+  .voice-text { font-size: 26px; color: var(--muted); margin-top: 6px; line-height: 1.45; }
+  .voice-text code { font-family: var(--mono); font-size: 24px; color: var(--paper); }
+
+  /* 2 · relay node (site .node-core / .node-ring) */
+  #node { position: absolute; left: 1426px; top: 492px; width: 96px; height: 96px; }
+  #node img { width: 96px; height: 96px; display: block; filter: drop-shadow(0 0 36px rgba(77,141,255,.6)); }
+  .ring { position: absolute; left: 1426px; top: 492px; width: 96px; height: 96px; border-radius: 26px; border: 2px solid var(--relay); box-sizing: border-box; }
+
+  /* 3–4 · the real panel. Screenshots are cropped from store/screenshots, pixels untouched, shown at 1.4×. */
+  #camera { position: absolute; inset: 0; transform-origin: 0 0; }
+  #panel { position: absolute; left: 1180px; top: 50px; width: 588px; height: 980px; border-radius: 22px; overflow: hidden;
+    box-shadow: 0 0 0 1.4px #2b3342, 0 50px 120px rgba(0,0,0,.6); clip-path: circle(var(--rad, 0px) at 294px 490px); }
+  #panel > img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #p2 { clip-path: inset(508px 0 var(--b, 472px) 0); }
+  /* Overlay in screenshot pixels (420×700), scaled with the panel. */
+  #ov { position: absolute; left: 0; top: 0; width: 420px; height: 700px; transform: scale(1.4); transform-origin: 0 0; }
+  #ring { position: absolute; left: 12px; top: 368px; width: 376px; height: 159px; border-radius: 14px; box-sizing: border-box;
+    border: 2px solid var(--relay); box-shadow: 0 0 0 4px rgba(77,141,255,.18); }
+  #press { position: absolute; left: 16px; top: 621px; width: 234px; height: 40px; border-radius: 8px; background: rgba(14,21,32,.22); }
+  /* The app's real toast: App.tsx + styles.css (rounded-full, border-line, bg-surface, 13px medium, IconCheck in --cr-ok). */
+  #toastwrap { position: absolute; left: 0; right: 0; bottom: 80px; display: flex; justify-content: center; padding: 0 12px; }
+  #toast { display: flex; align-items: center; gap: 8px; border-radius: 9999px; border: 1px solid #d5dbe4; background: #fff; padding: 8px 14px;
+    font: 500 13px/1.55 -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color: #0e1520; -webkit-font-smoothing: antialiased;
+    box-shadow: 0 10px 15px -3px rgba(0,0,0,.1), 0 4px 6px -4px rgba(0,0,0,.1); white-space: nowrap; }
+  #cursor { position: absolute; left: 0; top: 0; width: 15px; height: 22px; overflow: visible; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.35)); transform-origin: 0 0; }
+
+  .cap { position: absolute; left: 150px; top: 400px; }
+  .cap .mono { font-size: 22px; color: var(--relay); margin-bottom: 26px; }
+  .cap .lines { font-size: 84px; font-weight: 600; line-height: 1.06; letter-spacing: -0.03em; }
+
+  /* 5 · the Markdown block lifted out of the panel, then the agent (site's machine-side .output card) */
+  #mdcard { position: absolute; left: 1202.4px; top: 451.8px; width: 515.2px; height: 425.6px; border-radius: 11px; overflow: hidden; }
+  #mdcard img { position: absolute; left: -22.4px; top: -401.8px; width: 588px; height: 980px; }
+  #mdshadow { position: absolute; left: 1202.4px; top: 451.8px; width: 515.2px; height: 425.6px; border-radius: 11px; box-shadow: 0 40px 90px rgba(0,0,0,.7), 0 0 0 2px rgba(77,141,255,.55); }
+  #agent { position: absolute; left: 1080px; top: 330px; width: 760px; box-sizing: border-box; border: 1px solid var(--line-lit); border-left: 3px solid var(--machine);
+    border-radius: 14px; overflow: hidden; background: linear-gradient(180deg, rgba(10,26,36,.96), rgba(6,16,26,.96)); box-shadow: 0 50px 120px rgba(0,0,0,.65); }
+  #agent .head { display: flex; justify-content: space-between; padding: 16px 24px; border-bottom: 1px solid var(--line); font-size: 22px; color: var(--faint); letter-spacing: .1em; }
+  #agent .head b { color: var(--machine); font-weight: 600; }
+  #agent pre { margin: 0; padding: 22px 26px 26px; font-family: var(--mono); font-size: 22px; line-height: 1.7; color: var(--muted); }
+  #agent pre span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .k { color: var(--paper); font-weight: 600; } .a { color: var(--machine); } .c { color: var(--faint); }
+  #caret { display: inline-block; width: 12px; height: 26px; background: var(--machine); vertical-align: -5px; margin-left: 4px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* 6 · end card */
+  #end { position: absolute; left: 0; right: 0; top: 300px; text-align: center; }
+  #end-icon { width: 128px; height: 128px; display: block; margin: 0 auto; filter: drop-shadow(0 0 44px rgba(77,141,255,.55)); }
+  #end .word { font-size: 124px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.04; margin-top: 30px; }
+  #end .tag { font-size: 44px; font-weight: 400; color: var(--muted); letter-spacing: -0.01em; margin-top: 18px; }
+  #end .row { font-size: 24px; margin-top: 46px; color: var(--faint); letter-spacing: .18em; }
+  #end .row .gh { color: var(--human); } #end .row .gl { color: var(--relay); } #end .row .sep { color: var(--line-lit); margin: 0 18px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="glow"></div>
+
+  <!-- 1 · Problem: the site hero line, and the hero's four reviewer comments -->
+  <div id="hook">
+    <span class="ln"><span>Your reviewer</span></span>
+    <span class="ln"><span class="said">said it.</span></span>
+    <span class="ln"><span>Your agent</span></span>
+    <span class="ln"><span>never <span class="heard">heard it.</span></span></span>
+  </div>
+  <div class="voice" id="v1" style="left:1170px;top:246px"><div class="voice-who">@priya <span>· rate-limit.ts:141</span></div><div class="voice-text">This limits per-process, not per-user. Key it on the API token.</div></div>
+  <div class="voice" id="v2" style="left:1210px;top:410px"><div class="voice-who">@sam <span>· ingest.ts:88</span></div><div class="voice-text">Same problem here — can we pull this into one middleware?</div></div>
+  <div class="voice" id="v3" style="left:1150px;top:574px"><div class="voice-who">@priya <span>· ingest.ts:87</span></div><div class="voice-text"><code>req.ip</code> is the proxy — this rate-limits the load balancer.</div></div>
+  <div class="voice" id="v4" style="left:1196px;top:738px"><div class="voice-who">@dev <span>· resolved · collapsed</span></div><div class="voice-text">Switching to a token-keyed store — see the reply thread.</div></div>
+
+  <!-- 3–4 · The real side panel -->
+  <div id="camera" data-knack-ignore>
+    <div id="panel">
+      <img id="p1" src="assets/panel-01-review.png" alt="" />
+      <img id="p2" src="assets/panel-02-context.png" alt="" />
+      <img id="p3" src="assets/panel-03-prompt.png" alt="" />
+      <div id="ov">
+        <div id="ring"></div>
+        <div id="press"></div>
+        <div id="toastwrap"><div id="toast">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#0b7a4b" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11" /></svg>
+          Prompt copied — 13 comments
+        </div></div>
+        <svg id="cursor" viewBox="0 0 15 22"><path d="M1 1 L1 17.5 L5 13.8 L8 20.5 L10.6 19.4 L7.7 12.8 L13 12.8 Z" fill="#111" stroke="#fff" stroke-width="1.3" stroke-linejoin="round" /></svg>
+      </div>
+    </div>
+  </div>
+
+  <div class="ring" id="r1"></div><div class="ring" id="r2"></div>
+  <div id="node"><img src="assets/icon-128.png" alt="" /></div>
+
+  <div class="cap" id="cap1">
+    <div class="mono" id="e1">Extract · Review</div>
+    <div class="lines"><span class="ln"><span class="said">Every comment,</span></span><span class="ln"><span>with its code.</span></span></div>
+  </div>
+  <div class="cap" id="cap2">
+    <div class="mono" id="e2">Copy · Paste</div>
+    <div class="lines"><span class="ln"><span>One prompt for</span></span><span class="ln"><span>your <span class="heard">coding agent.</span></span></span></div>
+  </div>
+
+  <!-- 5 · Paste -->
+  <div id="agent">
+    <div class="head mono"><span>Coding agent</span><b>13 threads · 5 files</b></div>
+    <pre><span class="k"><span class="a" style="display:inline">❯ </span># Code review feedback — facebook/react #36944</span><span>- **Pull request:** [[Devtools] Added component search to the Profiler's commit view]</span><span>- **Author:** @Biki-das</span><span>- **Branch:** `devtools-profile-tracer` → `main`</span><span>- **Feedback:** 13 threads across 5 file(s)</span><span class="k">## Task</span><span>Address every piece of review feedback below.<i id="caret"></i></span></pre>
+  </div>
+  <div id="mdshadow"></div>
+  <div id="mdcard"><img src="assets/panel-03-prompt.png" alt="" /></div>
+
+  <!-- 6 · End card: README tagline, platforms from README -->
+  <div id="end">
+    <img id="end-icon" src="assets/icon-128.png" alt="CodeRelay" />
+    <div class="word ln"><span>CodeRelay</span></div>
+    <div class="tag ln"><span>Turn code review feedback into AI-ready prompts.</span></div>
+    <div class="row mono" id="row"><span class="gh">GitHub</span><span class="sep">/</span><span class="gl">GitLab</span><span class="sep">/</span><span>Azure DevOps</span></div>
+  </div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 15 });
+  const B = Motion.beats({ bpm: 120 });           // B(n) = n × 0.5s; every cut sits on a beat
+  Motion.score({ bpm: 120, key: 'D', scale: 'minor', mood: 'driving', sections: [
+    { at: 0, drums: false, bass: true, arp: false, filter: 1100 },       // the problem: muffled pad + pulse, no drums
+    { at: B(9), drums: true, bass: true, arp: true, filter: 20000 },     // panel lands: the band comes in
+    { at: B(23), drums: false, bass: true, arp: false, filter: 3200 },   // end card: drums out, pad rings
+  ] });
+
+  // ---------- background: a faint relay mesh (site hero canvas), drifting slowly
+  const rnd = Motion.random(7);
+  const nodes = Array.from({ length: 44 }, (_, i) => ({ x: rnd() * 1920, y: rnd() * 1080, s: i * 1.7 }));
+  Motion.canvas({ id: 'mesh', parent: '#stage', zIndex: 0 }, (ctx, t) => {
+    const P = nodes.map((n) => [n.x + Motion.noise(n.s, t * 0.08, 0) * 40, n.y + Motion.noise(0, n.s, t * 0.08) * 40]);
+    ctx.lineWidth = 1;
+    for (let i = 0; i < P.length; i++) for (let j = i + 1; j < P.length; j++) {
+      const d = Math.hypot(P[i][0] - P[j][0], P[i][1] - P[j][1]);
+      if (d < 230) { ctx.strokeStyle = `rgba(77,141,255,${(1 - d / 230) * 0.22})`; ctx.beginPath(); ctx.moveTo(P[i][0], P[i][1]); ctx.lineTo(P[j][0], P[j][1]); ctx.stroke(); }
+    }
+    ctx.fillStyle = 'rgba(130,176,255,.55)';
+    for (const [x, y] of P) { ctx.beginPath(); ctx.arc(x, y, 1.8, 0, Math.PI * 2); ctx.fill(); }
+  });
+
+  // ---------- camera helper. Panel: screenshot px (cx, cy) → stage = (1180 + 1.4cx, 50 + 1.4cy).
+  // `shot` puts screenshot point (cx, cy) at screen (tx, ty) with zoom s (≤ 1.4, so ≤ 2× on the 1× screenshots).
+  const K = 1.4, PX = 1180, PY = 50;
+  const shot = (cx, cy, s, tx, ty) => ({ scale: s, x: tx - (PX + cx * K) * s, y: ty - (PY + cy * K) * s });
+  const wide = { scale: 1, x: 0, y: 0 };
+  const cardShot = shot(200, 447, 1.32, 1420, 560);
+  const diffShot = shot(212, 440, 1.37, 1420, 560);
+  const tabShot = shot(200, 300, 1.15, 1420, 520);
+  const mdShot = shot(200, 432, 1.28, 1420, 540);
+  const copyShot = shot(200, 612, 1.28, 1420, 600);
+
+  // =============== 1 · HOOK (B0–B7): the problem, already rising at frame 0 (the poster)
+  const hl = document.querySelectorAll('#hook .ln > span');
+  Motion.from([hl[0], hl[1]], { y: '130%' }, { start: -0.32, duration: 0.9, ease: 'strong', stagger: 0.08 });
+  Motion.from([hl[2], hl[3]], { y: '130%' }, { start: B(1.6), duration: 0.8, ease: 'strong', stagger: 0.08 });
+  Motion.cue(B(1.6) + 0.12, 'hit', { gain: 0.55 });
+  const tilt = [-1.2, 0.9, -0.6, 1.1];
+  ['#v1', '#v2', '#v3', '#v4'].forEach((v, i) => {
+    Motion.to(v, { start: -0.2 + i * 0.2, duration: 0.7, ease: 'strong', from: { opacity: 0, x: -34, rotate: tilt[i] - 2 }, to: { opacity: 1, x: 0, rotate: tilt[i] } });
+    Motion.cue(Math.max(0, i * 0.2 - 0.12), i ? 'tick' : 'hit', { gain: i ? 0.45 : 0.5 });
+  });
+  Motion.to(hl, { start: B(7.2), duration: 0.32, ease: 'inCubic', stagger: 0.04, to: { y: '-130%' } });
+
+  // =============== 2 · RELAY (B7–B9): the voices collapse into the relay; the panel opens out of it
+  const centers = [[1450, 312], [1490, 476], [1430, 640], [1476, 804]];
+  ['#v1', '#v2', '#v3', '#v4'].forEach((v, i) => {
+    Motion.to(v, { start: B(7) + i * 0.04, duration: 0.36, ease: 'inCubic', to: { x: 1474 - centers[i][0], y: 540 - centers[i][1], scale: 0.1, opacity: 0, rotate: 0, blur: 6 } });
+  });
+  Motion.cue(B(7) + 0.3, 'whoosh', { gain: 0.6 });
+  Motion.cue(B(9), 'riser', { length: 1.5, gain: 0.5 });
+  Motion.to('#node', { start: B(7.8), duration: 0.42, ease: { stiffness: 220, damping: 18 }, from: { opacity: 0, scale: 0.6 }, to: { opacity: 1, scale: 1 } });
+  Motion.cue(B(7.8) + 0.05, 'pop', { gain: 0.6 });
+  Motion.to(['#r1', '#r2'], { start: 0, duration: 0.01, ease: 'linear', from: { opacity: 0 }, to: { opacity: 0 } }); // hidden until the pop
+  ['#r1', '#r2'].forEach((r, i) => Motion.to(r, { start: B(7.9) + i * 0.16, duration: 0.7, ease: 'outCubic', from: { opacity: 0.7, scale: 1 }, to: { opacity: 0, scale: 2.4 } }));
+  Motion.to('#panel', { start: B(8.4), duration: 0.6, ease: 'strong', from: { '--rad': '0px' }, to: { '--rad': '1150px' } });
+  // the icon flies into the panel's own header icon (28px in the screenshot → 39.2px on stage), then hands off
+  Motion.to('#node', { start: B(8.4), duration: 0.5, ease: 'strongInOut', to: { x: 1222 - 1474, y: 94.8 - 540, scale: 39.2 / 96 } });
+  Motion.to('#node', { start: B(9.4), duration: 0.12, ease: 'linear', to: { opacity: 0 } });
+  Motion.cue(B(9), 'impact', { gain: 0.8 });
+
+  // =============== 3 · REVIEW (B9–B15): every comment, with its code
+  Motion.from('#e1', { opacity: 0, x: -16 }, { start: B(9.1), duration: 0.6, ease: 'strong' });
+  Motion.from('#cap1 .ln > span', { y: '130%' }, { start: B(9.2), duration: 0.8, ease: 'strong', stagger: 0.09 });
+  Motion.to('#camera', { start: B(9.8), duration: 1.0, ease: 'smooth', from: wide, to: cardShot });
+  Motion.to('#ring', { start: B(10.9), duration: 0.45, ease: 'strong', from: { opacity: 0, scale: 1.04 }, to: { opacity: 1, scale: 1 } });
+  // "Show 1 reply and code context": the list wipes down into screenshot 02, the same thread expanded
+  Motion.to('#p2', { start: B(12.4), duration: 0.55, ease: 'strongInOut', from: { '--b': '472px' }, to: { '--b': '0px' } });
+  Motion.cue(B(12.4), 'tick', { gain: 0.6 });
+  Motion.to('#ring', { start: B(12.5), duration: 0.55, ease: 'strongInOut', to: { left: 59, top: 350, width: 312, height: 154, borderRadius: 10 } });
+  Motion.to('#camera', { start: B(12.5), duration: 1.0, ease: 'smooth', to: diffShot });
+  Motion.to('#ring', { start: B(13.9), duration: 0.25, ease: 'inCubic', to: { opacity: 0 } });
+  Motion.to(['#e1', '#cap1 .ln > span'], { start: B(14.4), duration: 0.28, ease: 'inCubic', stagger: 0.04, to: { y: '-130%', opacity: 0 } });
+
+  // =============== 4 · PROMPT + COPY (B15–B20)
+  Motion.to('#camera', { start: B(13.8), duration: 0.9, ease: 'smooth', to: tabShot });
+  Motion.to('#cursor', { start: B(13.7), duration: 0.2, ease: 'linear', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#cursor', { start: B(13.7), duration: 0.7, ease: 'smooth', from: { x: 372, y: 300 }, to: { x: 300, y: 158 } });
+  Motion.to('#cursor', { start: B(14.85), duration: 0.08, ease: 'outCubic', from: { scale: 1 }, to: { scale: 0.84 } });
+  Motion.to('#cursor', { start: B(15) + 0.04, duration: 0.14, ease: 'outCubic', to: { scale: 1 } });
+  Motion.to('#p3', { start: B(15), duration: 0.017, ease: 'linear', from: { opacity: 0 }, to: { opacity: 1 } });   // real UI: the tab swaps instantly
+  Motion.cue(B(15), 'tick', { gain: 0.7 });
+  Motion.to('#camera', { start: B(15.15), duration: 0.85, ease: 'smooth', to: mdShot });
+  Motion.from('#e2', { opacity: 0, x: -16 }, { start: B(15.2), duration: 0.6, ease: 'strong' });
+  Motion.from('#cap2 .ln > span', { y: '130%' }, { start: B(15.3), duration: 0.8, ease: 'strong', stagger: 0.09 });
+  Motion.to('#cursor', { start: B(16.6), duration: 0.75, ease: 'smooth', to: { x: 142, y: 640 } });
+  Motion.to('#camera', { start: B(16.7), duration: 0.8, ease: 'smooth', to: copyShot });
+  Motion.to('#cursor', { start: B(17.85), duration: 0.08, ease: 'outCubic', to: { scale: 0.84 } });
+  Motion.to('#cursor', { start: B(18) + 0.04, duration: 0.14, ease: 'outCubic', to: { scale: 1 } });
+  Motion.to('#press', { start: B(17.85), duration: 0.08, ease: 'linear', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#press', { start: B(18) + 0.06, duration: 0.18, ease: 'outCubic', to: { opacity: 0 } });
+  Motion.to('#toast', { start: B(18) + 0.03, duration: 0.18, ease: [0.22, 1, 0.36, 1], from: { opacity: 0, y: 4 }, to: { opacity: 1, y: 0 } }); // cr-fade-up
+  Motion.cue(B(18), 'pop', { gain: 0.8 });
+  Motion.to('#cursor', { start: B(18.8), duration: 0.25, ease: 'inCubic', to: { opacity: 0 } });
+  Motion.to('#camera', { start: B(18.5), duration: 0.95, ease: 'smooth', to: wide });
+
+  // =============== 5 · PASTE (B20–B23): the Markdown leaves the panel and lands in the agent
+  Motion.to('#mdcard', { start: B(20), duration: 0.01, ease: 'linear', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#mdshadow', { start: B(20), duration: 0.3, ease: 'outCubic', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to(['#mdcard', '#mdshadow'], { start: B(20), duration: 0.34, ease: 'strong', from: { y: 0, scale: 1 }, to: { y: -36, scale: 1.05 } });
+  Motion.to('#panel', { start: B(20), duration: 0.4, ease: 'inCubic', from: { y: 0, opacity: 1 }, to: { y: 110, opacity: 0 } });
+  Motion.cue(B(20) + 0.1, 'whoosh', { gain: 0.55 });
+  Motion.to('#agent', { start: B(20.3), duration: 0.5, ease: 'strong', from: { opacity: 0, y: 70 }, to: { opacity: 1, y: 0 } });
+  Motion.to(['#mdcard', '#mdshadow'], { start: B(20.7), duration: 0.26, ease: 'inCubic', to: { y: -96, scale: 0.62, opacity: 0 } }); // drops in at the prompt line
+  Motion.cue(B(21.3), 'hit', { gain: 0.6 });
+  Motion.from('#agent pre > span', { opacity: 0, y: 8 }, { start: B(21.2), duration: 0.35, ease: 'strong', stagger: 0.06 });
+  Motion.to(['#e2', '#cap2 .ln > span'], { start: B(22.5), duration: 0.28, ease: 'inCubic', stagger: 0.04, to: { y: '-130%', opacity: 0 } });
+  Motion.to('#agent', { start: B(22.6), duration: 0.3, ease: 'inCubic', to: { opacity: 0, y: -40 } });
+
+  // =============== 6 · END CARD (B23–B30), still by ~12.4s
+  Motion.from('#end-icon', { opacity: 0, y: 30, scale: 0.86 }, { start: B(23), duration: 0.8, ease: 'strong' });
+  Motion.from('#end .word > span', { y: '130%' }, { start: B(23.15), duration: 0.85, ease: 'strong' });
+  Motion.from('#end .tag > span', { y: '130%' }, { start: B(23.35), duration: 0.85, ease: 'strong' });
+  Motion.from('#row', { opacity: 0, y: 14 }, { start: B(23.9), duration: 0.6, ease: 'strong' });
+  Motion.cue(B(23), 'impact', { gain: 0.7 });
+  Motion.cue(B(24), 'swell', { length: 1, gain: 0.4 });
+</script>
+</body>
+</html>

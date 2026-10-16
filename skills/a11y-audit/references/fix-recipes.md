@@ -8,7 +8,7 @@ Order of preference for every fix:
 2. **Visible text** over hidden labels. Voice-control users say what they see.
 3. **ARIA only when there is no native option.** No ARIA is better than bad ARIA: a wrong `role` or a stale `aria-expanded` is worse than none.
 
-Contents: [Keyboard pass](#keyboard-pass-rules) ([kbd-focus-removed](#kbd-focus-removed) · [kbd-focus-obscured](#kbd-focus-obscured) · [kbd-hover-only](#kbd-hover-only) · [kbd-change-on-input](#kbd-change-on-input) · [kbd-dialog-escape](#kbd-dialog-escape)) · [color-contrast](#color-contrast) · [image-alt](#image-alt) · [svg-img-alt](#svg-img-alt) · [label](#label) · [placeholder-label](#placeholder-label) · [select-name](#select-name) · [button-name](#button-name) · [link-name](#link-name) · [html-has-lang](#html-has-lang) · [document-title](#document-title) · [heading-order](#heading-order) · [page-has-heading-one](#page-has-heading-one) · [landmark-one-main](#landmark-one-main) · [region](#region) · [bypass](#bypass) · [list](#list) · [listitem](#listitem) · [duplicate-id-aria](#duplicate-id-aria) · [aria-hidden-focus](#aria-hidden-focus) · [aria-required-attr](#aria-required-attr) · [aria-valid-attr-value](#aria-valid-attr-value) · [nested-interactive](#nested-interactive) · [tabindex](#tabindex) · [meta-viewport](#meta-viewport) · [frame-title](#frame-title) · [scrollable-region-focusable](#scrollable-region-focusable) · [target-size](#target-size) · [aria-dialog-name](#aria-dialog-name) · [link-in-text-block](#link-in-text-block)
+Contents: [Keyboard pass](#keyboard-pass-rules) ([kbd-focus-removed](#kbd-focus-removed) · [kbd-focus-obscured](#kbd-focus-obscured) · [kbd-focus-outside-modal](#kbd-focus-outside-modal) · [kbd-hover-only](#kbd-hover-only) · [kbd-change-on-input](#kbd-change-on-input) · [kbd-dialog-escape](#kbd-dialog-escape)) · [color-contrast](#color-contrast) · [image-alt](#image-alt) · [svg-img-alt](#svg-img-alt) · [label](#label) · [placeholder-label](#placeholder-label) · [select-name](#select-name) · [button-name](#button-name) · [link-name](#link-name) · [html-has-lang](#html-has-lang) · [document-title](#document-title) · [heading-order](#heading-order) · [page-has-heading-one](#page-has-heading-one) · [landmark-one-main](#landmark-one-main) · [region](#region) · [bypass](#bypass) · [list](#list) · [listitem](#listitem) · [duplicate-id-aria](#duplicate-id-aria) · [aria-hidden-focus](#aria-hidden-focus) · [aria-required-attr](#aria-required-attr) · [aria-valid-attr-value](#aria-valid-attr-value) · [nested-interactive](#nested-interactive) · [tabindex](#tabindex) · [meta-viewport](#meta-viewport) · [frame-title](#frame-title) · [scrollable-region-focusable](#scrollable-region-focusable) · [target-size](#target-size) · [aria-dialog-name](#aria-dialog-name) · [link-in-text-block](#link-in-text-block)
 
 ---
 
@@ -130,6 +130,33 @@ html { scroll-padding-top: 80px; scroll-padding-bottom: 96px; } /* sticky header
 2. The control is at the very end of the page and cannot scroll above a bottom bar at all. Scroll padding cannot help; leave room for the bar: `body { padding-bottom: 96px; }`, or make the banner non-fixed / dismissible and move focus into it first.
 
 Tailwind: `scroll-pt-20 scroll-pb-24` on `<html>`, `pb-24` on `<body>`. The audit Tabs forwards only; also Shift+Tab backwards through the page yourself, since a sticky *header* usually hides focus on the way up.
+
+## kbd-focus-outside-modal
+
+A modal is open, but Tab still walks through the page behind it, where every focused control is hidden under the backdrop (2.4.3, and 2.4.11 for each hidden control). `aria-modal="true"` and a dimmed overlay only *look* modal: neither takes the background out of the Tab order. Scroll padding does not help here; the background has to become inert.
+
+Best: native `<dialog>` opened with `showModal()`. The rest of the page becomes inert, focus moves into the dialog, Escape closes it, and focus goes back to the opener on close.
+
+```html
+<!-- before -->
+<div class="backdrop show"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="t">…</div></div>
+<!-- after -->
+<dialog id="new-ticket-dialog" aria-labelledby="t">…</dialog>
+<script>
+  openBtn.addEventListener('click', () => document.getElementById('new-ticket-dialog').showModal());
+</script>
+<style> dialog::backdrop { background: rgb(15 23 42 / .55); } </style>
+```
+
+Keeping a custom modal: set `inert` on everything outside it while it is open (the modal must not be inside the inert element), move focus into it on open, and undo both on close.
+
+```js
+const app = document.getElementById('app');        // the page, a sibling of the modal
+function openModal() { app.inert = true; modal.hidden = false; modal.querySelector('input, button').focus(); }
+function closeModal() { app.inert = false; modal.hidden = true; opener.focus(); }
+```
+
+React: UI-kit dialogs (Radix, React Aria, Headless UI, MUI) already make the background inert; for a hand-rolled one, `<div id="app" inert={open}>` (React 19; React 18 needs `inert={open ? '' : undefined}`).
 
 ## kbd-hover-only
 

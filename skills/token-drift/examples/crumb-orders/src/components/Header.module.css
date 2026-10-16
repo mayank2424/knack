@@ -1,0 +1,28 @@
+.header {
+  display: flex;
+  align-items: center;
+  padding: 16px 24px;
+  background: #ffffff;
+  border-bottom: 1px solid #e6e6e6;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.logo {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8590c;
+}
+
+.nav a {
+  margin-left: 24px;
+  font-size: 15px;
+  color: #555555;
+}
+
+.cartBadge {
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: #e8590c;
+  color: #ffffff;
+  font-size: 12px;
+}

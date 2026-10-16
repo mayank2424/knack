@@ -123,7 +123,9 @@ Choreography rules that make demos good:
 - **Zoom for detail, briefly.** Zoom on small UI, act, zoom out. Omit `scale` and the zoom
   fits the target (80% of the width / 70% of the height, 1.25x to 2.2x). Viewers complain
   about constant zooming: one or two zooms per clip, held 2 to 4 s. Zoom a container that
-  includes the heading so nothing is cut mid-word.
+  includes the heading so nothing is cut mid-word. Captions and the keystroke HUD are drawn
+  in screen space, so they keep their size and place through a zoom; no need to time
+  around them.
 - **Park the cursor** (`{ "cursor": [x, y] }`) before opening menus or palettes so it does
   not hover-select an item.
 - **Hide noise**: cookie banners, dev toolbars, framework badges, chat widgets via `hide`.
@@ -139,8 +141,9 @@ node "${CLAUDE_SKILL_DIR}/scripts/record.mjs" path/to/flow.json --dry-run
 ```
 
 Runs the whole flow without encoding, saves a screenshot after each step (the camera view,
-so zooms show, with captions and the keystroke HUD drawn), and builds `<name>-steps.png`
-(one image, every step labelled). **Read it.** Check each step landed on the right element
+so zooms show, with captions and the keystroke HUD drawn; a blocking `highlight` or caption
+is captured while it shows), and builds `<name>-steps.png` (one image, every step labelled,
+1600 px wide). **Read it.** Check each step landed on the right element
 and the UI reached the expected state.
 
 On failure it exits non-zero and prints the failing step, similar visible elements with
@@ -157,11 +160,12 @@ node "${CLAUDE_SKILL_DIR}/scripts/record.mjs" path/to/flow.json -o docs/media/in
 Useful flags: `--viewport WxH`, `--frame` / `--background sunset`, `--trim-idle [ms]` (cut
 long still stretches), `--speed 1.2`, `--max-seconds 15`, `--gif-width 720 --gif-fps 12`
 (smaller GIF), `--crf 24` (smaller MP4), `--scale 1` (faster capture), `--no-zoom`
-(reduced-motion take), `--cursor-size 1.6`, `--cursor-blur 0`. `--help` lists all.
+(reduced-motion take), `--cursor-size 1.6`, `--cursor-blur 0`, `--sheet-width 1200`
+(contact-sheet width). `--help` lists all.
 
 It prints each output with size and duration, a `Legibility:` estimate (typical text size
 at README and phone width), warns over 10 MB (GitHub's upload limit) or over 15 s, and
-writes `<name>-sheet.png`. MP4/WebM are BT.709-converted and tagged so colours match the
+writes `<name>-sheet.png` (1600 px wide, 256-colour PNG, typically 100 to 300 KB). MP4/WebM are BT.709-converted and tagged so colours match the
 page in Chrome and Safari; GIFs use one full-clip palette with Floyd-Steinberg dithering.
 
 ## 7. Review the result (do not skip)

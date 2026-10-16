@@ -548,16 +548,73 @@ function diffPair(baseBuf, headBuf) {
   const match = rawChanged ? alignRows(rowHashes(aw), rowHashes(bw)) : null;
   const offset = new Int32Array(h); // head row y shows base row y - offset[y]
   const shifts = [];
-  let aligned = false;
+  let shifted = false;
   if (match) {
     let off = 0;
     for (let j = 0; j < h; j++) {
       if (j < b0.height && match[j] >= 0) off = j - match[j];
       offset[j] = off;
-      if (j < b0.height && match[j] >= 0 && off !== 0) aligned = true;
+      if (j < b0.height && match[j] >= 0 && off !== 0) shifted = true;
     }
   }
-  let diff = raw, changed = rawChanged, moved = 0;
+  // Structural runs, from the row match alone:
+  // - inserted: unmatched head rows with no base rows left between their matched neighbours (also
+  //   at the very top or bottom of the page). Compared against plain background (their row's edge
+  //   colour) instead of whatever base content sits at that height, so new content shows without ghosts.
+  // - revealed: the same at the bottom of a viewport capture: content scrolled up into view, not added.
+  // - blanked: head shows plain background where base had content and the layout kept its height
+  //   (min-height, a short page in a tall viewport): that content was removed, not changed.
+  // - a pure removal: base rows no head row maps to, with consecutive head rows on either side.
+  const inserted = new Uint8Array(h), revealed = new Uint8Array(h), blanked = new Uint8Array(h);
+  const added = [];
+  let structural = false;
+  if (match) {
+    const uniform = (png, y) => {
+      const o = y * png.width * 4;
+      for (let x = 1; x < png.width; x++) { const p = o + x * 4; if (png.data[p] !== png.data[o] || png.data[p + 1] !== png.data[o + 1] || png.data[p + 2] !== png.data[o + 2]) return false; }
+      return true;
+    };
+    for (let j = 0; j < b0.height;) {
+      if (match[j] >= 0) { j++; continue; }
+      let k = j;
+      while (k + 1 < b0.height && match[k + 1] < 0) k++;
+      const atBottom = k + 1 >= b0.height;
+      const bStart = j > 0 ? match[j - 1] + 1 : 0;
+      const bEnd = atBottom ? a0.height - 1 : match[k + 1] - 1;
+      const rows = k - j + 1;
+      if (bEnd < bStart && rows > 2 * scale) {
+        if (atBottom && !fullPage) revealed.fill(1, j, k + 1);
+        else { inserted.fill(1, j, k + 1); added.push({ j0: j, j1: k, baseY: bStart }); structural = true; }
+      } else if (bEnd >= bStart && rows > 2 * scale) {
+        let headBlank = true, baseBlank = true;
+        for (let y = j; headBlank && y <= k; y++) headBlank = uniform(bw, y);
+        for (let y = bStart; baseBlank && y <= bEnd; y++) baseBlank = uniform(aw, y);
+        let content = 0;
+        if (headBlank && !baseBlank) {
+          for (let y = bStart; y <= bEnd; y++) if (!uniform(aw, y)) content++;
+          if (content >= 3 * scale) { blanked.fill(1, j, k + 1); structural = true; }
+        } else if (baseBlank && !headBlank) {
+          // The mirror case: new content placed in what was empty space (nothing below had to move).
+          for (let y = j; y <= k; y++) if (!uniform(bw, y)) content++;
+          if (content >= 3 * scale) { inserted.fill(1, j, k + 1); added.push({ j0: j, j1: k, baseY: bStart }); structural = true; }
+        }
+      }
+      j = k + 1;
+    }
+    const headFor = new Int32Array(a0.height).fill(-1);
+    for (let j = 0; j < b0.height; j++) if (match[j] >= 0) headFor[match[j]] = j;
+    for (let i = 0; i < a0.height && !structural;) {
+      if (headFor[i] >= 0) { i++; continue; }
+      let k = i;
+      while (k + 1 < a0.height && headFor[k + 1] < 0) k++;
+      const atEnd = k + 1 >= a0.height;
+      const prevJ = i > 0 ? headFor[i - 1] : -1, nextJ = atEnd ? b0.height : headFor[k + 1];
+      if (nextJ === prevJ + 1 && k - i + 1 > 2 * scale && (fullPage || !atEnd)) structural = true;
+      i = k + 1;
+    }
+  }
+  const aligned = shifted || structural;
+  let diff = raw, changed = rawChanged, moved = 0, addedPx = 0;
   const removed = [];
   const addedRegions = [];
   const mask = new Uint8Array(w * h);
@@ -572,23 +629,6 @@ function diffPair(baseBuf, headBuf) {
     // Only near offsets: trying a far one would let removed content "match" plain background.
     const candidates = (j) => [...new Set([offPrev[j], offPrev[j] + 1, offPrev[j] - 1,
       ...(Math.abs(offNext[j] - offPrev[j]) <= 2 * scale ? [offNext[j], offNext[j] + 1, offNext[j] - 1] : [])])];
-    // Pure insertions: unmatched head rows with no base rows left between their matched
-    // neighbours. Compare them against plain background (their row's edge colour) instead of
-    // whatever base content happens to sit at that height, so new content shows without ghosts.
-    const inserted = new Uint8Array(h);
-    const added = [];
-    for (let j = 0; j < b0.height;) {
-      if (match[j] >= 0) { j++; continue; }
-      let k = j;
-      while (k + 1 < b0.height && match[k + 1] < 0) k++;
-      const bStart = j > 0 && match[j - 1] >= 0 ? match[j - 1] + 1 : 0;
-      const bEnd = k + 1 < b0.height ? match[k + 1] - 1 : a0.height - 1;
-      if (j > 0 && bEnd < bStart && k - j + 1 > 2 * scale) {
-        inserted.fill(1, j, k + 1);
-        added.push({ j0: j, j1: k });
-      }
-      j = k + 1;
-    }
     const used = new Uint8Array(a0.height);
     let real = null;
     const realMask = new Uint8Array(w * h);
@@ -598,6 +638,9 @@ function diffPair(baseBuf, headBuf) {
       for (let j = 0; j < h; j++) {
         let src;
         if (inserted[j]) { const o = j * w * 4; for (let x = 0; x < w; x++) bw.data.copy(ba.data, o + x * 4, o, o + 4); continue; }
+        if (revealed[j] || blanked[j]) { b.data.copy(ba.data, j * w * 4, j * w * 4, (j + 1) * w * 4); continue; }
+        // Below the end of head there is nothing to compare: base rows left there are removed (reported below).
+        if (j >= b0.height) { for (let x = 0; x < w; x++) checker(ba.data, w, x, j); continue; }
         if (j < b0.height && match[j] >= 0) src = match[j];
         else { const c = candidates(j); if (pass < c.length) anyNew = true; src = j - c[Math.min(pass, c.length - 1)]; }
         if (src >= 0 && src < a0.height) { aw.data.copy(ba.data, j * w * 4, src * w * 4, (src + 1) * w * 4); if (pass === 0) used[src] = 1; }
@@ -610,17 +653,24 @@ function diffPair(baseBuf, headBuf) {
       else for (let q = 0; q < w * h; q++) if (realMask[q] && !isDiff(out.data, q * 4)) realMask[q] = 0;
     }
     for (const ad of added) {
+      // Page background next to the block: the edge colour of the row below it (or above, when they
+      // agree or there is no row below). A full-bleed banner differs from it everywhere, so the whole
+      // bar counts as added, not just its text.
+      const edge = (y) => { const o = y * w * 4; return (bw.data[o] << 16) | (bw.data[o + 1] << 8) | bw.data[o + 2]; };
+      const below = ad.j1 + 1 < b0.height ? edge(ad.j1 + 1) : null, above = ad.j0 > 0 ? edge(ad.j0 - 1) : null;
+      const bg = below ?? above;
       let x0 = w, x1 = -1, px = 0;
       for (let y = ad.j0; y <= ad.j1; y++) {
         const o = y * w * 4;
+        const plainRow = bg === null || edge(y) === bg;
         for (let x = 0; x < w; x++) {
           const p = o + x * 4;
-          if (bw.data[p] === bw.data[o] && bw.data[p + 1] === bw.data[o + 1] && bw.data[p + 2] === bw.data[o + 2]) continue;
+          if (plainRow && bw.data[p] === bw.data[o] && bw.data[p + 1] === bw.data[o + 1] && bw.data[p + 2] === bw.data[o + 2]) continue;
           px++; if (x < x0) x0 = x; if (x > x1) x1 = x;
           if (!realMask[y * w + x]) { realMask[y * w + x] = 1; real.data[p] = DIFF_COLOR[0]; real.data[p + 1] = DIFF_COLOR[1]; real.data[p + 2] = DIFF_COLOR[2]; }
         }
       }
-      if (px) addedRegions.push({ x: x0, y: ad.j0, width: x1 - x0 + 1, height: ad.j1 - ad.j0 + 1, pixels: px, kind: 'added' });
+      if (px) addedRegions.push({ x: x0, y: ad.j0, width: x1 - x0 + 1, height: ad.j1 - ad.j0 + 1, pixels: px, kind: 'added', baseY: ad.baseY });
     }
     // Paint: red = changed; rows that moved get a light blue wash over the faded head (no
     // doubled "ghost" text from comparing content against its old position).
@@ -629,8 +679,10 @@ function diffPair(baseBuf, headBuf) {
       const band = j < b0.height && offPrev[j] !== 0;
       for (let x = 0; x < w; x++) {
         const q = j * w + x, p = q * 4;
-        if (realMask[q]) { changed++; continue; }
-        if (isDiff(raw.data, p)) moved++;
+        if (realMask[q]) { if (inserted[j]) addedPx++; else changed++; continue; }
+        // New or blanked rows hold no moved content, whatever base had at that height.
+        // Rows past the end of head hold nothing at all (removed base content is reported separately).
+        if (isDiff(raw.data, p) && j < b0.height && !inserted[j] && !blanked[j]) moved++;
         if (!band && !isDiff(raw.data, p) && !isDiff(real.data, p)) continue;
         const g = 255 + (0.29889531 * b.data[p] + 0.58662247 * b.data[p + 1] + 0.11448223 * b.data[p + 2] - 255) * 0.12;
         const k = band ? 0.3 : 0;
@@ -647,13 +699,17 @@ function diffPair(baseBuf, headBuf) {
       if (used[i]) { i++; continue; }
       let k = i;
       while (k + 1 < a0.height && !used[k + 1] && firstHeadFor[k + 1] < 0) k++;
-      // Content extent of the removed rows (pixels that differ from the row's first pixel).
+      // Content extent of the removed rows: pixels that differ from the row's first pixel, or whole
+      // rows whose edge colour is not the page background next to them (a full-bleed bar).
+      const edge = (y) => { const o = y * w * 4; return (aw.data[o] << 16) | (aw.data[o + 1] << 8) | aw.data[o + 2]; };
+      const bg = k + 1 < a0.height ? edge(k + 1) : i > 0 ? edge(i - 1) : null;
       let x0 = w, x1 = -1, px = 0;
       for (let y = i; y <= k; y++) {
         const o = y * w * 4;
+        const plainRow = bg === null || edge(y) === bg;
         for (let x = 0; x < w; x++) {
           const p = o + x * 4;
-          if (aw.data[p] !== aw.data[o] || aw.data[p + 1] !== aw.data[o + 1] || aw.data[p + 2] !== aw.data[o + 2]) { px++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+          if (!plainRow || aw.data[p] !== aw.data[o] || aw.data[p + 1] !== aw.data[o + 1] || aw.data[p + 2] !== aw.data[o + 2]) { px++; x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
         }
       }
       // A 1-2px gap between matched runs is sub-pixel jitter, not removed content.
@@ -678,7 +734,7 @@ function diffPair(baseBuf, headBuf) {
   for (let p = 0, q = 0; q < w * h; q++, p += 4) if (isDiff(diff.data, p)) mask[q] = 1;
   // Added blocks are reported as one region each; other red pixels are clustered as usual.
   for (const g of addedRegions) for (let y = g.y; y < g.y + g.height; y++) mask.fill(0, y * w, (y + 1) * w);
-  const regions = changed ? [...addedRegions, ...regionsOf(mask, w, h)] : [];
+  const regions = changed || addedPx ? [...addedRegions, ...regionsOf(mask, w, h)] : [];
   // Nothing visible, yet the bytes differ: a colour shift below pixelmatch's perceptual threshold
   // (e.g. #6b7280 -> #64748b). Renders are deterministic, so exact differences are real; flag them.
   // Skipped when rows were realigned (sub-pixel jitter there would read as subtle changes).
@@ -738,7 +794,7 @@ function diffPair(baseBuf, headBuf) {
     b: b0.width !== w || b0.height !== h ? PNG.sync.write(b) : headBuf,
     aPng: a, bPng: b, offset,
     diff: PNG.sync.write(diff),
-    w, h, total, rawChanged, changed: changed + removedPixels, moved, subtle, faintColors,
+    w, h, total, rawChanged, changed, added: addedPx, removed: removedPixels, moved, subtle, faintColors,
     shifts: shifts.sort((p, q) => (q.toY - q.fromY) - (p.toY - p.fromY)).slice(0, 5)
       .map((s) => ({ fromY: cssRound(s.fromY), toY: cssRound(s.toY), dy: cssRound(s.dy) })).sort((p, q) => p.fromY - q.fromY),
     sizes: { base: { width: cssRound(a0.width), height: cssRound(a0.height) }, head: { width: cssRound(b0.width), height: cssRound(b0.height) } },
@@ -767,8 +823,10 @@ const COMPOSE_CSS = `
   figcaption{display:flex;justify-content:space-between;gap:8px;padding:0 2px 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase}
   figcaption span{color:#9a9aa3;text-transform:none;letter-spacing:0}
   img{display:block;border-radius:6px;outline:1px solid #2a2d35;background:#fff}
-  .crop{position:relative}
-  .box{position:absolute;border:2px dashed #3b82f6;border-radius:4px;box-shadow:0 0 0 1px rgba(15,17,21,.6)}
+  .crop{position:relative;overflow:hidden;border-radius:6px}
+  .box{position:absolute;box-sizing:border-box;border:2px dashed #3b82f6;border-radius:4px;box-shadow:0 0 0 1px rgba(15,17,21,.6)}
+  .ins{position:absolute;height:0;border-top:3px solid #e5484d;box-shadow:0 0 0 1px rgba(255,255,255,.7)}
+  .ins span{position:absolute;left:0;padding:3px 7px;border-radius:4px;background:#e5484d;color:#fff;font:600 11px/1.2 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;white-space:nowrap}
   .box.shift{border-color:#f59e0b}
   .box.subtle{border-color:#f5a524;border-style:dotted}
   .rows{display:flex;flex-direction:column;gap:18px;padding:8px 16px 16px}
@@ -795,6 +853,8 @@ async function renderHtml(browser, dir, name, html, width) {
 
 function headerHtml(r, extra = '') {
   const meta = [r.percent === null ? '' : `${pctText(r.percent)} changed`,
+    r.addedPercent ? `${pctText(r.addedPercent)} added` : '',
+    r.removedPercent ? `${pctText(r.removedPercent)} removed` : '',
     r.movedPercent ? `${pctText(r.movedPercent)} moved` : '',
     r.faintPixels ? `${r.faintPixels} px faint change` : '',
     r.sizeChanged ? `height ${r.base.height}→${r.head.height}px` : '',
@@ -823,8 +883,24 @@ async function composeFocus(browser, dir, r, d) {
   const marks = [...d.regionsPx.slice(0, 8), ...d.shiftMarks.slice(0, 2)];
   if (!marks.length) return false;
   const PAD = Math.round(32 * scale), MAXW = Math.round(760 * scale), MAXH = Math.round(420 * scale);
+  // A thin line (a 1px border whose colour changed) can span the whole page yet hold nothing to read:
+  // cropping all of it gives a sliver at 50% or a strip taller than the close-up. Show its start at
+  // full zoom instead, and only when bigger changes leave room.
+  // Thin = at most 4 grid cells across, long, and about one pixel thick (changed pixels per px of length).
+  const thin = (g) => {
+    if (g.kind !== 'changed' && g.kind !== 'subtle') return false;
+    const across = Math.min(g.width, g.height), along = Math.max(g.width, g.height);
+    return across <= 32 * scale && along >= 200 * scale && along >= 8 * across && g.pixels <= 1.5 * scale * along;
+  };
+  const view = (g) => {
+    if (!thin(g)) return g;
+    return g.height > g.width ? { ...g, height: Math.min(g.height, 160 * scale) } : { ...g, width: Math.min(g.width, 300 * scale) };
+  };
   // Expand, merge overlapping, keep the biggest few.
-  let boxes = marks.map((b) => ({ x0: Math.max(0, b.x - PAD * 2), y0: Math.max(0, b.y - PAD), x1: Math.min(d.w, b.x + b.width + PAD * 2), y1: Math.min(d.h, b.y + b.height + PAD), regs: [b] }));
+  let boxes = marks.map((g) => {
+    const v = view(g);
+    return { x0: Math.max(0, v.x - PAD * 2), y0: Math.max(0, v.y - PAD), x1: Math.min(d.w, v.x + v.width + PAD * 2), y1: Math.min(d.h, v.y + v.height + PAD), regs: [g] };
+  });
   for (let merged = true; merged;) {
     merged = false;
     outer: for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
@@ -835,7 +911,8 @@ async function composeFocus(browser, dir, r, d) {
       }
     }
   }
-  const weight = (bx) => bx.regs.reduce((sum, g) => sum + (g.kind === 'shift' ? 1e9 : g.pixels), 0); // shift starts always make the cut
+  // Shift starts always make the cut; thin lines go last.
+  const weight = (bx) => bx.regs.reduce((sum, g) => sum + (g.kind === 'shift' ? 1e9 : thin(g) ? g.pixels * 0.05 : g.pixels), 0);
   boxes = boxes.sort((p, q) => weight(q) - weight(p)).slice(0, 4).sort((p, q) => p.y0 - q.y0);
   const crop = (png, x0, y0, cw, ch) => {
     const out = new PNG({ width: cw, height: ch });
@@ -851,26 +928,46 @@ async function composeFocus(browser, dir, r, d) {
   const rows = boxes.map((bx) => {
     const cw = bx.x1 - bx.x0, ch = Math.min(bx.y1 - bx.y0, MAXH * 2);
     const rem = bx.regs.find((g) => g.kind === 'removed');
-    // Where this crop sits in base: same rows shifted by the local offset; for removed content,
-    // anchor at the junction and make the base crop tall enough to show what was removed.
-    const offB = rem ? rem.junction - rem.baseY : (d.offset[Math.min(d.h - 1, bx.y0 + (ch >> 1))] || 0);
+    const add = bx.regs.find((g) => g.kind === 'added');
+    // Where this crop sits in base: same rows shifted by the local offset. For removed content,
+    // anchor at the junction and make the base crop tall enough to show what was removed; for an
+    // added block, anchor at the insertion point so the content above it lines up.
+    const offB = rem ? rem.junction - rem.baseY : add ? add.y - add.baseY : (d.offset[Math.min(d.h - 1, bx.y0 + (ch >> 1))] || 0);
     const chB = Math.min(ch + (rem ? rem.removedHeight : 0), MAXH * 3);
     const zoom = Math.min(2, MAXW / cw, (MAXH * 1.6) / Math.max(ch, chB));
-    const css = (v) => ((v * zoom) / scale).toFixed(1);
-    const boxHtml = (x, y, bw, bh, cls = '') => `<div class="box ${cls}" style="left:${(+css(x) - 4).toFixed(1)}px;top:${(+css(y) - 4).toFixed(1)}px;width:${(+css(bw) + 8).toFixed(1)}px;height:${(+css(bh) + 8).toFixed(1)}px"></div>`;
-    const headBoxes = bx.regs.map((g) => boxHtml(g.x - bx.x0, g.y - bx.y0, g.width, g.height, g.kind === 'changed' || g.kind === 'removed' ? '' : g.kind)).join('');
-    const baseBoxes = bx.regs.map((g) => (g.kind === 'removed'
-      ? boxHtml(g.x - bx.x0, g.baseY - (bx.y0 - offB), g.width, g.removedHeight)
-      : boxHtml(g.x - bx.x0, g.y - bx.y0, g.width, g.height, g.kind === 'changed' || g.kind === 'removed' ? '' : g.kind))).join('');
+    const css = (v) => (v * zoom) / scale;
+    const imgW = css(cw);
+    // Boxes are clipped to their image: a region taller than the crop must not spill over the next row.
+    const boxHtml = (x, y, bw, bh, cls, imgH) => {
+      const L = Math.max(0, css(x) - 4), T = Math.max(0, css(y) - 4), R = Math.min(imgW, css(x + bw) + 4), B = Math.min(imgH, css(y + bh) + 4);
+      if (R - L < 6 || B - T < 6) return '';
+      return `<div class="box ${cls}" style="left:${L.toFixed(1)}px;top:${T.toFixed(1)}px;width:${(R - L).toFixed(1)}px;height:${(B - T).toFixed(1)}px"></div>`;
+    };
+    // Base has nothing where a block was added: mark the insertion point instead of boxing unrelated base content.
+    const insHtml = (x, y, bw, imgH) => {
+      const L = Math.max(0, css(x)), R = Math.min(imgW, css(x + bw)), T = Math.min(Math.max(0, css(y) - 1), imgH - 3);
+      if (R - L < 6 || css(y) > imgH) return '';
+      return `<div class="ins" style="left:${L.toFixed(1)}px;top:${T.toFixed(1)}px;width:${(R - L).toFixed(1)}px"><span style="${T < 22 ? 'top:6px' : 'bottom:4px'}">new block inserted here</span></div>`;
+    };
+    const cls = (g) => (g.kind === 'changed' || g.kind === 'removed' || g.kind === 'added' ? '' : g.kind);
+    const headBoxes = bx.regs.map((g) => boxHtml(g.x - bx.x0, g.y - bx.y0, g.width, g.height, cls(g), css(ch))).join('');
+    const baseY0 = bx.y0 - offB;
+    const baseBoxes = bx.regs.map((g) => (g.kind === 'removed' ? boxHtml(g.x - bx.x0, g.baseY - baseY0, g.width, g.removedHeight, '', css(chB))
+      : g.kind === 'added' ? insHtml(g.x - bx.x0, g.baseY - baseY0, g.width, css(chB))
+        : boxHtml(g.x - bx.x0, g.y - bx.y0, g.width, g.height, cls(g), css(chB)))).join('');
+    const cut = bx.regs.some((g) => g.kind !== 'shift' && !thin(g) && g.y + g.height > bx.y0 + ch);
+    const lines = bx.regs.filter(thin);
     const label = `x ${Math.round(bx.x0 / scale)}–${Math.round(bx.x1 / scale)}, y ${Math.round(bx.y0 / scale)}–${Math.round((bx.y0 + ch) / scale)}`
-      + `${offB ? ` (base y ${Math.round((bx.y0 - offB) / scale)})` : ''} · ${zoom >= 1.01 ? `${zoom.toFixed(1)}×` : `${Math.round(zoom * 100)}%`}`
+      + `${offB ? ` (base y ${Math.round(baseY0 / scale)})` : ''} · ${zoom >= 1.01 ? `${zoom.toFixed(1)}×` : `${Math.round(zoom * 100)}%`}`
       + (rem ? ` · ${Math.round(rem.removedHeight / scale)}px of content removed` : '')
-      + (bx.regs.some((g) => g.kind === 'added') ? ' · new block' : '')
+      + (add ? ` · new block, ${Math.round(add.height / scale)}px tall` : '')
       + (bx.regs.every((g) => g.kind === 'subtle') ? ` · faint change${r.faintColors ? ` (mostly ${r.faintColors.base} → ${r.faintColors.head})` : ' (low contrast)'}` : '')
+      + (lines.length && lines.length === bx.regs.length ? ` · thin line, ${Math.round(Math.max(lines[0].width, lines[0].height) / scale)}px long (showing its start)` : '')
+      + (cut ? ' · region continues below this crop' : '')
       + bx.regs.filter((g) => g.kind === 'shift').map((g) => ` · content below moves ${g.dy > 0 ? 'down' : 'up'} ${Math.abs(Math.round(g.dy / scale))}px`).join('');
-    const img = (src, hgt) => `<img src="${src}" width="${css(cw)}" height="${css(hgt)}" style="image-rendering:${zoom >= 1.5 ? 'pixelated' : 'auto'}">`;
+    const img = (src, hgt) => `<img src="${src}" width="${css(cw).toFixed(1)}" height="${css(hgt).toFixed(1)}" style="image-rendering:${zoom >= 1.5 ? 'pixelated' : 'auto'}">`;
     return `<div class="row"><h3>${esc(label)}</h3><div class="pair">
-      <figure><figcaption><b>Base</b><span>${esc(labels.base)}</span></figcaption><div class="crop">${img(crop(d.aPng, bx.x0, bx.y0 - offB, cw, chB), chB)}${baseBoxes}</div></figure>
+      <figure><figcaption><b>Base</b><span>${esc(labels.base)}</span></figcaption><div class="crop">${img(crop(d.aPng, bx.x0, baseY0, cw, chB), chB)}${baseBoxes}</div></figure>
       <figure><figcaption><b>Head</b><span>${esc(labels.head)}</span></figcaption><div class="crop">${img(crop(d.bPng, bx.x0, bx.y0, cw, ch), ch)}${headBoxes}</div></figure></div></div>`;
   }).join('');
   const html = `<!doctype html><meta charset="utf-8"><style>${COMPOSE_CSS}</style><body>${headerHtml(r, ' · close-up of changed regions')}<div class="rows">${rows}</div></body>`;
@@ -904,7 +1001,7 @@ const results = await pool(jobs, concurrency, async ({ page, width }) => {
   const rel = path.posix.join('pages', slug(page), String(width));
   const dir = path.join(outDir, rel);
   fs.mkdirSync(dir, { recursive: true });
-  const r = { page, width, status: 'error', percent: null, movedPercent: 0, changedPixels: null, movedPixels: 0, totalPixels: null, sizeChanged: false, regions: [], shifts: [], shift: null, notes: [], files: {} };
+  const r = { page, width, status: 'error', percent: null, movedPercent: 0, addedPercent: 0, removedPercent: 0, changedPixels: null, movedPixels: 0, addedPixels: 0, removedPixels: 0, totalPixels: null, sizeChanged: false, regions: [], shifts: [], shift: null, notes: [], files: {} };
   try {
     const urls = { base: resolvePage(targets.base, page), head: resolvePage(targets.head, page) };
     for (const side of ['base', 'head']) if (urls[side].error) throw new Error(`${side}: ${urls[side].error}`);
@@ -926,8 +1023,11 @@ const results = await pool(jobs, concurrency, async ({ page, width }) => {
     fs.writeFileSync(path.join(dir, 'head.png'), d.b);
     fs.writeFileSync(path.join(dir, 'diff.png'), d.diff);
     Object.assign(r, {
-      changedPixels: d.changed, movedPixels: d.moved, totalPixels: d.total,
+      // Changed % counts only content that differs in place; added blocks, removed blocks and
+      // moved content are reported separately so a deleted card does not read as "21% changed".
+      changedPixels: d.changed, movedPixels: d.moved, addedPixels: d.added, removedPixels: d.removed, totalPixels: d.total,
       percent: (d.changed / d.total) * 100, movedPercent: (d.moved / d.total) * 100,
+      addedPercent: (d.added / d.total) * 100, removedPercent: (d.removed / d.total) * 100,
       base: d.sizes.base, head: d.sizes.head, regions: d.regions, shifts: d.shifts,
       shift: d.shifts.length ? d.shifts.reduce((p, q) => ((q.toY - q.fromY) > (p.toY - p.fromY) ? q : p)) : null,
       sizeChanged: d.sizes.base.height !== d.sizes.head.height || d.sizes.base.width !== d.sizes.head.width,
@@ -943,7 +1043,7 @@ const results = await pool(jobs, concurrency, async ({ page, width }) => {
     // is not worth a reviewer's time; real colour tweaks touch hundreds.
     const faintMatters = d.subtle >= minRegion * px2;
     r.status = d.rawChanged === 0 && !r.sizeChanged ? (faintMatters ? 'minor' : 'unchanged')
-      : (r.percent >= threshold || r.movedPercent >= threshold || r.sizeChanged || solid ? 'changed' : 'minor');
+      : (Math.max(r.percent, r.movedPercent, r.addedPercent, r.removedPercent) >= threshold || r.sizeChanged || solid ? 'changed' : 'minor');
     if (bad(cb.httpStatus) !== bad(ch.httpStatus)) r.status = 'changed';
     const kinds = ['base', 'head', 'diff', 'compare'];
     const shown = await compose(browser, dir, r, d);
@@ -989,7 +1089,11 @@ const noteOf = (r) => [
   ...r.notes.filter((n) => /HTTP|console errors|kept changing|still loading|faint change/.test(n) && !n.includes('too few to matter')).map((n) => n.replace(/^(base|head): (?=HTTP)/, '')),
 ].filter(Boolean).join('; ').replace(/\|/g, '\\|');
 const statusCell = (r) => (r.status === 'changed' ? '**changed**' : r.status === 'error' ? '**error**' : r.status);
-const movedCell = (r) => (r.movedPercent ? ` (+${pctText(r.movedPercent)} moved)` : '');
+const extraCell = (r) => {
+  const parts = [r.addedPercent ? `${pctText(r.addedPercent)} added` : '', r.removedPercent ? `${pctText(r.removedPercent)} removed` : '',
+    r.movedPercent ? `${pctText(r.movedPercent)} moved` : ''].filter(Boolean);
+  return parts.length ? ` (${parts.join(', ')})` : '';
+};
 // GitHub renders PR images at most ~880px wide; tuck the full comparison away when it would be tiny or very tall there.
 const tucked = (r) => {
   const cssW = 3 * Math.round(Math.max(r.base.width, r.head.width) * r.compareScale) + 64;
@@ -1004,11 +1108,12 @@ md.push(`Captured ${pages.length} page${pages.length > 1 ? 's' : ''} at ${widths
   + `**${totals.changed} changed**, ${totals.minor} minor, ${totals.unchanged} unchanged${totals.error ? `, **${totals.error} error**` : ''}. `
   + `Base: ${labels.base} · Head: ${labels.head}.`, '');
 md.push('| Page | Width | Result | Pixels changed | Notes |', '|---|---:|---|---:|---|');
-for (const r of results) md.push(`| \`${r.page}\` | ${r.width}px | ${statusCell(r)} | ${fmtPct(r)}${movedCell(r)} | ${noteOf(r)} |`);
+for (const r of results) md.push(`| \`${r.page}\` | ${r.width}px | ${statusCell(r)} | ${fmtPct(r)}${extraCell(r)} | ${noteOf(r)} |`);
 md.push('');
 const pairMd = (r, level) => {
   const out = [];
-  const what = [r.percent || !r.faintPixels ? `${fmtPct(r)} changed` : '', r.movedPercent ? `${pctText(r.movedPercent)} moved` : '',
+  const what = [r.percent || !r.faintPixels ? `${fmtPct(r)} changed` : '', r.addedPercent ? `${pctText(r.addedPercent)} added` : '',
+    r.removedPercent ? `${pctText(r.removedPercent)} removed` : '', r.movedPercent ? `${pctText(r.movedPercent)} moved` : '',
     r.faintPixels && !r.percent ? `faint change in ${r.faintPixels} px` : ''].filter(Boolean).join(', ');
   out.push(`${level} \`${r.page}\` at ${r.width}px (${what})`, '');
   if (r.files.focus) out.push(`![${r.page} at ${r.width}px: close-up of changed regions, base vs head](${img(r.files.focus)})`, '');

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Overview · Tallyhouse</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <a class="logo" href="index.html"><i>T</i>Tallyhouse</a>
+      <nav>
+        <a href="index.html" aria-current="page">Overview</a>
+        <a href="invoices.html">Invoices</a>
+        <a href="settings.html">Settings</a>
+      </nav>
+      <p class="foot">Juniper &amp; Vale Studio<br>Pro plan</p>
+    </aside>
+    <main>
+      <div class="head">
+        <div>
+          <h1>Good afternoon, Priya</h1>
+          <p>Here is where your cash stands this month.</p>
+        </div>
+        <a class="btn" href="invoices.html">+ New invoice</a>
+      </div>
+
+      <section class="stats">
+        <div class="stat"><span>Outstanding</span><b>$18,420</b><small>9 invoices</small></div>
+        <div class="stat"><span>Paid in October</span><b>$42,180</b><small>+12% vs September</small></div>
+        <div class="stat"><span>Overdue</span><b>$3,150</b><small>2 clients</small></div>
+      </section>
+
+      <section class="panel">
+        <header><h2>Recent invoices</h2><a href="invoices.html">View all</a></header>
+        <table>
+          <thead><tr><th>Client</th><th class="hide-sm">Due</th><th>Status</th><th class="num">Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Northwind Bakery<span class="sub">INV-1042</span></td><td class="hide-sm">Oct 28</td><td><span class="pill due">Due</span></td><td class="num">$4,800</td></tr>
+            <tr><td>Harbor &amp; Pine<span class="sub">INV-1041</span></td><td class="hide-sm">Oct 21</td><td><span class="pill paid">Paid</span></td><td class="num">$12,500</td></tr>
+            <tr><td>Kestrel Outfitters<span class="sub">INV-1039</span></td><td class="hide-sm">Oct 02</td><td><span class="pill late">Overdue</span></td><td class="num">$2,150</td></tr>
+            <tr><td>Marigold Dental<span class="sub">INV-1038</span></td><td class="hide-sm">Sep 30</td><td><span class="pill paid">Paid</span></td><td class="num">$1,960</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

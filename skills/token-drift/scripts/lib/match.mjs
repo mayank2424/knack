@@ -1,6 +1,6 @@
 // Nearest-token matching, EXACT / NEAR / OFF-SCALE classification and the
 // per-context fix (replacement text) for each finding.
-import { deltaE2000, oklabDistance } from './color.mjs';
+import { deltaE2000, oklabDistance, isPureBW, BW_MAX_DE } from './color.mjs';
 import { shadowDistance } from './values.mjs';
 import { AMBIGUOUS, NEGATABLE } from './tailwind.mjs';
 
@@ -122,8 +122,9 @@ function distance(f, t) {
 function isNear(f, dist, th, t = null) {
   switch (f.category) {
     case 'color':
-      // pure white / black are almost always deliberate, not a drifted off-white
-      if ((f.color.key === '#ffffff' || f.color.key === '#000000') && dist.deltaE > 1) return false;
+      // pure white / black are almost always deliberate, in both directions: #ffffff isn't a drifted #fafafa,
+      // and #f5f5f5 / #fafafa aren't a drifted #ffffff token
+      if ((isPureBW(f.color) || isPureBW(t?.meas?.color)) && dist.deltaE > BW_MAX_DE) return false;
       return dist.deltaE <= (t?.isDefault ? th.color / 2 : th.color) && dist.alpha <= Math.min(0.05, Math.max(0.011, f.color.alpha * 0.25));
     // every px is a visible step in a type scale, so font sizes get a tighter absolute bound
     case 'font-size': return dist.abs <= th.font || dist.pct <= th.pct;
@@ -182,9 +183,18 @@ function twReplacement(f, t) {
 const CAT_WORD = { radius: /^(radius|radii|rounded|border(radius)?|corner)/i, space: /^(space|spacing|spacer|gap|size|sp|s|scale)\b/i, 'font-size': /^(font|fs|text|type|typo|size|fontsize)/i, 'z-index': /^(z|zindex|z-index|layer|elevation)/i, duration: /^(duration|motion|transition|speed|time)/i };
 const SEMANTIC = [
   [/^background|^bg/, /bg|background|surface|canvas|base/],
-  [/^color$|^fill$/, /text|fg|ink|foreground|body|content/],
+  // `text-[#0a0a0a]` is a text color just like `color: #0a0a0a`
+  [/^color$|^fill$|^text$|^caret|^placeholder|^decoration/, /text|fg|ink|foreground|body|content/],
   [/^border|^outline|^stroke/, /border|line|divider|stroke|outline/],
 ];
+// words that name a role, not a component: they don't make a token "belong" to a file
+const ROLE_WORDS = new Set(['color', 'colors', 'bg', 'background', 'text', 'fg', 'foreground', 'border', 'ring', 'fill', 'stroke', 'default', 'base']);
+const words = (s) => String(s || '').replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+/** Component words of the file a finding is in: ui/card.tsx → card, NoteListItem.tsx → note, list, item. */
+function fileWords(f) {
+  const base = String(f.rel || f.file || '').split(/[\\/]/).pop().replace(/\.[^.]*$/, '').replace(/\.(module|styles?)$/, '');
+  return new Set(words(base).filter((w) => w.length > 2 && !ROLE_WORDS.has(w) && w !== 'index'));
+}
 
 function preference(f, t, rank = 0, index = null) {
   let p = rank * 0.05;
@@ -205,8 +215,15 @@ function preference(f, t, rank = 0, index = null) {
   if (f.category === 'color') {
     for (const [pr, nr] of SEMANTIC) if (pr.test(f.prop) && nr.test(t.name)) { p -= 0.2; break; }
     if (roleMismatch(f.prop, t.name) || roleMismatch(f.prop, aliasOf(t))) p += 0.3; // a role-free primitive beats a token meant for another role
-    // a custom property or other role-less spot: prefer the palette primitive over someone else's semantic alias
-    else if (!ROLE_OF_PROP.some(([, re]) => re.test(String(f.prop).toLowerCase())) && aliasOf(t)) p += 0.05;
+    else {
+      // a custom property or other role-less spot: prefer the palette primitive over someone else's semantic alias
+      if (!ROLE_OF_PROP.some(([, re]) => re.test(String(f.prop).toLowerCase())) && aliasOf(t)) p += 0.05;
+      // equal-valued semantic tokens: the one named after this component (bg-card in card.tsx) wins
+      const fw = fileWords(f);
+      if (fw.size && words(t.name).some((w) => fw.has(w))) p -= 0.25;
+    }
+    // then the most generic name: --color-foreground over --color-card-foreground outside a card
+    p += 0.02 * words(t.name).length;
   }
   return p;
 }
@@ -238,7 +255,11 @@ export function classify(findings, index, th) {
       scored.push({ t, dist, rank, pref: preference(f, t, rank, index) });
     }
     scored.sort((a, b) => (Math.round(a.dist.d * 1000) - Math.round(b.dist.d * 1000)) || (a.pref - b.pref) || a.t.name.localeCompare(b.t.name));
-    const best = scored[0];
+    let best = scored[0];
+    // the nearest token is pure white/black but this isn't (or vice versa): a non-white token within threshold still counts
+    if (best && f.category === 'color' && !best.dist.exact && (isPureBW(f.color) || isPureBW(best.t.meas.color)) && best.dist.deltaE > BW_MAX_DE) {
+      best = scored.find((s) => !isPureBW(s.t.meas.color) && isNear(f, s.dist, th, s.t)) || best;
+    }
     if (!best) {
       f.status = 'OFF-SCALE'; f.token = null; f.fix = null;
       f.fixNote = cands.length ? (f.category === 'shadow' ? 'no token with the same shadow structure (layers / inset)' : 'no comparable token') : (index.byCat[f.category] || []).length ? 'no token of this category is usable here (other package, other Tailwind version, or class-only)' : 'no token in this category';
@@ -247,7 +268,7 @@ export function classify(findings, index, th) {
     f.status = best.dist.exact ? 'EXACT' : isNear(f, best.dist, th, best.t) ? 'NEAR' : 'OFF-SCALE';
     f.token = best.t;
     f.distance = best.dist;
-    f.alternatives = scored.slice(1, 3).filter((s) => Math.abs(s.dist.d - best.dist.d) < 0.001).map((s) => s.t.name);
+    f.alternatives = scored.filter((s) => s !== best).slice(0, 2).filter((s) => Math.abs(s.dist.d - best.dist.d) < 0.001).map((s) => s.t.name);
     // midway between two different scale steps (10px between 8 and 12): not drift toward either one
     const tie = f.status === 'NEAR' && f.category !== 'color' && scored.find((s) => s !== best && Math.abs(s.dist.d - best.dist.d) < 0.001 && valueKey(s.t) !== valueKey(best.t));
     if (tie) { f.status = 'OFF-SCALE'; f.between = [best.t.name, tie.t.name]; }
@@ -276,6 +297,12 @@ export function classify(findings, index, th) {
     if (f.negative) { f.fixNote = 'negative value: rewrite as calc(-1 * token) by hand'; continue; }
     const ref = referenceFor(f, best.t, index);
     if (!ref && best.t.refs.tw != null && f.context === 'jsx-style') { f.fixNote = `inline style can't use a Tailwind theme value; use the class (${best.t.usage.split('  ·  ').find((u) => !u.startsWith('theme(')) || best.t.usage}) instead`; continue; }
+    // Tailwind v4 only has utilities for durations and z-index (duration-150, z-10), no theme variable CSS could reference
+    if (!ref && best.t.twv === 4 && best.t.isDefault && best.t.refs.tw != null && !best.t.refs.css && f.context === 'css') {
+      const cls = best.t.usage.split('  ·  ').find((u) => !u.startsWith('theme(')) || best.t.name;
+      f.fixNote = `Tailwind v4 has no ${f.category === 'z-index' ? 'z-index' : f.category} variable to use from CSS; put the ${cls} class on the element instead, or keep the value`;
+      continue;
+    }
     if (!ref) { f.fixNote = best.t.refs.cssAssumed ? 'token JSON has no generated CSS variable in this repo' : (best.t.refs.scss || best.t.refs.less) && f.lang === (best.t.refs.scss ? 'scss' : 'less') ? `${best.t.name} is not imported into this file (@use/@import its file first)` : `token not referenceable from ${f.lang} (${best.t.usage})`; continue; }
     if (f.context === 'jsx-style') {
       f.fix = f.numeric ? { start: f.start, end: f.end, text: `'${ref}'` } : { start: f.start, end: f.end, text: ref };

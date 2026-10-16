@@ -7,7 +7,7 @@ The goal: every automatic rewrite leaves the rendered UI **pixel-identical** in 
 | Mode | Rewrites | Visual change |
 |---|---|---|
 | `--fix` | EXACT only: the raw value equals the token's resolved value (same 8-bit sRGB + alpha; same px after rem→px; same ms) | None in the base theme. Theme-aware tokens are listed for confirmation |
-| `--fix=near` | EXACT + NEAR: ΔE2000 ≤ 4 (≤ 2 against framework-default palette colors; never for pure `#fff`/`#000` beyond ΔE 1) with alpha within ~25% of the token's; spacing/radius within 2px and 25%, or 5%; offsets (`top`/`left`/`inset`) within 2px; font sizes within 1px or 5%; durations within 10 ms or 15%; weights within 50 | Small and deliberate: the value snaps to the system |
+| `--fix=near` | EXACT + NEAR: ΔE2000 ≤ 4 (≤ 2 against framework-default palette colors; never to or from pure `#fff`/`#000` beyond ΔE 0.5, so `#fafafa` and `#f5f5f5` are not flattened to white) with alpha within ~25% of the token's; spacing/radius within 2px and 25%, or 5%; offsets (`top`/`left`/`inset`) within 2px; font sizes within 1px or 5%; durations within 10 ms or 15%; weights within 50 | Small and deliberate: the value snaps to the system |
 | OFF-SCALE | Never, including values exactly midway between two steps | Needs a human decision: add a token, or keep it as a one-off |
 
 Always run `--dry-run` first. It prints a unified diff, writes `.knack/token-drift/fix.diff`, and changes nothing.
@@ -42,6 +42,7 @@ Always run `--dry-run` first. It prints a unified diff, writes `.knack/token-dri
 - **Tailwind classes with a `/modifier` on colors** (`bg-[#2563eb]/50`). Opacity modifiers on var-backed colors only work if the color was defined with channels. Font-size `/line-height` modifiers are kept.
 - **Tailwind `shadow-[…]` that would become `shadow-[var(--x)]`.** Tailwind can't reliably tell a var() shadow from a shadow color. The token is suggested and you rewrite by hand.
 - **Inline styles matching a Tailwind v3 theme value** (no CSS variable behind it). The suggestion is to use the class instead.
+- **Durations and z-indexes in CSS under Tailwind v4.** v4 has no theme variable for them (`duration-150` and `z-10` are plain utilities), so `transition: color 150ms` can't become a `var()`. The scan suggests the class instead.
 - **DTCG / Style Dictionary tokens with no generated CSS variable in the repo**, unless you pass `--json-vars`.
 - **Tailwind v3 theme tokens in CSS files** with no CSS variable behind them. A `theme('…')` suggestion is shown instead, since it only works where Tailwind's PostCSS plugin runs.
 - **Anything inside comments, `var()` fallbacks, `url()`, SVG path data, `@font-face` descriptors, transition delays, token definition files, generated files, or lines marked `token-drift-ignore` / `stylelint-disable-line`.**

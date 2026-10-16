@@ -170,6 +170,33 @@
   };
 
   /**
+   * Stagger: a number (seconds between items) or
+   * { each, from: 'start'|'center'|'end'|'edges'|'random'|index, grid: [cols, rows], ease, seed }.
+   * Grid staggers ripple out by 2D distance from the origin cell.
+   */
+  function staggerDelays(n, st) {
+    if (!st || typeof st === 'number') return Array.from({ length: n }, (_, i) => i * (st || 0));
+    const each = st.each ?? 0.05;
+    const [cols, rows] = st.grid || [n, 1];
+    const fromIdx = typeof st.from === 'number' ? st.from : null;
+    const origin = (() => {
+      if (fromIdx != null) return [fromIdx % cols, Math.floor(fromIdx / cols)];
+      if (st.from === 'center' || st.from === 'edges') return [(cols - 1) / 2, (rows - 1) / 2];
+      if (st.from === 'end') return [cols - 1, rows - 1];
+      return [0, 0];
+    })();
+    const dist = Array.from({ length: n }, (_, i) => Math.hypot(i % cols - origin[0], Math.floor(i / cols) - origin[1]));
+    const max = Math.max(...dist, 1e-9);
+    const rnd = random(st.seed || 7);
+    const e = resolveEase(st.ease || 'linear');
+    // Delay = distance (in items or grid cells) × each, optionally eased across the range.
+    return dist.map((d) => {
+      const k = st.from === 'random' ? rnd() * max : st.from === 'edges' ? max - d : d;
+      return e(k / max) * max * each;
+    });
+  }
+
+  /**
    * Motion.to(target, { start, duration, ease, from: {...}, to: {...} })
    * or the shorthand Motion.to(target, { opacity: 1, y: 0 }, { start, duration, ease, from }).
    */
@@ -180,9 +207,9 @@
     const { start = 0, duration = 0.6, from = {}, to: dest = {} } = opts;
     const e = resolveEase(opts.ease);
     const list = els(target);
-    const stagger = opts.stagger || 0;
+    const delays = staggerDelays(list.length, opts.stagger || 0);
     list.forEach((el, i) => {
-      const s = start + i * stagger;
+      const s = start + delays[i];
       lastEnd = Math.max(lastEnd, s + duration);
       if (!tracks.has(el)) tracks.set(el, new Map());
       const props = new Set([...Object.keys(from), ...Object.keys(dest)]);
@@ -348,6 +375,157 @@
     return api;
   }
 
+
+  // ------------------------------------------------------- showreel kit
+  /** Seeded 3D simplex noise in [-1, 1]. noise(x, y, z). Deterministic per seed. */
+  const makeNoise = (seed = 1) => {
+    const r = random(seed), p = new Uint8Array(512), perm = Array.from({ length: 256 }, (_, i) => i);
+    for (let i = 255; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [perm[i], perm[j]] = [perm[j], perm[i]]; }
+    for (let i = 0; i < 512; i++) p[i] = perm[i & 255];
+    const g = [[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+    const F3 = 1 / 3, G3 = 1 / 6;
+    return (x, y = 0, z = 0) => {
+      const s = (x + y + z) * F3, i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s);
+      const t = (i + j + k) * G3, x0 = x - i + t, y0 = y - j + t, z0 = z - k + t;
+      let i1, j1, k1, i2, j2, k2;
+      if (x0 >= y0) { if (y0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=1;k2=0; } else if (x0 >= z0) { i1=1;j1=0;k1=0;i2=1;j2=0;k2=1; } else { i1=0;j1=0;k1=1;i2=1;j2=0;k2=1; } }
+      else { if (y0 < z0) { i1=0;j1=0;k1=1;i2=0;j2=1;k2=1; } else if (x0 < z0) { i1=0;j1=1;k1=0;i2=0;j2=1;k2=1; } else { i1=0;j1=1;k1=0;i2=1;j2=1;k2=0; } }
+      const c = [[x0, y0, z0, 0, 0, 0], [x0 - i1 + G3, y0 - j1 + G3, z0 - k1 + G3, i1, j1, k1], [x0 - i2 + 2 * G3, y0 - j2 + 2 * G3, z0 - k2 + 2 * G3, i2, j2, k2], [x0 - 1 + 3 * G3, y0 - 1 + 3 * G3, z0 - 1 + 3 * G3, 1, 1, 1]];
+      let n = 0;
+      for (const [dx, dy, dz, a, b, d] of c) {
+        let tt = 0.6 - dx * dx - dy * dy - dz * dz;
+        if (tt < 0) continue;
+        const ii = i & 255, jj = j & 255, kk = k & 255;
+        const gi = g[p[ii + a + p[jj + b + p[kk + d]]] % 12];
+        tt *= tt; n += tt * tt * (gi[0] * dx + gi[1] * dy + gi[2] * dz);
+      }
+      return 32 * n;
+    };
+  };
+  const noise = makeNoise(1);
+
+  /**
+   * Beat grid for cutting to music. const B = Motion.beats({ bpm: 120 });
+   * B(4) → time of beat 4, B.bar(2) → start of bar 2, B.pulse(t) → 1 on each beat decaying to 0.
+   */
+  function beats({ bpm = 120, offset = 0, perBar = 4, decay = 0.18 } = {}) {
+    const beat = 60 / bpm;
+    const at = (n) => offset + n * beat;
+    at.beat = beat;
+    at.bpm = bpm;
+    at.bar = (n) => offset + n * beat * perBar;
+    at.index = (t) => (t - offset) / beat;
+    at.pulse = (t, d = decay) => { const k = (t - offset) / beat; if (k < 0) return 0; return Math.exp(-((k - Math.floor(k)) * beat) / d); };
+    cfg.bpm = bpm;
+    return at;
+  }
+
+  /**
+   * Full-stage canvas drawn every frame: Motion.canvas((ctx, t, { w, h }) => { ... }).
+   * Sized to the stage at the render's device pixel ratio, so --scale 2 stays sharp.
+   * Options: { parent, zIndex, id, el, width, height }. By default the canvas goes inside `#cam`
+   * when that wrapper exists (so camera moves and shake apply to it), otherwise into `#stage`.
+   * Passing `el` reuses your own <canvas>; it gets the same absolute full-stage positioning.
+   */
+  function canvas(a, b) {
+    const opts = typeof a === 'function' ? {} : a || {};
+    const draw = typeof a === 'function' ? a : b;
+    let el = opts.el ? els(opts.el)[0] : null;
+    const setup = () => {
+      if (!el) {
+        el = document.createElement('canvas');
+        if (opts.id) el.id = opts.id;
+        const parent = (opts.parent && els(opts.parent)[0]) || document.getElementById('cam') || document.getElementById('stage');
+        parent.prepend(el);
+      }
+      el.style.cssText += `;position:absolute;inset:0;width:100%;height:100%;z-index:${opts.zIndex ?? 0};pointer-events:none`;
+      const dpr = global.devicePixelRatio || 1;
+      const w = opts.width || cfg.width, h = opts.height || cfg.height;
+      el.width = Math.round(w * dpr); el.height = Math.round(h * dpr);
+      return { ctx: el.getContext('2d'), dpr, w, h };
+    };
+    let state = null;
+    on((t) => {
+      if (!state) state = setup();
+      const { ctx, dpr, w, h } = state;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      draw(ctx, t, { w, h, el });
+    });
+    return api;
+  }
+
+  /**
+   * Sample text into points (for particle type). Call inside Motion.ready() so fonts are loaded.
+   * Returns [{ x, y }] in stage coordinates, centred on (cx, cy).
+   */
+  function textPoints(text, { font = '700 200px sans-serif', cx = cfg.width / 2, cy = cfg.height / 2, step = 6, letterSpacing = 0 } = {}) {
+    const c = document.createElement('canvas');
+    const ctx = c.getContext('2d');
+    ctx.font = font;
+    if (letterSpacing && 'letterSpacing' in ctx) ctx.letterSpacing = letterSpacing + 'px';
+    const m = ctx.measureText(text);
+    const w = Math.ceil(m.width) + 4, h = Math.ceil(m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) + 4;
+    c.width = w; c.height = h;
+    ctx.font = font;
+    if (letterSpacing && 'letterSpacing' in ctx) ctx.letterSpacing = letterSpacing + 'px';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(text, 2, m.actualBoundingBoxAscent + 2);
+    const data = ctx.getImageData(0, 0, w, h).data, pts = [];
+    for (let y = 0; y < h; y += step) for (let x = 0; x < w; x += step) if (data[(y * w + x) * 4 + 3] > 128) pts.push({ x: cx - w / 2 + x, y: cy - h / 2 + y });
+    return pts;
+  }
+
+  /** Resample an SVG path string into n points (arc-length evenly spaced). */
+  const samplePath = (d, n = 160) => {
+    const p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    p.setAttribute('d', d);
+    const len = p.getTotalLength();
+    return Array.from({ length: n }, (_, i) => { const q = p.getPointAtLength((len * i) / n); return [q.x, q.y]; });
+  };
+  /**
+   * Morph between any closed SVG shapes (different point counts are fine).
+   * Motion.morph('#blob', { start, duration, ease, shapes: [d1, d2, d3], points: 160 })
+   * Each shape change takes `duration`; shapes play back to back from `start`.
+   */
+  function morph(target, { start = 0, duration = 0.8, ease: e = 'strongInOut', shapes = [], points = 160, hold = 0 } = {}) {
+    const ez = resolveEase(e);
+    const sets = shapes.map((d) => samplePath(d, points));
+    // Rotate each set so its start point is nearest the previous set's, to avoid twisting.
+    for (let k = 1; k < sets.length; k++) {
+      const a = sets[k - 1], b = sets[k];
+      let best = 0, bestD = Infinity;
+      for (let o = 0; o < points; o++) { let d = 0; for (let i = 0; i < points; i += 8) { const q = b[(i + o) % points]; d += (a[i][0] - q[0]) ** 2 + (a[i][1] - q[1]) ** 2; } if (d < bestD) { bestD = d; best = o; } }
+      sets[k] = b.map((_, i) => b[(i + best) % points]);
+    }
+    const toD = (pts) => 'M' + pts.map((q) => q[0].toFixed(2) + ' ' + q[1].toFixed(2)).join('L') + 'Z';
+    lastEnd = Math.max(lastEnd, start + (sets.length - 1) * (duration + hold));
+    els(target).forEach((el) => on((t) => {
+      const local = (t - start) / (duration + hold);
+      const k = clamp(Math.floor(local), 0, sets.length - 2);
+      const p = ez(clamp(((t - start) - k * (duration + hold)) / duration));
+      if (sets.length < 2) return;
+      const a = sets[k], b = sets[k + 1];
+      el.setAttribute('d', toD(a.map((q, i) => [lerp(q[0], b[i][0], p), lerp(q[1], b[i][1], p)])));
+    }));
+    return api;
+  }
+
+  /** Setup that needs loaded fonts/images (measuring text, textPoints). Runs once before frame 0. */
+  const readyFns = [];
+  const ready = (fn) => { readyFns.push(fn); return api; };
+
+  /**
+   * Sound cues for the procedural score (scripts/score.mjs, used automatically by render.mjs).
+   * Motion.cue(t, 'whoosh' | 'impact' | 'hit' | 'drop' | 'tick' | 'riser' | 'swell' | 'glitch' | 'pop', { gain, length })
+   *   riser/swell END at t; whoosh peaks just before t (on the cut).
+   * Motion.score({ bpm, key, scale, mood, drums, start, end, gain, sections }) sets the music bed.
+   *   sections: [{ at, drums, bass, arp, pad, filter }] arrange breakdowns, builds and drops.
+   */
+  const cues = [];
+  const cue = (t, type, o = {}) => { cues.push({ t, type, ...o }); return api; };
+  const score = (o = {}) => { cfg.score = { bpm: cfg.bpm || 120, ...o }; return api; };
+
   // ------------------------------------------------------------- seek core
   let time = 0;
   async function seek(t) {
@@ -487,6 +665,7 @@
     }
     // Decode images up front so the first frame that shows one never paints it blank.
     await Promise.all(Array.from(document.images, (img) => (img.decode ? img.decode().catch(() => {}) : null)));
+    for (const fn of readyFns) await fn();
     await seek(0);
     global.__KNACK_READY__ = true;
     if (!RENDER) mountPlayer();
@@ -497,8 +676,10 @@
   const api = {
     config, to, from, on, split, counter, draw, type, seek,
     interpolate, clamp, lerp, random, ease,
+    noise, makeNoise, beats, canvas, textPoints, morph, samplePath, ready, cue, score, staggerDelays,
+    resolveEase, spring, bezier,
     get time() { return time; },
-    getConfig: () => ({ ...cfg, lastTweenEnd: lastEnd }),
+    getConfig: () => ({ ...cfg, lastTweenEnd: lastEnd, cues: cues.slice().sort((a, b) => a.t - b.t) }),
     _tracks: tracks,
   };
   global.Motion = api;

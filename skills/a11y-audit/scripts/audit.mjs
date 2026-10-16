@@ -29,7 +29,8 @@
  *
  * Keyboard pass (what axe cannot check): real Tab presses for focus order and traps; visible focus by pixel
  * diff (own box, ancestor, label, or a change next to it); focus removed by script (onfocus=blur); focus
- * entirely hidden under fixed/sticky layers (2.4.11, forward Tab only); clickable-but-unfocusable elements;
+ * entirely hidden under fixed/sticky layers (2.4.11, forward Tab only) or behind an open modal's backdrop (focus
+ * leaking out of the modal); clickable-but-unfocusable elements;
  * menus that open on hover but not from the keyboard; <select>s that navigate on change (3.2.2, navigations
  * are blocked); with --state on a modal: Escape closes it and focus returns to the trigger.
  *
@@ -218,6 +219,7 @@ const FIX = {
   'kbd-positive-tabindex': 'Positive tabindex overrides the natural order. Use 0 or -1 and fix DOM order.',
   'kbd-focus-removed': 'Delete the focus handler that calls blur() or moves focus away (onfocus="blur()", onFocus={e => e.target.blur()}). To hide rings for mouse users only, style :focus-visible instead.',
   'kbd-focus-obscured': 'Reserve room for the sticky/fixed layer: html { scroll-padding-top: <header height>; scroll-padding-bottom: <bottom bar height> } (or scroll-margin on the targets). Controls at the very end of the page cannot scroll above a bottom bar at all: also add body { padding-bottom: <bar height> }, or make the layer static, smaller, or dismissible.',
+  'kbd-focus-outside-modal': 'The page behind the open modal is still in the Tab order. Open the modal with <dialog>.showModal() (the rest of the page becomes inert, Escape closes it), or set inert on the background (e.g. the app root) while it is open, and move focus into the dialog when it opens.',
   'kbd-change-on-input': 'Do not navigate or submit on change. Add an explicit "Go"/submit button (form + <button type="submit">), or tell users beforehand what selecting an option will do.',
   'kbd-dialog-escape': 'Users expect Escape to close a modal (APG dialog pattern; not a WCAG failure by itself while a Close button is reachable). Close modals on Escape. Native <dialog> opened with showModal() does it for free; custom modals need a keydown handler for Escape (UI kits: Radix/Headless UI/MUI Dialog do this; check you did not disable it).',
   'kbd-dialog-focus-return': 'On close, move focus back to the element that opened the dialog (store document.activeElement before opening, call .focus() on it after closing). Native <dialog> and most UI-kit dialogs restore it automatically.',
@@ -234,6 +236,7 @@ const KBD_RULES = {
   'kbd-positive-tabindex': { impact: 'serious', help: 'Element uses a positive tabindex', wcag: ['2.4.3'] },
   'kbd-focus-removed': { impact: 'serious', help: 'Script removes focus as soon as the element receives it', wcag: ['2.1.1', '2.4.7', '3.2.1'] },
   'kbd-focus-obscured': { impact: 'serious', help: 'Focused element is entirely hidden behind a sticky or fixed element', wcag: ['2.4.11'] },
+  'kbd-focus-outside-modal': { impact: 'serious', help: 'Focus leaves the open modal for the page hidden behind it', wcag: ['2.4.3', '2.4.11'] },
   'kbd-change-on-input': { impact: 'serious', help: 'Changing a form control navigates away without warning', wcag: ['3.2.2'] },
   'kbd-dialog-escape': { impact: 'moderate', help: 'Escape does not close the open modal dialog (ARIA APG dialog pattern)', wcag: [] },
   'kbd-dialog-focus-return': { impact: 'moderate', help: 'Closing the dialog does not return focus to its trigger', wcag: ['2.4.3'] },
@@ -267,13 +270,36 @@ const PAGE_HELPERS = () => {
     }
     return parts.join(' > ');
   };
+  // Rendered text: innerText keeps the break between block children ("Every 4 weeks" + "Most popular"),
+  // textContent would glue them together; it falls back to textContent for unrendered nodes.
+  const textOf = (n) => (n ? (n.innerText || n.textContent || '') : '').replace(/\s+/g, ' ').trim();
+  // A <label> wrapping its own control: the control contributes its value (a <select>: the chosen option),
+  // not all of its text ("Priority Urgent", not "Priority Normal High Urgent").
+  const labelText = (label, el) => {
+    const out = [];
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c === el) { if (el.localName === 'select') out.push(' ', el.selectedOptions[0]?.text || '', ' '); continue; }
+        if (c.nodeType === 3) { out.push(c.textContent); continue; }
+        if (c.nodeType !== 1 || ['script', 'style', 'template'].includes(c.localName)) continue;
+        const d = getComputedStyle(c).display;
+        if (d === 'none') continue;
+        const block = !d.startsWith('inline') && d !== 'contents';
+        if (block) out.push(' ');
+        walk(c);
+        if (block) out.push(' ');
+      }
+    };
+    walk(label);
+    return out.join('');
+  };
   const nameOf = (el) => {
     const lab = el.getAttribute('aria-label');
     if (lab) return lab.trim();
     const by = el.getAttribute('aria-labelledby');
-    if (by) return by.split(/\s+/).map((i) => document.getElementById(i)?.textContent || '').join(' ').trim();
-    if (el.labels && el.labels.length) return [...el.labels].map((l) => l.textContent).join(' ').trim();
-    const txt = ['select', 'input', 'textarea'].includes(el.localName) ? '' : (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+    if (by) return by.split(/\s+/).map((i) => textOf(document.getElementById(i))).join(' ').trim();
+    if (el.labels && el.labels.length) return [...el.labels].map((l) => labelText(l, el)).join(' ').replace(/\s+/g, ' ').trim();
+    const txt = ['select', 'input', 'textarea'].includes(el.localName) ? '' : textOf(el);
     if (txt) return txt.slice(0, 80);
     const img = el.querySelector && el.querySelector('img[alt]');
     return (el.getAttribute('alt') || img?.getAttribute('alt') || el.getAttribute('title') || el.getAttribute('placeholder') || el.value || '').toString().slice(0, 80);
@@ -306,8 +332,12 @@ const PAGE_HELPERS = () => {
     return lab || null;
   };
   const visibleOrProxied = (el) => visible(el) || !!proxyOf(el);
+  // showModal() makes everything outside the topmost modal <dialog> inert, with no [inert] attribute to see.
+  const topModal = () => { try { return [...document.querySelectorAll('dialog:modal')].pop() || null; } catch (_) { return null; } };
   const tabbable = (el) => {
     if (!el.matches(FOCUSABLE) || el.disabled || el.closest('[inert]')) return false;
+    const modal = topModal();
+    if (modal && !modal.contains(el)) return false;
     const ti = el.getAttribute('tabindex');
     if (ti !== null && +ti < 0) return false;
     if (el.localName === 'summary' && el.parentElement?.localName !== 'details') return false;
@@ -322,6 +352,19 @@ const PAGE_HELPERS = () => {
     if (!m) return false;
     const a = m[1].split(/[ ,/]+/).filter(Boolean)[3];
     return a === undefined || +a >= 0.5;
+  };
+  // A covering layer that is (part of) an open modal: the dialog itself, a backdrop that holds one, or a
+  // viewport-sized fixed layer while some modal is open. Focus under it has leaked out of the modal; that is
+  // a different bug (and fix) from a sticky header hiding focus.
+  // A non-modal role="dialog" (chat widget, popover) only counts when the layer is a full-viewport backdrop.
+  const DIALOG = 'dialog[open],[role=dialog],[role=alertdialog],[aria-modal="true"]';
+  const isModal = (d) => d.getAttribute('aria-modal') === 'true' || (d.localName === 'dialog' && (() => { try { return d.matches(':modal'); } catch (_) { return false; } })());
+  const modalOf = (layer) => {
+    const own = [layer.closest(DIALOG), ...layer.querySelectorAll(DIALOG)].find((d) => d && isModal(d) && visible(d));
+    if (own) return own;
+    const q = layer.getBoundingClientRect();
+    if (q.width * q.height < innerWidth * innerHeight * 0.9) return null;
+    return [...document.querySelectorAll(DIALOG)].find((d) => visible(d)) || null;
   };
   const obscuredBy = (el) => {
     const r = el.getBoundingClientRect();
@@ -344,7 +387,9 @@ const PAGE_HELPERS = () => {
       if (!opaque) return null;
       cover = layer;
     }
-    return inside && cover ? cover : null;
+    if (!inside || !cover) return null;
+    const modal = modalOf(cover);
+    return { layer: cover, modal: modal && !modal.contains(el) ? modal : null };
   };
   // Focus events since the last reset: catches scripts that blur() or move focus the moment it arrives.
   // Capture-phase focus/blur, not focusin: Chrome skips focusin when a focus handler blurs synchronously.
@@ -533,7 +578,7 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
   // Tab loop
   if (!fromCurrent) await page.evaluate(() => { document.activeElement?.blur?.(); scrollTo(0, 0); });
   const seq = [], seen = new Map();
-  let completed = false, trap = null, iframeRepeats = 0, bodyHits = 0;
+  let completed = false, trap = null, iframeRepeats = 0, bodyHits = 0, innerRepeats = 0;
   const limit = Math.min(maxTabs, expected.count * 2 + 25);
   const readActive = () => page.evaluate(() => {
       const K = window.__knack;
@@ -548,9 +593,13 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
       }
       const framed = el.ownerDocument !== document;
       const cover = !framed && K.visible(el) ? K.obscuredBy(el) : null;
+      const behindModal = cover && cover.modal ? K.selectorOf(cover.modal) : null;
       let pinned = false;
       for (let n = el; n && n.nodeType === 1 && !framed; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') { pinned = true; break; } }
-      return { id: K.idOf(el), tag: el.localName, role: el.getAttribute('role') || '', name: K.nameOf(el), selector: K.selectorOf(el), html: K.snippet(el), visible: framed || K.visibleOrProxied(el), framed, pinned, modal: K.inModal(el), tabindex: el.getAttribute('tabindex'), obscuredBy: cover ? K.selectorOf(cover) : null };
+      // Native controls with a user-agent shadow tree (media controls, date/time fields): Tab steps through their
+      // inner buttons/fields while activeElement stays on the host element.
+      const inner = (['video', 'audio'].includes(el.localName) && el.controls) || (el.localName === 'input' && ['date', 'time', 'datetime-local', 'month', 'week', 'file', 'range', 'color'].includes(el.type));
+      return { inner, id: K.idOf(el), tag: el.localName, role: el.getAttribute('role') || '', name: K.nameOf(el), selector: K.selectorOf(el), html: K.snippet(el), visible: framed || K.visibleOrProxied(el), framed, pinned, modal: K.inModal(el), tabindex: el.getAttribute('tabindex'), obscuredBy: cover ? K.selectorOf(cover.layer) : null, behindModal };
   });
   const removed = [];
   if (fromCurrent) {
@@ -573,6 +622,9 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
     if (seen.has(a.id)) {
       if (a.tag === 'iframe' || a.tag === 'frame') { if (++iframeRepeats < 60) continue; }
       const idx = seen.get(a.id);
+      // Same native control again, straight after itself: Tab is inside its UA controls, not stuck. Bounded, so a
+      // script that really swallows Tab on a <video> is still reported.
+      if (a.inner && idx === seq.length - 1 && ++innerRepeats <= 20) continue;
       if (idx === 0 && seq.length >= Math.floor(expected.count * 0.9)) { completed = true; break; }
       const cycle = seq.slice(idx);
       const never = expected.ids.filter((id) => !seen.has(id));
@@ -582,6 +634,7 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
     }
     seen.set(a.id, seq.length);
     seq.push(a);
+    innerRepeats = 0;
   }
   if (!completed && !trap && seq.length >= limit) warn(`Stopped after ${limit} Tab presses; raise --max-tabs for very long pages.`);
 
@@ -594,12 +647,16 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
     if (s.removedOnFocus) stop.removedOnFocus = true;
     if (s.framed) stop.framed = true;
     if (s.obscuredBy) stop.obscuredBy = s.obscuredBy;
+    if (s.behindModal) stop.behindModal = s.behindModal;
     if (s.pinned) stop.pinned = true;
     focusStops.push(stop);
     // Not measurable here: focus that was taken away (reported separately), elements inside iframes, and
     // the <iframe> stop itself (the ring, if any, is drawn inside the frame's own document).
     if (!s.visible || s.removedOnFocus || s.framed || s.tag === 'iframe' || s.tag === 'frame' || n >= FOCUS_CHECK_LIMIT) continue;
-    let r = await diffFocus(page, diffPage, s.id, { level: 0 });
+    // Links inside a :focus-within menu only exist while focus is in the menu: measure those with focus on an
+    // earlier stop that keeps the menu open (nearest first; hidden ones cannot take focus) instead of on nothing.
+    const prev = seq.slice(Math.max(0, n - 6), n).filter((x) => !x.framed && !x.removedOnFocus).map((x) => x.id).reverse();
+    let r = await diffFocus(page, diffPage, s.id, { level: 0, prev });
     if (!r) continue;
     let via = null;
     // Fallbacks when the element's own box shows nothing: an ancestor whose style changed (card rings via
@@ -610,7 +667,7 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
     tries.push([{ label: true }, 'its <label>'], [{ viewport: true, near: 160 }, 'a change next to it']);
     for (const [region, how] of tries) {
       if (r.visible) break;
-      const r2 = await diffFocus(page, diffPage, s.id, region);
+      const r2 = await diffFocus(page, diffPage, s.id, { ...region, prev });
       if (r2 && r2.visible) { r = { ...r2, changed: r.changed }; via = how; }
     }
     stop.focus = { changedPixels: r.d.changed, ratio: +(r.d.changed / r.d.total).toFixed(4), maxDelta: r.d.maxDelta, changed: r.changed, ...(via ? { via } : {}) };
@@ -618,7 +675,8 @@ async function keyboardPass(page, diffPage, { fromCurrent = false } = {}) {
   }
 
   add('kbd-focus-removed', removed.map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: `Tab reaches this ${s.tag} but a script immediately removes focus (blur() or focus moved elsewhere), so keyboard users never see or keep focus here${s.name ? `: "${s.name.slice(0, 40)}"` : ''}.` })));
-  add('kbd-focus-obscured', focusStops.filter((s) => s.obscuredBy).map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: `When focused, this element is entirely covered by the fixed/sticky element \`${s.obscuredBy}\`.` })));
+  add('kbd-focus-outside-modal', focusStops.filter((s) => s.behindModal).map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: `A modal dialog (\`${s.behindModal}\`) is open, yet Tab reaches this element on the page behind it, where it is hidden under \`${s.obscuredBy}\`.` })));
+  add('kbd-focus-obscured', focusStops.filter((s) => s.obscuredBy && !s.behindModal).map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: `When focused, this element is entirely covered by the fixed/sticky element \`${s.obscuredBy}\`.` })));
   add('kbd-focus-not-visible', focusStops.filter((s) => s.focusVisible === false).map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: `No visible change when focused (${s.focus.changed.length ? 'computed changes: ' + s.focus.changed.join(', ') + ', but ' + (s.focus.maxDelta > 0 ? `the strongest pixel change is only ${s.focus.maxDelta}/255` : 'no pixels changed') : 'no style change at all'}).` })));
   add('kbd-focus-hidden', focusStops.filter((s) => !s.visible && !s.removedOnFocus).map((s) => ({ id: s.id, selector: s.selector, html: s.html, detail: 'Receives focus while invisible, off-screen, or zero-size.' })));
   vlog('hover-only menus');
@@ -795,6 +853,17 @@ async function diffFocus(page, diffPage, id, region) {
     const K = window.__knack, el = K.byId(id);
     if (!el) return null;
     document.activeElement?.blur?.();
+    if (!K.visibleOrProxied(el) && region.prev?.length) {
+      // focusVisible:false keeps that stop's own :focus-visible ring out of the "before" picture.
+      for (const pid of region.prev) {
+        const p = K.byId(pid);
+        if (!p) continue;
+        p.focus({ focusVisible: false });
+        if (document.activeElement === p && K.visibleOrProxied(el)) break;
+      }
+      // Nothing keeps it shown (e.g. a skip link that only appears on focus): measure from no focus, as before.
+      if (!K.visibleOrProxied(el)) document.activeElement?.blur?.();
+    }
     el.scrollIntoView({ block: 'center', inline: 'center' });
     let t = el;
     if (region.label) t = (el.labels && [...el.labels].find((l) => K.visible(l))) || null;
@@ -906,10 +975,14 @@ async function annotate(page, diffPage, pageReport, file) {
     return out;
   }, vh);
   const shot = await page.screenshot({ fullPage: true, clip: { x: 0, y: 0, width: W, height: H }, animations: 'disabled', caret: 'hide' });
+  // Focus stops inside those layers are not in the picture either: no badge floating over unrelated content.
+  const undrawn = new Set(hiddenLayers.length ? await page.evaluate((sels) => sels.filter((sel) => { try { return !!document.querySelector(sel)?.closest('[data-knack-shot-hidden]'); } catch (_) { return false; } }), (pageReport.keyboard?.focusOrder || []).map((s) => s.selector)) : []);
   await page.evaluate(() => { for (const n of document.querySelectorAll('[data-knack-shot-hidden]')) { n.style.removeProperty('visibility'); delete n.dataset.knackShotHidden; } });
   const counts = Object.fromEntries(IMPACTS.map((k) => [k, 0]));
   for (const v of pageReport.issues) counts[v.impact] = (counts[v.impact] || 0) + 1;
-  const stops = (pageReport.keyboard?.focusOrder || []).filter((s) => s.rect && s.visible);
+  const placed = (pageReport.keyboard?.focusOrder || []).filter((s) => s.rect && s.visible);
+  // No badge where there is nothing to point at in the picture (links of a menu that is closed again).
+  const stops = placed.filter((s) => !undrawn.has(s.selector) && (s.rect.w > 0 || s.rect.h > 0));
   const COLORS = { critical: '#e5132b', serious: '#ff5a1f', moderate: '#f59e0b', minor: '#ca8a04' };
   // "No visible focus" is shown by the magenta focus badge; keep its box but skip the label to cut clutter.
   const labelled = dedupeLabels(boxes.filter((b) => b.rule !== 'kbd-focus-not-visible'));
@@ -926,7 +999,7 @@ async function annotate(page, diffPage, pageReport, file) {
       <span style="font-weight:800">a11y-audit</span>
       <span style="opacity:.6;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${Math.round(W * 0.3)}px">${esc(pageReport.url)}${pageReport.state ? ' · after ' + esc(pageReport.state) : ''}</span>
       ${IMPACTS.map((k) => chip(`${counts[k]} ${k}`, `<i style="width:12px;height:12px;border:3px solid ${COLORS[k]};border-radius:2px;display:inline-block;box-sizing:border-box"></i>`)).join('')}
-      ${chip(`focus order (${stops.length})`, '<b style="width:18px;height:18px;border-radius:50%;background:#2563eb;color:#fff;display:inline-grid;place-items:center;font-size:10px">1</b>')}
+      ${chip(`focus order (${placed.length})`, '<b style="width:18px;height:18px;border-radius:50%;background:#2563eb;color:#fff;display:inline-grid;place-items:center;font-size:10px">1</b>')}
       ${chip('no visible focus', '<b style="width:18px;height:18px;border-radius:50%;background:#c026d3;color:#fff;display:inline-grid;place-items:center;font-size:10px">2</b>')}
       ${stops.some((s) => badge(s) === GRAY) ? chip('not measured (iframe)', `<b style="width:18px;height:18px;border-radius:50%;background:${GRAY};color:#fff;display:inline-grid;place-items:center;font-size:10px">3</b>`) : ''}
       ${chip('dashed = keyboard pass', '')}
@@ -1092,8 +1165,10 @@ async function dialogEscape(page, trigger) {
     const a = K.deepActive();
     let t = document.querySelector('[data-knack-trigger]');
     if (!t) try { t = document.querySelector(trigger); } catch (_) {}
-    const returned = !!a && !!t && (a === t || t.contains(a) || a.contains(t));
-    return { closed, returned, focusAfter: a && a !== document.body ? K.selectorOf(a) : null };
+    // Focus that fell to <body>/<html> is lost; those contain the trigger, so test for them first.
+    const lost = !a || a === document.body || a === document.documentElement;
+    const returned = !lost && !!t && (a === t || t.contains(a) || a.contains(t));
+    return { closed, returned, focusAfter: lost ? null : K.selectorOf(a) };
   }, trigger).catch(() => ({ closed: false, returned: false }));
   return { ...before, ...after };
 }
@@ -1122,6 +1197,7 @@ const STACK_FIX = {
   'kbd-hover-only': { tailwind: 'Pair every `group-hover:block` with `group-focus-within:block`, or toggle the submenu from a `<button aria-expanded>`.' },
   'kbd-focus-obscured': { tailwind: 'Add `scroll-pt-<n>` to `<html>` matching the sticky header (e.g. `scroll-pt-20` for 80px), `scroll-pb-<n>` for bottom bars.' },
   'kbd-dialog-escape': { radix: 'Radix Dialog closes on Escape by default: look for `onEscapeKeyDown={e => e.preventDefault()}`.', mui: 'MUI Dialog: remove `disableEscapeKeyDown`.', react: 'If hand-rolled, prefer `<dialog>` + `showModal()` or a tested dialog (Radix, React Aria, Headless UI).' },
+  'kbd-focus-outside-modal': { react: 'Use a dialog that makes the background inert (Radix/React Aria/Headless UI Dialog, or `<dialog>` + `showModal()`); hand-rolled: `<div id="app" inert={open}>` while it is open (React 18: `inert={open ? \'\' : undefined}`).' },
   'kbd-dialog-focus-return': { radix: 'Radix restores focus automatically unless `onCloseAutoFocus` prevents it.', react: 'Store `document.activeElement` before opening and call `.focus()` on it in the close handler.' },
   'label': { react: '`<label htmlFor={id}>` with `const id = useId()`.', vue: '`<label :for="id">` + matching `:id`.', angular: '`<label for="x">` or `<mat-label>` inside `<mat-form-field>`.', mui: 'Use the TextField `label` prop (it renders a real `<label>`).' },
   'placeholder-label': { react: 'Add `<label htmlFor={id}>`; keep the placeholder only as an example value.', mui: 'Use the TextField `label` prop instead of `placeholder` alone.' },
@@ -1266,7 +1342,7 @@ function markdown(report, sum) {
     L.push(`${k.focusOrder.length} focus stops reached of ~${k.expectedTabbable} tabbable elements${p.state ? ' (Tab started from wherever the click left focus, so earlier elements are not revisited)' : ''}. ${k.trap ? (k.trap.intended ? 'Focus is contained in an open modal (intended).' : '**Focus trap detected.**') : k.completedCycle ? 'Tab cycle completed.' : 'Tab cycle did not complete.'}${dlg}`, '');
     if (k.focusOrder.length > FOCUS_CHECK_LIMIT) L.push(`Visible focus was checked for the first ${FOCUS_CHECK_LIMIT} stops only.`, '');
     L.push('| # | Element | Name | Visible focus |', '|---|---|---|---|');
-    const status = (s) => (s.removedOnFocus ? '**removed by script**' : !s.visible ? 'hidden element' : s.focusVisible === false ? '**no**' : s.focusVisible ? `yes${s.focus?.via ? ` (via ${s.focus.via})` : ''}` : s.tag === 'iframe' || s.framed ? 'not measured (iframe)' : '?') + (s.obscuredBy ? ` · **covered by \`${s.obscuredBy.replace(/\|/g, '\\|')}\`**` : '');
+    const status = (s) => (s.removedOnFocus ? '**removed by script**' : !s.visible ? 'hidden element' : s.focusVisible === false ? '**no**' : s.focusVisible ? `yes${s.focus?.via ? ` (via ${s.focus.via})` : ''}` : s.tag === 'iframe' || s.framed ? 'not measured (iframe)' : '?') + (s.behindModal ? ` · **behind open modal \`${s.behindModal.replace(/\|/g, '\\|')}\`**` : s.obscuredBy ? ` · **covered by \`${s.obscuredBy.replace(/\|/g, '\\|')}\`**` : '');
     for (const s of k.focusOrder.slice(0, 60)) L.push(`| ${s.n} | \`${s.selector.replace(/\|/g, '\\|')}\` | ${(s.name || '').replace(/\|/g, '\\|').slice(0, 40) || '_(none)_'} | ${status(s)} |`);
     if (k.focusOrder.length > 60) L.push(`| … | ${k.focusOrder.length - 60} more | | |`);
     L.push('');

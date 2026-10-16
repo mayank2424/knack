@@ -21,9 +21,11 @@ itself before handing you a file that fits GitHub's limits.
   at a legible size with a human velocity profile (minimum-jerk, gentle landing), motion
   blur while it travels, hand/I-beam shapes, press feedback and ripples.
 - **Calm, framed zooms.** Zoom fits the target, scales straight in about a fixed point (no
-  sideways slide) and settles softly. `--no-zoom` gives a reduced-motion take.
+  sideways slide) and settles softly. Captions and the keystroke HUD stay in screen space,
+  so a zoom never crops them. `--no-zoom` gives a reduced-motion take.
 - **Self-checking.** A dry run screenshots every step; failures list similar elements with
-  ready-to-paste selectors; every recording ends with a contact sheet the agent reads.
+  ready-to-paste selectors; every recording ends with a contact sheet the agent reads
+  (1600 px, 256-colour PNG, about 100 to 150 KB for the bundled examples).
 - **Built for where demos go.** MP4/WebM with BT.709 colour tags so brand colours match
   the page (mean ΔE 0.3 in Chrome, was 5.6), GIF with a full-clip palette (no speckled
   chrome or banded gradients), size warnings at 10 MB, a legibility estimate at README and
@@ -57,6 +59,18 @@ node scripts/inspect.mjs --find-server                   # which localhost ports
 node scripts/inspect.mjs http://localhost:3000           # selectors + annotated screenshot
 node scripts/record.mjs --help                           # every flag
 ```
+
+## Examples
+
+Three real recordings, with their fixtures, flows and contact sheets, in [examples/](examples/)
+(outputs under `examples/output/`, manifest in `examples/examples.json`):
+
+- **Orbit todo app**: typing, zoom, ⌘K palette and dark mode; one take to MP4 + GIF
+  (`examples/flow.json`).
+- **Docs search**: ⌘K search on a dark docs site, zoomed in on the palette; 1280×800 MP4
+  for a changelog post (`examples/docs-search.flow.json`).
+- **Signup form**: tabbing through fields with the keystroke HUD, a switch and a success
+  state; 406 KB framed GIF for a README (`examples/signup.flow.json`).
 
 ## How a flow looks
 

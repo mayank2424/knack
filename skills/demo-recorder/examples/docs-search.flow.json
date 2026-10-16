@@ -1,0 +1,21 @@
+{
+  // Wayfern Docs: open search with ⌘K, filter as you type, jump to a guide.
+  //   node scripts/record.mjs examples/docs-search.flow.json
+  "name": "docs-search",
+  "url": "./docs-search.html",
+  "viewport": "1280x800",
+  "format": ["mp4"],
+  "colorScheme": "dark",
+  "cursor": { "color": "#5eead4", "start": [980, 560] },
+  "steps": [
+    { "caption": "Find any page with ⌘K", "duration": 3200 },
+    { "wait": 800 },
+    { "press": "Meta+K", "pause": 500 },
+    { "zoom": { "to": "#palette" }, "pause": 150 },
+    { "type": "backoff", "delay": 95, "pause": 900 },
+    { "click": ".hit[data-title=\"Retries and backoff\"]", "pause": 300 },
+    { "zoom": "out", "pause": 300 },
+    { "cursor": [1150, 600], "pause": 400 },
+    { "highlight": "#main pre", "dim": true, "duration": 1800, "padding": 6 }
+  ]
+}

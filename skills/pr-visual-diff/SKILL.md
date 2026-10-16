@@ -122,16 +122,20 @@ Useful flags: `--full-page` (whole scroll height; use when the change is below t
 
 Output per page × width: `base.png`, `head.png`, `diff.png`, `compare.png` (base | head |
 diff, labelled), `focus.png` (close-ups of the changed regions, base vs head at up to 2x),
-plus `summary.md` and `summary.json` (change %, moved %, regions with `kind`, shifts, size
-changes, HTTP status, new console errors, stability, what was still loading).
+plus `summary.md` and `summary.json` (change %, plus added %, removed % and moved % reported
+separately, regions with `kind`, shifts, size changes, HTTP status, new console errors,
+stability, what was still loading). "Pixels changed" counts only content that differs in
+place: a deleted card shows up as "20.31% removed" next to a 0% change, not as a 21% change.
 
 Reading the diff: **red** = changed pixels (boxed), **blue wash** = rows that only moved
 (row alignment recognises "everything below y moved down 70px", so a taller header is one
 red region plus a blue band, not a page of red), **amber** = faint change below the
 visible threshold (a colour-token tweak, or the edge of a pale element). Removed blocks are
-marked with a dashed red bar where they used to be; added blocks are solid red.
+marked with a dashed red bar where they used to be; added blocks (including a bar inserted
+above the header or a section appended at the bottom) are solid red, and their close-up
+marks the insertion point on the base side.
 
-Result per pair: `changed` (≥ 0.1% of pixels changed or moved, a size change, or one solid
+Result per pair: `changed` (≥ 0.1% of pixels changed, added, removed or moved, a size change, or one solid
 cluster: ≥ 40 px², or ≥ 16 px² without a sub-pixel halo, e.g. one changed digit), `minor`
 (scattered or faint differences only), `unchanged`, `error`. A 1-2px padding change usually
 reads as "moved" (blue band from that element down, ±1px is tolerated as sub-pixel

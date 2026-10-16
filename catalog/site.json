@@ -2,17 +2,56 @@
   "$comment": "Per-skill content for the website: what each skill checks, and a real output shown as evidence. Images live in site/assets/evidence/ and are produced by running the skill on its bundled example.",
   "skills": {
     "motion-video": {
-      "summary": "Turns a brief into a storyboard, an HTML composition and a frame-accurate MP4, GIF, WebM or transparent MOV.",
+      "summary": "Turns a brief, or just \"go all out\", into a shot list, an HTML composition and a frame-accurate video with a synthesized, cue-synced score.",
       "checks": [
-        "Renders a filmstrip contact sheet and reviews it before the final render",
-        "Lints every frame for off-safe-area text, tiny type, unloaded fonts and cut-off animation",
-        "Encodes with Playwright and ffmpeg at the exact frame count, color-tagged for browsers and players"
+        "Plans on a beat grid and scores every cut with synthesized music and sound effects",
+        "Reviews filmstrips and stills at every cut, and lints for collisions, tiny type and unloaded fonts",
+        "Renders exact frames with color-accurate encoding, optional motion blur and 4K"
       ],
       "evidence": {
         "type": "video",
-        "src": "assets/evidence/motion.mp4",
-        "poster": "assets/evidence/motion-poster.png",
-        "caption": "Knack's launch film: composed from real skill output and rendered by the skill. Source in examples/knack-promo."
+        "audio": true,
+        "src": "assets/evidence/showreel.mp4",
+        "poster": "assets/evidence/showreel-poster.png",
+        "caption": "templates/showreel: one square through seven techniques, cut on a 124 BPM grid, with a synthesized score. Turn the sound on."
+      },
+      "trail": [
+        [
+          "Write",
+          "storyboard.md"
+        ],
+        [
+          "Bash",
+          "render.mjs --check"
+        ],
+        [
+          "Read",
+          "filmstrip.png"
+        ],
+        [
+          "Edit",
+          "index.html"
+        ],
+        [
+          "Bash",
+          "render.mjs → mp4"
+        ]
+      ],
+      "og": {
+        "frames": [
+          {
+            "src": "skills/motion-video/examples/output/showreel/showreel.mp4",
+            "t": 4.1
+          },
+          {
+            "src": "skills/motion-video/examples/output/copse-launch/copse-launch.mp4",
+            "t": 4.0
+          },
+          {
+            "src": "skills/motion-video/examples/output/tidzy-vertical/tidzy-vertical.mp4",
+            "t": 10.6
+          }
+        ]
       }
     },
     "demo-recorder": {
@@ -27,7 +66,29 @@
         "src": "assets/evidence/demo.mp4",
         "poster": "assets/evidence/demo-poster.png",
         "caption": "examples/flow.json recorded against the bundled demo app: 14.8s, 890 KB MP4."
-      }
+      },
+      "trail": [
+        [
+          "Bash",
+          "inspect.mjs"
+        ],
+        [
+          "Write",
+          "flow.json"
+        ],
+        [
+          "Bash",
+          "record.mjs --dry-run"
+        ],
+        [
+          "Read",
+          "steps.png"
+        ],
+        [
+          "Bash",
+          "record.mjs → mp4"
+        ]
+      ]
     },
     "responsive-qa": {
       "summary": "Sweeps a page from 320px to 1920px and reports layout bugs with the element that causes them.",
@@ -40,7 +101,29 @@
         "type": "image",
         "src": "assets/evidence/responsive-desktop.png",
         "caption": "sweep.mjs at 1280px: the API endpoint overflows its card (1) and the avatar is squashed (2). Boxes match report.json."
-      }
+      },
+      "trail": [
+        [
+          "Bash",
+          "sweep.mjs"
+        ],
+        [
+          "Read",
+          "contact-sheet.png"
+        ],
+        [
+          "Edit",
+          "styles.css"
+        ],
+        [
+          "Bash",
+          "sweep.mjs --compare"
+        ],
+        [
+          "Done",
+          "0 errors"
+        ]
+      ]
     },
     "a11y-audit": {
       "summary": "Runs axe-core and a real keyboard pass, then fixes violations in source until the page passes.",
@@ -53,7 +136,29 @@
         "type": "image",
         "src": "assets/evidence/a11y.png",
         "caption": "audit.mjs on examples/inaccessible-page.html: 4 critical, 12 serious, 4 moderate. Dashed boxes come from the keyboard pass."
-      }
+      },
+      "trail": [
+        [
+          "Bash",
+          "audit.mjs"
+        ],
+        [
+          "Read",
+          "report.md"
+        ],
+        [
+          "Edit",
+          "source files"
+        ],
+        [
+          "Bash",
+          "audit.mjs --fail-on serious"
+        ],
+        [
+          "Done",
+          "0 serious"
+        ]
+      ]
     },
     "token-drift": {
       "summary": "Finds colors and spacing that bypass your design tokens, maps each to the right token and fixes the safe ones.",
@@ -83,7 +188,29 @@
           "Drift score 13% → 63%"
         ],
         "caption": "Real output on the bundled example. Values that need judgment (named z-index layers, negative offsets, JS-computed styles) are listed, not changed."
-      }
+      },
+      "trail": [
+        [
+          "Bash",
+          "tokens.mjs"
+        ],
+        [
+          "Bash",
+          "scan.mjs"
+        ],
+        [
+          "Read",
+          "report.md"
+        ],
+        [
+          "Bash",
+          "scan.mjs --fix"
+        ],
+        [
+          "Done",
+          "13% → 63%"
+        ]
+      ]
     },
     "pr-visual-diff": {
       "summary": "Captures the pages a PR touches on both branches, diffs them and writes the Visual changes section.",
@@ -96,7 +223,29 @@
         "type": "image",
         "src": "assets/evidence/prdiff.png",
         "caption": "focus.png from capture.mjs on examples/before and examples/after: the CTA restyle was intended, the shrunken pricing buttons were not."
-      }
+      },
+      "trail": [
+        [
+          "Bash",
+          "affected-pages.mjs"
+        ],
+        [
+          "Bash",
+          "worktree-serve.mjs"
+        ],
+        [
+          "Bash",
+          "capture.mjs"
+        ],
+        [
+          "Read",
+          "focus.png"
+        ],
+        [
+          "Write",
+          "pr-section.md"
+        ]
+      ]
     }
   }
 }

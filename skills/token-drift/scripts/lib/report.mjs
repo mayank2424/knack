@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { c, swatch, round, plural } from './util.mjs';
+import { rareLabel } from './propose.mjs';
 
 export const STATUS = ['EXACT', 'NEAR', 'OFF-SCALE'];
 
@@ -37,7 +38,7 @@ export function printSummary(r, { scriptRel, showNext = true } = {}) {
   if (cats.length) {
     console.log(c.bold('  By category') + c.dim('            tokens  exact  near   off  score'));
     for (const [cat, v] of cats) {
-      if (v.noTokens) { console.log(c.dim(`    ${cat.padEnd(20)} ${String(v.tokenized).padStart(7)}  ${String(v.raw).padStart(4)} raw values, no ${cat} tokens: not scored`)); continue; }
+      if (v.noTokens || v.score == null) { console.log(c.dim(`    ${cat.padEnd(20)} ${String(v.tokenized).padStart(7)}  ${String(v.raw).padStart(4)} raw values, no ${cat} tokens: not scored`)); continue; }
       console.log(`    ${cat.padEnd(20)} ${String(v.tokenized).padStart(7)} ${String(v.EXACT).padStart(6)} ${String(v.NEAR).padStart(5)} ${String(v['OFF-SCALE']).padStart(5)} ${String(v.score + '%').padStart(6)}`);
     }
     console.log('');
@@ -151,7 +152,8 @@ export function writeReports(r, outDir, { proposal } = {}) {
   L.push(`| NEAR | ${n(r.counts.NEAR)} | ${n(r.fixable.NEAR)} with \`--fix=near\` | Within threshold of a token. Almost certainly drift; review before fixing. |`);
   L.push(`| OFF-SCALE | ${n(r.counts['OFF-SCALE'])} | never | Far from every token. Add a token, or keep it as a deliberate one-off. |`, '');
   const unscored = Object.entries(r.untracked || {});
-  if (unscored.length) L.push(`> **Not scored:** ${unscored.map(([k, v]) => `${k} (${n(v)} raw values)`).join(', ')}. The project has no tokens in ${unscored.length === 1 ? 'this category' : 'these categories'}; \`--propose\` drafts a starter set.`, '');
+  if (r.tokenCount === 0) L.push(`> **No tokens yet.** Nothing can reference a token, so the score is 0% and categories aren't scored individually. \`--propose\` drafts a starter set from the values used most.`, '');
+  else if (unscored.length) L.push(`> **Not scored:** ${unscored.map(([k, v]) => `${k} (${n(v)} raw values)`).join(', ')}. The project has no tokens in ${unscored.length === 1 ? 'this category' : 'these categories'}; \`--propose\` drafts a starter set.`, '');
 
   // next steps first: what the reader can do right now
   L.push('## What to do next', '');
@@ -171,7 +173,7 @@ export function writeReports(r, outDir, { proposal } = {}) {
   L.push('', '## By category', '', '| Category | Tokenized | Exact | Near | Off-scale | Score |', '|---|---:|---:|---:|---:|---:|');
   for (const [cat, v] of Object.entries(r.byCategory)) {
     if (!(v.raw + v.tokenized)) continue;
-    L.push(v.noTokens ? `| ${cat} | ${n(v.tokenized)} | | | ${n(v.raw)} raw | no tokens |` : `| ${cat} | ${n(v.tokenized)} | ${n(v.EXACT)} | ${n(v.NEAR)} | ${n(v['OFF-SCALE'])} | ${v.score}% |`);
+    L.push(v.noTokens || v.score == null ? `| ${cat} | ${n(v.tokenized)} | | | ${n(v.raw)} raw | no tokens |` : `| ${cat} | ${n(v.tokenized)} | ${n(v.EXACT)} | ${n(v.NEAR)} | ${n(v['OFF-SCALE'])} | ${v.score}% |`);
   }
   L.push('', '## Top offenders', '', '| File | Raw values | Exact | Near | Off-scale |', '|---|---:|---:|---:|---:|');
   for (const f of r.byFile.slice(0, 15)) L.push(`| ${code(f.file)} | ${f.total} | ${f.EXACT} | ${f.NEAR} | ${f['OFF-SCALE']} |`);
@@ -238,6 +240,13 @@ export function writeReports(r, outDir, { proposal } = {}) {
     L.push('| Proposed | Value | Uses | Absorbs |', '|---|---|---:|---|');
     for (const p of proposal.proposals) L.push(`| ${p.hex ? sw(p.hex) + ' ' : ''}${code(p.name)} | ${code(p.value)} | ${p.count} | ${p.members.map((m) => `${m.hex ? sw(m.hex) + ' ' : ''}${code(m.value)}×${m.count}`).join(', ')}${p.note ? ` (${esc(p.note)})` : ''} |`);
     L.push('', '```css', proposal.css.trimEnd(), '```');
+  }
+  if (proposal && proposal.oneOffs.length) {
+    const label = rareLabel(proposal.minUses || 2);
+    L.push('', `## One-offs: not proposed (${n(proposal.oneOffs.length)})`, '', `Values ${label}. A token for each would only rename the problem; keep them as deliberate one-offs, snap them to a proposed token by hand, or re-run with \`--min-uses 1\` to propose them too.`, '');
+    const rows = ['| Value | Category | Uses | Where |', '|---|---|---:|---|'];
+    for (const o of proposal.oneOffs.slice(0, 300)) rows.push(`| ${o.hex ? sw(o.hex) + ' ' : ''}${code(o.value)}${o.members?.length > 1 ? ` (${o.members.slice(1).map(code).join(', ')})` : ''} | ${o.category} | ${o.count ?? 1} | ${(o.locations || [o.location]).slice(0, 3).map(code).join(' ')} |`);
+    details(L, `${n(proposal.oneOffs.length)} one-offs`, rows);
   }
   const md = L.join('\n') + '\n';
   fs.writeFileSync(path.join(outDir, 'report.md'), md);

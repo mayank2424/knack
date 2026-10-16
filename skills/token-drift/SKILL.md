@@ -35,7 +35,7 @@ Paths below use `${CLAUDE_SKILL_DIR}`, this skill's folder. Other agents should 
 - **EXACT**: the raw value equals a token (e.g. `#2563eb` when `--color-brand-500: #2563eb`). Swapping in the token changes nothing visually.
 - **NEAR**: within threshold of a token (`#2563ea`, `15px` vs `16px`). Almost always drift. Review before fixing.
 - **OFF-SCALE**: far from every token, or exactly midway between two (`10px` between 8 and 12). Either the system is missing a token, or it's a deliberate one-off. A human decides.
-- **Drift score**: share of design values that already reference a token (`var()`, `$x`, token classes like `p-4`). Higher is better. Categories with no tokens at all, colors in plain JS strings, and files that can't use CSS variables (emails, OG images) are listed but not scored.
+- **Drift score**: share of design values that already reference a token (`var()`, `$x`, token classes like `p-4`). Higher is better. Categories with no tokens at all, colors in plain JS strings, and files that can't use CSS variables (emails, OG images) are listed but not scored. A project with no tokens anywhere scores 0% (nothing can reference a token yet) and its categories are listed without scores.
 
 ## Workflow
 
@@ -124,7 +124,7 @@ For colors, show the "Near-miss colors" swatch table in `report.md` (found value
 node ${CLAUDE_SKILL_DIR}/scripts/scan.mjs <dir> --propose
 ```
 
-This writes `.knack/token-drift/proposed-tokens.css` and a "Proposed tokens" table, e.g. 13 near-duplicate grays collapsed into one `--color-gray-100`. Present the clusters, let the user rename and approve them, add the approved tokens to the real token file, then re-scan. The former OFF-SCALE values become EXACT, and `--fix` can finish the job. With no tokens at all, `--propose` clusters every value and bootstraps a starter set.
+This writes `.knack/token-drift/proposed-tokens.css` and a "Proposed tokens" table, e.g. 13 near-duplicate grays collapsed into one `--color-gray-100`. Only clusters used at least twice become proposals; values used once are listed as one-offs in `report.md` (`--min-uses N` moves the cutoff, `--min-uses 1` proposes everything). Color names follow Tailwind's palette (`#e8590c` → `--color-orange-600`) and pure white/black never absorb off-whites like `#f5f5f5`, but they are still only suggestions. Present the clusters and one-offs, let the user rename and approve them, add the approved tokens to the real token file, then re-scan. The former OFF-SCALE values become EXACT, and `--fix` can finish the job. With no tokens at all, `--propose` clusters every value and bootstraps a starter set.
 
 What is and isn't auto-fixed, with the reasons, is in `references/fix-policy.md`. Read it before explaining a skipped value or when the user asks "why didn't it fix X?".
 
@@ -160,7 +160,7 @@ It exits with status 1 when the score drops below the threshold. Offer to add th
 | Script | Purpose |
 |---|---|
 | `scripts/tokens.mjs [dir] [--json] [--all] [--tokens p] [--exec-config] [--json-vars]` | Discover and normalize tokens; print a summary or JSON |
-| `scripts/scan.mjs [dir] [--fix[=near]] [--dry-run] [--propose] [--json] [--md] [--threshold k=v] [--include g] [--exclude g] [--ignore v] [--strict] [--include-tests] [--fail-under n] [--out dir]` | Scan, classify, report, fix, propose |
+| `scripts/scan.mjs [dir] [--fix[=near]] [--dry-run] [--propose] [--min-uses n] [--json] [--md] [--threshold k=v] [--include g] [--exclude g] [--ignore v] [--strict] [--include-tests] [--fail-under n] [--out dir]` | Scan, classify, report, fix, propose |
 | `scripts/setup.sh` | Check for Node 18+ |
 
 Both scripts support `--help`. Exit codes: 0 ok, 1 below `--fail-under` or a runtime error, 2 a usage error.

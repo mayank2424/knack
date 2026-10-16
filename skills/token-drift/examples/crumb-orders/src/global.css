@@ -1,0 +1,26 @@
+html,
+body {
+  margin: 0;
+  color: #333333;
+  background: #fafafa;
+  font-size: 16px;
+  font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+a {
+  color: #e8590c;
+}
+
+a:hover {
+  color: #d9480f;
+}
+
+h1 {
+  font-size: 32px;
+  margin-bottom: 24px;
+}
+
+h2 {
+  font-size: 24px;
+  margin-bottom: 16px;
+}

@@ -352,48 +352,125 @@ async function detectInPage(cfg) {
   const docW = Math.max(root.scrollWidth, body.scrollWidth);
   const rootClipX = isClip(cs(root).overflowX) || isClip(cs(body).overflowX);
   const pageScrolls = docW > vw + 1 && !rootClipX;
-  const overSet = new Set();
+  // Elements (and text runs) that stick out past the viewport and aren't explained by an ancestor that
+  // sticks out as far. Also used on a grid/flex item's subtree while that item is allowed to shrink.
+  function findCulprits(cands, textRuns) {
+    const overSet = new Set();
+    for (const el of cands) {
+      const r = rect(el);
+      if (r.right <= vw + 1 || r.width < 3 || r.height < 3) continue;
+      if (el !== body) { const a = anc(el); if (a.xBox || a.fixed) continue; }
+      if (cs(el).position === 'fixed') continue;
+      // inline boxes (a <code> run, a link) are explained by their text, reported on the block below
+      if (INLINE.has(cs(el).display) && !/^(IMG|VIDEO|CANVAS|IFRAME|EMBED|OBJECT|INPUT|SELECT|TEXTAREA|BUTTON|svg)$/.test(el.tagName)) continue;
+      overSet.add(el);
+    }
+    const found = [];
+    for (const el of overSet) {
+      let p = el.parentElement;
+      while (p && p !== body && p !== root && !overSet.has(p) && INLINE.has(cs(p).display)) p = p.parentElement; // skip inline wrappers (<a><img>)
+      const pRight = !p || p === root ? vw : rect(p).right;
+      if (!overSet.has(p) || rect(el).right > pRight + 1) found.push({ el, r: rect(el) });
+    }
+    // text runs (long words, nowrap) that stick out past the viewport
+    const textOver = new Map();
+    for (const t of textRuns) {
+      const maxR = Math.max(...t.rects.map((r) => r.right));
+      if (maxR <= vw + 1) continue;
+      const a = anc(t.el);
+      if (a.xBox || a.fixed || cs(t.el).position === 'fixed' || !INLINE.has(cs(t.el).display) && cs(t.el).overflowX !== 'visible') continue;
+      const blk = blockOf(t.el);
+      if (blk !== body && cs(blk).overflowX !== 'visible') continue;
+      if ((overSet.has(t.el) && rect(t.el).right >= maxR - 1) || (overSet.has(blk) && rect(blk).right >= maxR - 1)) continue; // its box already explains it
+      const prev = textOver.get(blk);
+      if (!prev || prev.right < maxR) textOver.set(blk, { right: maxR, rects: t.rects.filter((r) => r.right > vw + 1), node: t.node });
+    }
+    for (const [blk, info] of textOver) found.push({ el: blk, r: union(info.rects), text: info });
+    // several grid/flex items sticking out of one container that fits: one root cause, report the container
+    const byParent = new Map();
+    for (const c of found) if (!c.text && c.el.parentElement && /grid|flex/.test(cs(c.el.parentElement).display)) { const a = byParent.get(c.el.parentElement) || []; a.push(c); byParent.set(c.el.parentElement, a); }
+    for (const [p, arr] of byParent) {
+      if (arr.length < 2) continue;
+      for (const c of arr) found.splice(found.indexOf(c), 1);
+      found.push({ el: p, r: union(arr.map((c) => c.r)), group: arr.length });
+    }
+    return found;
+  }
   const overCandidates = body !== root && rect(body).right > vw + 1 ? [body, ...all] : all;
-  for (const el of overCandidates) {
-    const r = rect(el);
-    if (r.right <= vw + 1 || r.width < 3 || r.height < 3) continue;
-    if (el !== body) { const a = anc(el); if (a.xBox || a.fixed) continue; }
-    if (cs(el).position === 'fixed') continue;
-    // inline boxes (a <code> run, a link) are explained by their text, reported on the block below
-    if (INLINE.has(cs(el).display) && !/^(IMG|VIDEO|CANVAS|IFRAME|EMBED|OBJECT|INPUT|SELECT|TEXTAREA|BUTTON|svg)$/.test(el.tagName)) continue;
-    overSet.add(el);
-  }
-  const culprits = [];
-  for (const el of overSet) {
-    let p = el.parentElement;
-    while (p && p !== body && p !== root && !overSet.has(p) && INLINE.has(cs(p).display)) p = p.parentElement; // skip inline wrappers (<a><img>)
-    const pRight = !p || p === root ? vw : rect(p).right;
-    if (!overSet.has(p) || rect(el).right > pRight + 1) culprits.push({ el, r: rect(el) });
-  }
-  // text runs (long words, nowrap) that stick out past the viewport
-  const textOver = new Map();
-  for (const t of texts) {
-    const maxR = Math.max(...t.rects.map((r) => r.right));
-    if (maxR <= vw + 1) continue;
-    const a = anc(t.el);
-    if (a.xBox || a.fixed || cs(t.el).position === 'fixed' || !INLINE.has(cs(t.el).display) && cs(t.el).overflowX !== 'visible') continue;
-    const blk = blockOf(t.el);
-    if (blk !== body && cs(blk).overflowX !== 'visible') continue;
-    if ((overSet.has(t.el) && rect(t.el).right >= maxR - 1) || (overSet.has(blk) && rect(blk).right >= maxR - 1)) continue; // its box already explains it
-    const prev = textOver.get(blk);
-    if (!prev || prev.right < maxR) textOver.set(blk, { right: maxR, rects: t.rects.filter((r) => r.right > vw + 1), node: t.node });
-  }
-  for (const [blk, info] of textOver) culprits.push({ el: blk, r: union(info.rects), text: info });
-  // several grid/flex items sticking out of one container that fits: one root cause, report the container
-  const byParent = new Map();
-  for (const c of culprits) if (!c.text && c.el.parentElement && /grid|flex/.test(cs(c.el.parentElement).display)) { const a = byParent.get(c.el.parentElement) || []; a.push(c); byParent.set(c.el.parentElement, a); }
-  for (const [p, arr] of byParent) {
-    if (arr.length < 2) continue;
-    for (const c of arr) culprits.splice(culprits.indexOf(c), 1);
-    culprits.push({ el: p, r: union(arr.map((c) => c.r)), group: arr.length });
+  const culprits = findCulprits(overCandidates, texts);
+
+  // A grid/flex item that can't shrink below its content (min-width: auto) only passes the overflow on.
+  // Let it shrink for a moment (min-width: 0, the suggested fix) and see what inside it still sticks out:
+  // those are the real culprits, so the fix can cover all of them in one pass. The inline style is
+  // restored before anything else reads layout (and before the next frame, so observers never see it).
+  function probeInside(item) {
+    const saved = item.getAttribute('style');
+    rectMap.clear(); ancMap.clear();
+    try {
+      item.style.setProperty('min-width', '0px', 'important');
+      if (item.getBoundingClientRect().right > vw + 1) return []; // still too wide: its own width is the problem
+      const cands = all.filter((el) => el !== item && item.contains(el));
+      const runs = [];
+      for (const t of texts) {
+        if (!item.contains(t.el)) continue;
+        range.selectNodeContents(t.node);
+        const rects = [...range.getClientRects()].filter((r) => r.width > 0.5 && r.height > 0.5).map((r) => R(r.left, r.top, r.right, r.bottom));
+        if (rects.length) runs.push({ ...t, rects });
+      }
+      const found = findCulprits(cands, runs).filter((c) => c.el !== item); // its own items regrouped onto it say nothing new
+      found.sort((a, b) => b.r.right - a.r.right);
+      return found.slice(0, 4).map(({ el, r, text, group }) => ({
+        selector: selector(el),
+        overflowPx: Math.round(r.right - vw),
+        width: Math.round(r.width),
+        hints: overflowHints(el, r, text, group, true),
+      }));
+    } catch (_) {
+      return [];
+    } finally {
+      if (saved === null) item.removeAttribute('style'); else item.setAttribute('style', saved);
+      rectMap.clear(); ancMap.clear();
+    }
   }
 
-  function overflowHints(el, r, text, group) {
+  // What sets an element's rendered width. The HTML width attribute only counts when no CSS width
+  // overrides it: a matching CSS rule (or inline style) beats the attribute's presentational hint.
+  function cssWidthRule(el) {
+    let hit = null;
+    const walk = (rules) => {
+      for (const rule of rules) {
+        if (hit) return;
+        if (rule.media && rule.constructor.name === 'CSSMediaRule' && !matchMedia(rule.media.mediaText).matches) continue;
+        if (rule.constructor.name === 'CSSSupportsRule' && !CSS.supports(rule.conditionText)) continue;
+        if (rule.selectorText !== undefined && rule.style?.width) { try { if (el.matches(rule.selectorText)) hit = rule.style.width; } catch (_) {} }
+        if (!hit && rule.cssRules?.length) walk(rule.cssRules);
+      }
+    };
+    for (const sh of document.styleSheets) {
+      let rules = null;
+      try { rules = sh.cssRules; } catch (_) {}
+      if (rules && (!sh.media?.mediaText || matchMedia(sh.media.mediaText).matches)) walk(rules);
+      if (hit) break;
+    }
+    return { hit };
+  }
+  function widthSource(el, r) {
+    if (el.style.width) return `inline style width: ${el.style.width}`;
+    let cw = null;
+    try { cw = el.computedStyleMap?.().get('width'); } catch (_) {}
+    const px = cw && cw.unit === 'px' ? cw.value : null; // computed (not used) width: absolute lengths only
+    const attr = (el.getAttribute('width') || '').trim();
+    if (px !== null) {
+      const fromAttr = /^\d+(\.\d+)?$/.test(attr) && Math.abs(px - parseFloat(attr)) < 0.5;
+      // unreadable (cross-origin) sheets can't be checked: then a matching value is credited to the attribute
+      if (fromAttr && !cssWidthRule(el).hit) return `width="${attr}" attribute`;
+      return `CSS width: ${+px.toFixed(2)}px`;
+    }
+    if (el.tagName === 'IMG' && el.naturalWidth && Math.abs(el.naturalWidth - r.width) <= 1 && String(cw) === 'auto') return `intrinsic ${el.naturalWidth}px image width (no CSS width)`;
+    return null;
+  }
+
+  function overflowHints(el, r, text, group, nested = false) {
     const s = cs(el), h = [];
     const p = el.parentElement, ps = p && p !== root ? cs(p) : null;
     const tag = el.tagName;
@@ -417,15 +494,24 @@ async function detectInPage(cfg) {
       return h;
     }
     if (/^(IMG|VIDEO|CANVAS|IFRAME|PICTURE|svg|EMBED|OBJECT)$/.test(tag) && s.maxWidth === 'none') h.push(`<${tag.toLowerCase()}> has no max-width: 100%`);
-    if (tag === 'IMG' && el.getAttribute('width')) h.push(`width="${el.getAttribute('width')}" attribute`);
+    if (/^(IMG|VIDEO|CANVAS|IFRAME|EMBED|OBJECT)$/.test(tag)) { const src = widthSource(el, r); if (src) h.push(src); }
     if (tag === 'TABLE') h.push('table wider than the screen: wrap it in an overflow-x: auto container');
     if (tag === 'PRE') h.push('<pre> without overflow-x: auto');
-    if (el.style.width) h.push(`inline style width: ${el.style.width}`);
+    if (el.style.width && !/^(IMG|VIDEO|CANVAS|IFRAME|EMBED|OBJECT)$/.test(tag)) h.push(`inline style width: ${el.style.width}`);
     if (parseFloat(s.minWidth) > vw) h.push(`min-width: ${s.minWidth}`);
     if (/flex/.test(s.display) && s.flexWrap === 'nowrap' && s.flexDirection.startsWith('row') && el.children.length > 1) h.push(`flex row without flex-wrap (${el.children.length} items)`);
     if (/grid/.test(s.display)) h.push(`grid tracks: ${s.gridTemplateColumns}`);
-    if (ps && /flex/.test(ps.display) && s.minWidth === 'auto' && r.width > rect(p).width + 1) h.push('flex item cannot shrink below its content (min-width: auto); add min-width: 0');
-    if (ps && /grid/.test(ps.display) && r.width > rect(p).width + 1) h.push('grid item wider than its track; use minmax(0, 1fr) / min-width: 0');
+    const flexStuck = ps && /flex/.test(ps.display) && s.minWidth === 'auto' && r.width > rect(p).width + 1;
+    const gridStuck = ps && /grid/.test(ps.display) && r.width > rect(p).width + 1;
+    if (flexStuck) h.push('flex item cannot shrink below its content (min-width: auto); add min-width: 0');
+    if (gridStuck) h.push('grid item wider than its track; use minmax(0, 1fr) / min-width: 0');
+    if ((flexStuck || gridStuck) && !nested) {
+      const causes = probeInside(el);
+      if (causes.length) {
+        h.push(`what makes it wide (still overflows once it can shrink): ${causes.map((c) => `${c.selector} +${c.overflowPx}px`).join(', ')}`);
+        h.causes = causes;
+      }
+    }
     if (is100vw(el)) h.push(`width: 100vw includes the ${window.innerWidth - vw}px classic scrollbar (Windows/Linux): use width: 100%, or move the full-bleed band out of the centred container`);
     if (s.transform && s.transform !== 'none') h.push('transform moves it off-screen');
     if (parseFloat(s.marginLeft) < 0 || parseFloat(s.marginRight) < 0) h.push(`negative margin (${s.marginLeft} / ${s.marginRight})`);
@@ -442,15 +528,16 @@ async function detectInPage(cfg) {
     reportedCulprits.add(el);
     const px = Math.round(r.right - vw);
     const hints = overflowHints(el, r, text, group);
+    const causes = hints.causes;
     const isImg = !text && /^(IMG|PICTURE|VIDEO)$/.test(el.tagName);
     const what = text ? `Text ${q(text.node.nodeValue.trim().slice(0, 30))} runs` : isImg ? `Image is ${Math.round(r.width)}px wide and runs` : group ? `Its ${group} items run` : `Runs`;
     const vpDesc = sbW > 1 ? `${vw}px-wide page (${window.innerWidth}px window minus its scrollbar)` : `${vw}px viewport`;
-    if (pageScrolls) add(isImg ? 'image-overflow' : 'horizontal-overflow', 'error', el, `${what} ${px}px past the ${vpDesc}; the page scrolls sideways.`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
+    if (pageScrolls) add(isImg ? 'image-overflow' : 'horizontal-overflow', 'error', el, `${what} ${px}px past the ${vpDesc}; the page scrolls sideways.`, { rect: r, magnitude: px, details: { overflowPx: px, hints: [...hints], ...(causes ? { causes } : {}) } });
     else if (rootClipX && !(
       // nothing of value is lost: decorative art with no text, or a 100vw band losing only the scrollbar's width
       (!text && !el.textContent.trim() && !el.querySelector('img[alt]:not([alt=""]),a,button,input') && (decorative(el) || cs(el).pointerEvents === 'none' || /^(CANVAS|svg|VIDEO)$/.test(el.tagName))) ||
       (is100vw(el) && px <= sbW + 1)
-    )) add('hidden-overflow', 'warn', el, `${what} ${px}px past the viewport and is cut off by overflow-x: hidden on <html>/<body> (hidden, not fixed).`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
+    )) add('hidden-overflow', 'warn', el, `${what} ${px}px past the viewport and is cut off by overflow-x: hidden on <html>/<body> (hidden, not fixed).`, { rect: r, magnitude: px, details: { overflowPx: px, hints: [...hints], ...(causes ? { causes } : {}) } });
   }
   if (pageScrolls && !culprits.length) {
     add('horizontal-overflow', 'error', null, `Page is ${docW - vw}px wider than the viewport, but no element box sticks out (pseudo-element, box-shadow or transform?).`, { magnitude: docW - vw });
@@ -710,7 +797,7 @@ async function detectInPage(cfg) {
       const lost = area(vis) > 0 ? 1 - area(inter(vis, R(0, vis.top, vw, vis.bottom))) / area(r) : 1;
       if (a.xKind !== 'scroll' && !a.fixed && !decorative(img) && atEdge && lost >= 0.1) {
         const where = a.xBox ? `cropped by overflow on ${selector(a.xBox)}, ${Math.round(lost * 100)}% of it is cut off` : 'it runs off-screen';
-        add('image-overflow', lost >= 0.3 || !a.xBox ? 'error' : 'warn', img, `Image is ${Math.round(r.width)}px wide, wider than the ${vw}px viewport; ${where}.`, { rect: r, magnitude: r.width - vw, details: { hints: [s.maxWidth === 'none' ? 'no max-width: 100%' : `max-width: ${s.maxWidth}`, img.getAttribute('width') ? `width="${img.getAttribute('width')}" attribute` : `width: ${Math.round(r.width)}px`].filter(Boolean) } });
+        add('image-overflow', lost >= 0.3 || !a.xBox ? 'error' : 'warn', img, `Image is ${Math.round(r.width)}px wide, wider than the ${vw}px viewport; ${where}.`, { rect: r, magnitude: r.width - vw, details: { hints: [s.maxWidth === 'none' ? 'no max-width: 100%' : `max-width: ${s.maxWidth}`, widthSource(img, r) || `width: ${Math.round(r.width)}px`].filter(Boolean) } });
       }
     }
     // spacer GIFs (≤ 8px) and tiny renders can't look distorted
@@ -905,7 +992,11 @@ async function detectInPage(cfg) {
       if (!topEl || !bar.contains(topEl)) continue; // something else (or nothing) is actually on top
       const dy = window.scrollY - sy0, dx = window.scrollX - sx0;
       const hb = hitsByBar.get(bar) || { list: [], need: 0, frac: 0 };
-      hb.list.push({ id, link, frac, rect: R(line.left + dx, line.top + dy, line.right + dx, line.bottom + dy) });
+      // where the header sits on the page right after this jump (page coordinates): drawn as a band so the
+      // full-page screenshot shows the heading inside the area the header covers
+      const bTop = Math.max(br.top, 0), bLeft = Math.max(br.left, 0);
+      const band = { x: Math.round(bLeft + window.scrollX), y: Math.round(bTop + window.scrollY), w: Math.round(Math.min(br.right, vw) - bLeft), h: Math.round(br.bottom - bTop) };
+      hb.list.push({ id, link, frac, band, rect: R(line.left + dx, line.top + dy, line.right + dx, line.bottom + dy) });
       hb.need = Math.max(hb.need, Math.ceil(br.bottom + 8)); hb.frac = Math.max(hb.frac, frac); hb.h = Math.round(br.bottom);
       hitsByBar.set(bar, hb);
     }
@@ -913,7 +1004,7 @@ async function detectInPage(cfg) {
       hb.list.sort((a, b) => a.rect.top - b.rect.top);
       const first = hb.list[0];
       const ids = hb.list.map((x) => '#' + x.id);
-      add('anchor-hidden', hb.frac >= 0.95 ? 'error' : 'warn', document.getElementById(first.id) || bar, `${hb.list.length} of ${anchors.length} in-page link${anchors.length === 1 ? '' : 's'} (${ids.slice(0, 4).join(', ')}${ids.length > 4 ? '…' : ''}) jump${hb.list.length === 1 ? 's' : ''} to a heading that lands ${hb.frac >= 0.95 ? 'completely' : 'partly'} under the ${cs(bar).position} header ${q(snippet(bar, 20))} (${hb.h}px tall).`, { rect: first.rect, magnitude: hb.h, details: { targets: ids, header: selector(bar), hints: [`add html { scroll-padding-top: ${hb.need}px } (or scroll-margin-top: ${hb.need}px on the targets)`] } });
+      add('anchor-hidden', hb.frac >= 0.95 ? 'error' : 'warn', document.getElementById(first.id) || bar, `${hb.list.length} of ${anchors.length} in-page link${anchors.length === 1 ? '' : 's'} (${ids.slice(0, 4).join(', ')}${ids.length > 4 ? '…' : ''}) jump${hb.list.length === 1 ? 's' : ''} to a heading that lands ${hb.frac >= 0.95 ? 'completely' : 'partly'} under the ${cs(bar).position} header ${q(snippet(bar, 20))} (${hb.h}px tall).`, { rect: first.rect, magnitude: hb.h, details: { targets: ids, header: selector(bar), band: first.band, hints: [`add html { scroll-padding-top: ${hb.need}px } (or scroll-margin-top: ${hb.need}px on the targets)`] } });
     }
     if (anchors.length) { window.scrollTo(sx0, sy0); await new Promise((res) => requestAnimationFrame(res)); }
   }
@@ -966,8 +1057,19 @@ function drawOverlay({ issues, vw, docH }) {
     .b.dash{border-style:dashed}
     .l{position:absolute;font:700 11px/16px ui-monospace,SFMono-Regular,Menlo,monospace;color:#fff;background:var(--c);padding:0 5px;border-radius:8px;white-space:nowrap;box-shadow:0 1px 3px rgba(0,0,0,.35)}
     .e{position:absolute;right:0;font:700 11px/16px ui-monospace,Menlo,monospace;color:#fff;background:var(--c);padding:0 6px;border-radius:8px 0 0 8px}
+    .band{position:absolute;box-sizing:border-box;border:2px dashed var(--c);border-left:0;border-right:0;background:repeating-linear-gradient(135deg,color-mix(in srgb,var(--c) 26%,transparent) 0 6px,transparent 6px 12px)}
+    .cap{position:absolute;font:600 11px/16px ui-sans-serif,-apple-system,"Segoe UI",sans-serif;color:#fff;background:var(--c);padding:0 6px;border-radius:4px;white-space:nowrap;max-width:calc(100% - 8px);overflow:hidden;text-overflow:ellipsis}
   </style>`;
   const placed = [];
+  // anchor-hidden: hatch the strip the fixed header covers right after the jump (under the numbered box)
+  for (const i of issues) {
+    const b = i.details?.band;
+    if (!b || i.severity === 'info' || b.y >= docH) continue;
+    const col = COL[i.severity];
+    const tgt = (i.details.targets || [])[0] || '';
+    html += `<div class="band" style="--c:${col};left:${b.x}px;top:${b.y}px;width:${b.w}px;height:${Math.min(b.h, docH - b.y)}px"></div>`;
+    html += `<div class="cap" style="--c:${col};right:4px;top:${Math.max(b.y, Math.min(docH, b.y + b.h) - 18)}px">${i.n} header covers this after the ${tgt} jump</div>`;
+  }
   for (const i of issues) {
     if (!i.box || i.severity === 'info') continue;
     const col = COL[i.severity];
@@ -985,6 +1087,43 @@ function drawOverlay({ issues, vw, docH }) {
   }
   sh.innerHTML = html;
   document.documentElement.appendChild(host);
+}
+
+// anchor-hidden evidence: jump to the target like a click on its link would, then outline the fixed
+// header and, on top of it, the heading line hidden underneath (viewport coordinates).
+async function drawJumpOverlay({ id, header, n, sev }) {
+  document.getElementById('__knack_rqa')?.remove();
+  const tgt = document.getElementById(id) || document.getElementsByName(id)[0];
+  let bar = null; try { bar = document.querySelector(header); } catch (_) {}
+  if (!tgt || !bar) return false;
+  tgt.scrollIntoView({ block: 'start', behavior: 'instant' });
+  await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 80)));
+  let line = null;
+  const range = document.createRange();
+  const w = document.createTreeWalker(tgt, NodeFilter.SHOW_TEXT, { acceptNode: (t) => (t.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+  for (let t = w.nextNode(); t && !line; t = w.nextNode()) { range.selectNodeContents(t); line = [...range.getClientRects()].find((x) => x.width > 1 && x.height > 1) || null; }
+  line ||= tgt.getBoundingClientRect();
+  const br = bar.getBoundingClientRect();
+  const vw = document.documentElement.clientWidth;
+  const col = sev === 'error' ? '#ff2d55' : '#ff9f0a';
+  const host = document.createElement('div');
+  host.id = '__knack_rqa';
+  host.style.cssText = 'all:initial;position:fixed;inset:0;pointer-events:none;z-index:2147483647;';
+  const sh = host.attachShadow({ mode: 'open' });
+  const box = (r) => `left:${Math.max(0, r.left)}px;top:${Math.max(0, r.top)}px;width:${Math.min(vw, r.right) - Math.max(0, r.left)}px;height:${r.bottom - Math.max(0, r.top)}px`;
+  const lt = Math.max(0, line.top);
+  const ly = Math.max(br.bottom + 4, 0);
+  sh.innerHTML = `<style>
+    div{position:absolute;box-sizing:border-box}
+    .hdr{border:2px dashed ${col};background:repeating-linear-gradient(135deg,color-mix(in srgb,${col} 22%,transparent) 0 6px,transparent 6px 12px)}
+    .hd{border:2px solid ${col};background:color-mix(in srgb,${col} 18%,transparent);border-radius:3px}
+    .cap{font:600 12px/18px ui-sans-serif,-apple-system,"Segoe UI",sans-serif;color:#fff;background:${col};padding:0 7px;border-radius:4px;white-space:nowrap;max-width:calc(100vw - 16px);overflow:hidden;text-overflow:ellipsis;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+  </style>
+  <div class="hdr" style="${box(br)}"></div>
+  <div class="hd" style="left:${Math.max(0, line.left)}px;top:${lt}px;width:${Math.min(vw, line.right) - Math.max(0, line.left)}px;height:${Math.max(4, line.bottom - lt)}px"></div>
+  <div class="cap" style="left:8px;top:${ly}px">${n} ↑ #${id.replace(/[<&]/g, '')} lands under the ${Math.round(br.bottom)}px header</div>`;
+  document.documentElement.appendChild(host);
+  return true;
 }
 
 // ======================================================================
@@ -1065,6 +1204,16 @@ async function sweepTarget(browser, target) {
       await page.evaluate(drawOverlay, { issues: res.issues, vw: res.doc.clientWidth, docH: res.doc.scrollHeight });
       const file = path.join(shotDir, `${w}x${h}.png`);
       await page.screenshot({ path: file, fullPage, clip: { x: 0, y: 0, width: res.doc.clientWidth, height: docH }, animations: 'disabled', caret: 'hide' });
+      // anchor-hidden: also capture what the reader actually sees right after the jump
+      for (const i of res.issues) {
+        if (i.check !== 'anchor-hidden' || !i.details?.targets?.length) continue;
+        const id = i.details.targets[0].slice(1);
+        const shown = await page.evaluate(drawJumpOverlay, { id, header: i.details.header, n: i.n, sev: i.severity }).catch(() => false);
+        if (!shown) continue;
+        const jf = path.join(shotDir, `${w}x${h}-jump-${id.replace(/[^a-z0-9_-]+/gi, '-').slice(0, 40)}.png`);
+        await page.screenshot({ path: jf, animations: 'disabled', caret: 'hide' });
+        i.details.jumpScreenshot = rel(jf);
+      }
       await page.close();
       if (process.env.RQA_DEBUG) log(dim(`      load+settle ${t1 - t0}ms · detect ${t2 - t1}ms · shot ${Date.now() - t2}ms`));
       const ec = res.issues.filter((i) => i.severity === 'error').length;
@@ -1275,6 +1424,8 @@ try {
     log(`  ${icon} ${pad(g.check, 19)} ${cyan(pad(g.selector || '(page)', 40))} ${dim(pad(where, 16))} ${g.message}`);
     const hints = g.details?.hints;
     if (hints?.length) log(`      ${dim('↳ ' + hints.join(' · '))}`);
+    // culprits found inside a grid/flex item that can't shrink: fix these in the same pass
+    for (const c of g.details?.causes || []) log(`        ${dim('· ' + c.selector + ' +' + c.overflowPx + 'px' + (c.hints.length ? ': ' + c.hints.join(' · ') : ''))}`);
   }
   for (const [check, n] of Object.entries(hiddenPerCheck)) log(dim(`  ⚠ … ${n} more ${check} warning${n === 1 ? '' : 's'} (see report.json)`));
   if (visibleGroups.length > MAX_LINES) log(dim(`  … ${visibleGroups.length - MAX_LINES} more grouped issues in report.json`));
@@ -1289,13 +1440,19 @@ try {
     const cm = report.compare;
     log('');
     log(`${magenta('◆')} vs ${cm.against}: ${green(`✓ ${cm.fixed} fixed`)} · ${cm.new ? red(`✖ ${cm.new} new`) : dim('0 new')} · ${cm.remaining} remaining`);
-    for (const g of groupIssues(cm.newIssues).slice(0, 10)) log(`  ${red('+')} ${pad(g.check, 19)} ${cyan(pad(g.selector || '(page)', 40))} ${dim('@' + fmtWidths(g.widths))}`);
-    for (const g of groupIssues(cm.fixedIssues).slice(0, 10)) log(`  ${green('−')} ${pad(g.check, 19)} ${dim(pad(g.selector || '(page)', 40))} ${dim('@' + fmtWidths(g.widths))}`);
+    // grouped like the summary; the full per-viewport lists are in report.json (compare.newIssues / fixedIssues)
+    const CMP_LINES = 10;
+    const newG = groupIssues(cm.newIssues), fixedG = groupIssues(cm.fixedIssues);
+    for (const g of newG.slice(0, CMP_LINES)) log(`  ${red('+')} ${pad(g.check, 19)} ${cyan(pad(g.selector || '(page)', 40))} ${dim('@' + fmtWidths(g.widths))}`);
+    if (newG.length > CMP_LINES) log(dim(`  +${newG.length - CMP_LINES} more (see report.json → compare.newIssues)`));
+    for (const g of fixedG.slice(0, CMP_LINES)) log(`  ${green('−')} ${pad(g.check, 19)} ${dim(pad(g.selector || '(page)', 40))} ${dim('@' + fmtWidths(g.widths))}`);
+    if (fixedG.length > CMP_LINES) log(dim(`  +${fixedG.length - CMP_LINES} more fixed (see report.json → compare.fixedIssues)`));
   }
 
   log('');
   for (const s of sheets) log(`${magenta('◆')} Contact sheet → ${s}`);
   log(`${magenta('◆')} Screenshots   → ${rel(path.join(outDir, 'shots'))}/`);
+  if (results.some((r) => r.issues.some((i) => i.details?.jumpScreenshot))) log(`${magenta('◆')} Anchor jumps  → ${rel(path.join(outDir, 'shots'))}/<page>/<w>x<h>-jump-<id>.png (the screen right after the jump)`);
   log(`${magenta('◆')} Report        → ${rel(reportPath)}`);
 
   if (JSON_MODE && !outClosed) process.stdout.write(JSON.stringify(report, null, 2) + '\n');

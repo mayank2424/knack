@@ -1,0 +1,111 @@
+{
+  "examples": [
+    {
+      "id": "showreel",
+      "title": "\"Go all out\": a 15-second showreel with its own score",
+      "prompt": "Make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are, like it's your showreel for a résumé. Go all out.",
+      "summary": "Creative-freedom mode. The concept is one vermilion square carried through seven techniques: squash and stretch with onion skins, a rippling type grid, a 3D cube turning on the beat, a liquid morph, particles assembling into a word, a graph editor whose curve then drives the move, and a match cut where the ball becomes the title's full stop. Cuts land on a 124 BPM grid; ink floods mark the two big beats, and the synthesized score puts a whoosh, hit, riser or drop on every cut.",
+      "input": [
+        "showreel/index.html"
+      ],
+      "command": "node scripts/render.mjs examples/showreel/index.html --trc srgb",
+      "result": "15.0s, 1920×1080, 60fps, 900 frames, with a 25-cue synthesized score at -14 LUFS",
+      "media": [
+        {
+          "type": "video",
+          "src": "output/showreel/showreel.mp4",
+          "alt": "The showreel, with sound",
+          "caption": "The rendered showreel. Sound on: the score and every cue are synthesized from the composition."
+        },
+        {
+          "type": "image",
+          "src": "output/showreel/filmstrip.png",
+          "alt": "Twelve evenly spaced frames from the showreel",
+          "caption": "The filmstrip the agent reviews before rendering the final video."
+        }
+      ],
+      "excerpt": "◆ Check passed: no layout or timing issues found.\n◆ Filmstrip (12 frames) → examples/output/showreel/filmstrip.png\n◆ Score synthesized (driving, 124 BPM, 25 cues, -14.0 dBFS RMS)\n◆ Done in 17.6s (capture 15.0s, 60.0 shots/s) → examples/output/showreel/showreel.mp4 (3.87 MB, 900 frames, 15s)"
+    },
+    {
+      "id": "copse-launch",
+      "title": "A launch film for a real Mac app, cut on its own keystroke",
+      "prompt": "Make a 15-second launch video for Copse, our macOS clipboard manager, for the website and X. Use the real app: real screenshots, icon, name, tagline and brand look. 16:9, with sound.",
+      "summary": "Brief mode with a real product. The agent read the repo for the tagline, price, brand tokens and fonts, then built the film from the app's own dark-mode panel snapshots. The tagline is split by the keystroke: real clip rows float around \"Everything you copy.\", ⌘ ⇧ V lands on three beats and the rows snap into the real panel. The camera pushes onto search, the actions menu and paste, and the icon's three trees grow into the Copse icon for the lockup. The score drops on the V press and puts a cue on every key and cut.",
+      "input": [
+        "copse-launch/index.html",
+        "copse-launch/storyboard.md"
+      ],
+      "command": "node scripts/render.mjs examples/copse-launch/index.html --trc srgb --crf 24 --motion-blur 4 -o examples/output/copse-launch/copse-launch.mp4",
+      "result": "15s, 1920×1080, 60fps, 3.1 MB, with a 28-cue synthesized score at -14 LUFS",
+      "media": [
+        {
+          "type": "video",
+          "src": "output/copse-launch/copse-launch.mp4",
+          "alt": "The Copse launch film, with sound",
+          "caption": "Every UI frame is a real Copse screenshot; the score and cues are synthesized from the composition."
+        },
+        {
+          "type": "image",
+          "src": "output/copse-launch/filmstrip.png",
+          "alt": "Twelve frames from the Copse launch film",
+          "caption": "Hook over real clip rows, the panel, search, the actions menu, the trees and the lockup."
+        }
+      ],
+      "excerpt": "◆ Check passed: no layout or timing issues found.\n◆ Rendering 900 frames × 4 motion-blur samples (1920×1080 @ 60fps, 6 workers)…\n◆ Score synthesized (driving, 120 BPM, 28 cues, -14.0 LUFS)\n◆ Encoding MP4 with ffmpeg…\n◆ Done in 404.7s (capture 399.0s, 9.0 shots/s) → examples/output/copse-launch/copse-launch.mp4 (3.14 MB, 900 frames, 15s)"
+    },
+    {
+      "id": "tidzy-vertical",
+      "title": "A 12-second vertical ad for a real Mac app",
+      "prompt": "Make a 12-second vertical (9:16) ad for Tidzy for Reels/TikTok/Shorts. Hook in the first second, show the real app finding a file instantly and freeing up space, end on the name and site. Use the real screenshots and brand. Add sound.",
+      "summary": "Brief mode with real brand inputs: the README's copy, the website's colors and Geist type, and crops of the app's own screenshots. The poster frame is already the hook: \"Can't find that screenshot?\" over a wall of identical filenames. The word flies into Tidzy's search bar in a match cut, and the real result is found by the text inside it. The real Clean Up cards fold into \"Moved to Trash · Undo\", and the green check floods the frame and shrinks into the app icon. Text stays inside the 9:16 safe zones.",
+      "input": [
+        "tidzy-vertical/index.html",
+        "tidzy-vertical/storyboard.md"
+      ],
+      "command": "node scripts/render.mjs examples/tidzy-vertical/index.html --trc srgb --crf 23 -o examples/output/tidzy-vertical/tidzy-vertical.mp4",
+      "result": "12s, 1080×1920, 60fps, 2.7 MB, with a 36-cue score at -14 LUFS",
+      "media": [
+        {
+          "type": "video",
+          "src": "output/tidzy-vertical/tidzy-vertical.mp4",
+          "alt": "Vertical Tidzy ad: a lost screenshot found by its text, space freed, end card",
+          "caption": "The rendered 9:16 ad, with sound. Every UI element is the real app."
+        },
+        {
+          "type": "image",
+          "src": "output/tidzy-vertical/filmstrip.png",
+          "alt": "Eight frames of the Tidzy vertical ad",
+          "caption": "Frame 0 is the poster and already shows the hook; captions stay clear of the platform UI zones."
+        }
+      ],
+      "excerpt": "◆ Check passed: no layout or timing issues found.\n◆ Rendering 720 frames (1080×1920 @ 60fps, 6 workers)…\n◆ Score synthesized (driving, 120 BPM, 36 cues, -14.0 LUFS)\n◆ Encoding MP4 with ffmpeg…\n◆ Done in 131.0s (capture 126.6s, 5.7 shots/s) → examples/output/tidzy-vertical/tidzy-vertical.mp4 (2.69 MB, 720 frames, 12s)"
+    },
+    {
+      "id": "coderelay-explainer",
+      "title": "A 15-second explainer for a real Chrome extension",
+      "prompt": "Make a 15-second explainer for CodeRelay, our Chrome extension, for the Chrome Web Store listing and X. Show the core idea: open review comments on a pull request turn into one AI-ready prompt you paste into your coding agent. Use the real product: screenshots, icon, name, tagline. 16:9, with sound.",
+      "summary": "Brief mode, read from the product repo: the site's hero line and its amber/blue/cyan color meanings, the store screenshots, icon, fonts and README tagline. Reviewer comments collapse into the CodeRelay icon, the real side panel opens out of it, and the camera pushes onto a real comment, its diff and the generated Markdown. A click on Copy prompt brings up the app's own toast, and the prompt drops into a coding agent. The score holds the drums back until the panel lands.",
+      "input": [
+        "coderelay-explainer/index.html",
+        "coderelay-explainer/storyboard.md"
+      ],
+      "command": "node scripts/render.mjs examples/coderelay-explainer/index.html --trc srgb --crf 20",
+      "result": "15s, 1920×1080, 60fps, 3.2 MB, with a 16-cue score at -14 LUFS",
+      "media": [
+        {
+          "type": "video",
+          "src": "output/coderelay-explainer/coderelay-explainer.mp4",
+          "alt": "The CodeRelay explainer, with sound",
+          "caption": "Problem, transformation, result in 15 seconds. Every UI frame is a real store screenshot."
+        },
+        {
+          "type": "image",
+          "src": "output/coderelay-explainer/filmstrip.png",
+          "alt": "Twelve frames from the CodeRelay explainer",
+          "caption": "The hook, the relay into the real panel, the camera moves onto the comment, diff and prompt, the paste and the end card."
+        }
+      ],
+      "excerpt": "◆ Check passed: no layout or timing issues found.\n◆ Rendering 900 frames (1920×1080 @ 60fps, 6 workers)…\n◆ Score synthesized (driving, 120 BPM, 16 cues, -14.0 LUFS)\n◆ Encoding MP4 with ffmpeg…\n◆ Done in 83.4s (capture 79.2s, 11.4 shots/s) → examples/output/coderelay-explainer/coderelay-explainer.mp4 (3.23 MB, 900 frames, 15s)"
+    }
+  ]
+}

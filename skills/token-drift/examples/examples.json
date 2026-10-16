@@ -1,0 +1,88 @@
+{
+  "examples": [
+    {
+      "id": "acme-dashboard",
+      "title": "A Tailwind v3 dashboard where only 13% of values use the tokens",
+      "prompt": "Find the hardcoded colors and magic numbers that should be using our design tokens, and fix the safe ones.",
+      "summary": "A small app with a Tailwind v3 config, CSS custom properties and legacy SCSS variables, plus drift planted in five flavors: near-miss hex, 15px against a 16px token, Tailwind arbitrary values, JSX inline styles and an oklch() near-match. The scan finds 48 EXACT, 10 NEAR and 14 OFF-SCALE values. --fix rewrites the 41 provably safe ones (Tailwind classes, var(), $scss and JSX strings), lists the 3 swaps that will now follow dark mode, and lifts the score from 13% to 63%. Reviewing the near misses with --fix=near takes it to 74%; what is left is off-scale values and cases that need a human.",
+      "input": [
+        "acme-dashboard"
+      ],
+      "command": "node scripts/scan.mjs examples/acme-dashboard --fix --dry-run",
+      "result": "Drift score 13% → 63% with --fix (41 EXACT values) → 74% with --fix=near",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/acme-dashboard/report-near-misses.png",
+          "alt": "The top of report.md: a 13% drift-score gauge, a table of 48 EXACT, 10 NEAR and 14 OFF-SCALE values, and a near-miss color table where each found color sits next to its token in a pair of swatches that look identical, with ΔE between 0.13 and 0.53.",
+          "caption": "report.md: six near-miss colors, each shown beside the token it should have been. Every pair is under ΔE 1, so nobody could see the difference by eye."
+        },
+        {
+          "type": "image",
+          "src": "output/acme-dashboard/terminal-fix.png",
+          "alt": "Terminal: the --fix --dry-run diff turns rounded-[8px] px-[16px] into rounded-lg px-4 in Button.jsx and padding 15px 24px into 15px var(--space-6) in global.css, warns that 3 replacements will follow dark mode, then --fix prints 13% → 63% and --fix=near prints 63% → 74%.",
+          "caption": "--fix --dry-run first, then apply. text-[14px] and the off-scale 15px are left alone on purpose."
+        },
+        {
+          "type": "image",
+          "src": "output/acme-dashboard/terminal-scan.png",
+          "alt": "Terminal summary of the scan: 13% drift score, EXACT 48, NEAR 10, OFF-SCALE 14, and six near misses with true-color swatches, for example #2563ea → var(--color-brand-500) ΔE 0.13.",
+          "caption": "The terminal summary prints the same near misses with true-color swatches."
+        }
+      ],
+      "excerpt": "$ node scripts/scan.mjs examples/acme-dashboard\ntoken-drift · examples/acme-dashboard/  8 files scanned · 380 tokens from 4 sources\n\n  Drift score   13%  ███░░░░░░░░░░░░░░░░░░░░░  11 of 83 design values use tokens\n\n  EXACT       48  equals a token → swap in the token (41 auto-fixable)\n  NEAR        10  within threshold of a token → likely drift (9 fixable with --fix=near)\n  OFF-SCALE   14  far from every token → new token or deliberate one-off\n$ node scripts/scan.mjs examples/acme-dashboard --fix\nDrift score 13% → 63%  (7 exact · 10 near · 14 off-scale left)\n$ node scripts/scan.mjs examples/acme-dashboard --fix=near\nDrift score 63% → 74%  (7 exact · 1 near · 14 off-scale left)"
+    },
+    {
+      "id": "tailwind-v4-shadcn",
+      "title": "shadcn-style components full of p-[13px] and bg-[oklch(…)]",
+      "prompt": "Clean up the Tailwind arbitrary values like p-[13px] and text-[#0a0a0a] in our components.",
+      "summary": "A Tailwind v4 notes app with shadcn-style semantic tokens: light values in :root, dark overrides in .dark, mapped through @theme inline, plus one fixed brand color in @theme. Its components hard-code the same values as arbitrary classes, in hex and in oklch. --fix maps 49 of them to canonical classes (bg-[oklch(0.577_0.245_27.325)] → bg-destructive, rounded-[14px] → rounded-xl via calc(var(--radius) + 4px), padding: 12px → calc(var(--spacing) * 3), text-[14px] → text-[length:var(--text-sm)] so the line height is not changed) and moves the score from 18% to 85%. The 15 swaps whose token changes in dark mode are listed for confirmation. p-[13px], text-[13px] and text-[15px] sit midway between two steps and are left for a human.",
+      "input": [
+        "nimbus-notes"
+      ],
+      "command": "node scripts/scan.mjs examples/nimbus-notes --fix --dry-run",
+      "result": "Drift score 18% → 85%; 15 of the 49 fixes flagged as theme-aware",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/tailwind-v4-shadcn/terminal-theme-aware.png",
+          "alt": "Terminal: the dry-run diff for button.tsx replaces bg-[oklch(0.577_0.245_27.325)] with bg-destructive, border-[oklch(0.922_0_0)] with border-border and text-[14px] with text-[length:var(--text-sm)], then a yellow warning lists 15 replacements whose token changes per theme, then --fix prints 18% → 85%.",
+          "caption": "Raw oklch and hex become semantic classes. The yellow list names every swap that will now follow dark mode."
+        },
+        {
+          "type": "image",
+          "src": "output/tailwind-v4-shadcn/report-exact-matches.png",
+          "alt": "The exact-matches table in report.md with swatches: hover:bg-[#f5f5f5] and bg-[oklch(0.97_0_0)] → bg-accent, text-[#0a0a0a] → text-foreground, text-[#737373] → text-muted-foreground, rounded-[6px] → rounded-sm, while text-[#a1a1a1] is held back because its exact match, --color-ring, is meant for borders.",
+          "caption": "report.md: the same color written as hex and as oklch maps to one token. text-[#a1a1a1] is held back because its exact match is a ring color."
+        }
+      ],
+      "excerpt": "$ node scripts/scan.mjs examples/nimbus-notes\n  Drift score   18%  ████░░░░░░░░░░░░░░░░░░░░  13 of 73 design values use tokens\n  EXACT       51  equals a token → swap in the token (49 auto-fixable)\n  NEAR         1  within threshold of a token → likely drift (1 fixable with --fix=near)\n  OFF-SCALE    8  far from every token → new token or deliberate one-off\n$ node scripts/scan.mjs examples/nimbus-notes --fix\nDrift score 18% → 85%  (2 exact · 1 near · 8 off-scale left)\n! 15 replacements use a theme-aware token: the value will now follow dark mode. Confirm that is intended:\n    src/components/NoteListItem.tsx:10 bg-[oklch(0.97_0_0)] → bg-accent (follows --accent, which changes per theme)\n    src/components/ui/button.tsx:6 bg-[oklch(0.577_0.245_27.325)] → bg-destructive (follows --destructive, which changes per theme)\n    src/components/ui/button.tsx:7 border-[oklch(0.922_0_0)] → border-border (follows --border, which changes per theme)"
+    },
+    {
+      "id": "bootstrap-tokens",
+      "title": "A 2019 codebase with no tokens at all",
+      "prompt": "We don't have design tokens yet. Suggest a starter palette and spacing scale from what the code already uses.",
+      "summary": "A bakery ordering app written with CSS modules and styled-components, with 119 hard-coded design values and no tokens anywhere. tokens.mjs says so plainly, the scan scores it 0% without pretending any category has a score, and --propose clusters the values into candidate tokens: #333333, #323232 and #343434 become one --color-gray-700; #e5e5e5, #e6e6e6 and #e7e7e7 become one --color-gray-200; 15px folds into 16px and 180ms into 200ms. Only clusters used at least twice are proposed (25 of them); the 19 values used once are listed as one-offs instead of becoming tokens. Names follow Tailwind's palette, so the brand orange #e8590c comes out as --color-orange-600, and pure white stays --color-white instead of swallowing #f5f5f5 and #fafafa. After saving the proposal as src/tokens.css, --fix rewrites 87 values and the score goes from 0% to 74%. The names are still only a starting point: rename them to your roles before they ship.",
+      "input": [
+        "crumb-orders"
+      ],
+      "command": "node scripts/scan.mjs examples/crumb-orders --propose",
+      "result": "119 raw values → 25 proposed tokens + 19 one-offs; adopting them takes the score from 0% to 74%",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/bootstrap-tokens/report-proposed-tokens.png",
+          "alt": "The \"Proposed tokens\" table in report.md with swatches: --color-orange-600 #e8590c; --color-gray-700 #333333 absorbs #333333×5, #323232 and #343434; --color-white #ffffff stands alone; --color-gray-200 #e5e5e5 absorbs #e6e6e6 and #e7e7e7; --space-16 absorbs 15px; --font-size-14 absorbs 13px and 15px.",
+          "caption": "report.md: each proposed token lists the near-duplicate values it would replace. White does not absorb the off-whites."
+        },
+        {
+          "type": "image",
+          "src": "output/bootstrap-tokens/terminal-propose.png",
+          "alt": "Terminal: tokens.mjs reports no design tokens found; scan.mjs --propose shows a 0% score and the top 10 of 25 proposed tokens, notes that 19 values used once are left out as one-offs, and suggests saving the proposal and re-running; after saving it as src/tokens.css, --fix rewrites 87 values in 7 files and the score goes from 0% to 74%.",
+          "caption": "From no tokens to a starter set: propose, approve the clusters, then let --fix swap them in."
+        }
+      ],
+      "excerpt": "$ node scripts/scan.mjs examples/crumb-orders --propose\n  No design tokens found — every value counts as off-scale. Bootstrap a token set with --propose.\n  Drift score    0%  ░░░░░░░░░░░░░░░░░░░░░░░░  0 of 119 design values use tokens\n  Proposed tokens (25 clusters used 2+ times) → .knack/token-drift/proposed-tokens.css\n    --color-orange-600         #e8590c        7 uses: #e8590c\n    --color-gray-700           #333333        7 uses: #333333, #323232, #343434\n    --color-white              #ffffff        6 uses: #ffffff\n    --color-gray-200           #e5e5e5        5 uses: #e5e5e5, #e6e6e6, #e7e7e7\n    --space-16                 16px           9 uses: 16px, 15px\n  Left out: 19 values used once, listed in report.md as one-offs (keep them, or --min-uses 1 to propose them too).\n# after saving proposed-tokens.css as src/tokens.css:\n$ node scripts/scan.mjs examples/crumb-orders --fix\nDrift score 0% → 74%  (0 exact · 11 near · 20 off-scale left)"
+    }
+  ]
+}

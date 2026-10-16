@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fernhill Ops · Orders</title>
+<!--
+  Worked example (examples.json → "dashboard"): an AI-built orders dashboard.
+  The bugs are the "grid blowout" family: 1fr tracks that can't shrink below their content.
+  BUG 1: app shell is grid-template-columns: 232px 1fr. 1fr = minmax(auto, 1fr), so the main column
+         grows to the width of the 10-column orders table and the whole page scrolls sideways, even at 1280.
+  BUG 2: the orders table has no overflow-x: auto wrapper, and its cells are white-space: nowrap.
+  BUG 3: KPI grid is repeat(2, 1fr) on phones; a long unbroken campaign tag blows one track open.
+  BUG 4: the filter chips are a flex row without flex-wrap.
+  shell-fixed.html applies only the sweep's first suggestion (FIX 1); fixed.html fixes all four (FIX n).
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; color: #0f172a; background: #f1f5f9; }
+  /* BUG 1: 1fr = minmax(auto, 1fr): the column can't get narrower than the widest thing inside it */
+  .app { display: grid; grid-template-columns: 232px 1fr; min-height: 100vh; }
+  .side { background: #0b1324; color: #cbd5e1; padding: 20px 14px; }
+  .side b { display: block; color: #fff; font-size: 16px; padding: 4px 10px 18px; }
+  .side a { display: block; color: #cbd5e1; text-decoration: none; padding: 10px; border-radius: 8px; }
+  .side a[aria-current] { background: #1e293b; color: #fff; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } .side { display: none; } }
+  main { padding: 24px; }
+  .top { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+  .top h1 { margin: 0 auto 0 0; font-size: 22px; }
+  .top input { height: 40px; border: 1px solid #cbd5e1; border-radius: 10px; padding: 0 12px; font: inherit; min-width: 0; width: 220px; max-width: 40vw; }
+  .top button { height: 40px; padding: 0 14px; border: 0; border-radius: 10px; background: #0f766e; color: #fff; font: 600 14px system-ui, sans-serif; }
+  /* BUG 3: repeat(N, 1fr) instead of minmax(0, 1fr) */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 1100px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+  .kpi { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; }
+  .kpi small { display: block; color: #64748b; font-size: 13px; }
+  .kpi strong { display: block; font-size: 26px; letter-spacing: -0.01em; }
+  .kpi .up { color: #15803d; } .kpi .down { color: #b91c1c; }
+  .kpi code { font-size: 12px; color: #334155; }
+  /* BUG 4: no flex-wrap */
+  .chips { display: flex; gap: 8px; margin: 20px 0 12px; }
+  .chips button { flex: none; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #cbd5e1; background: #fff; font: 500 13px system-ui, sans-serif; }
+  .chips button[aria-pressed="true"] { background: #0f172a; color: #fff; border-color: #0f172a; }
+  .card { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; }
+  .card h2 { font-size: 16px; margin: 0 0 10px; }
+  /* BUG 2: no scroll wrapper, nowrap cells */
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: #64748b; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .paid { background: #dcfce7; color: #166534; } .open { background: #fef3c7; color: #92400e; } .late { background: #fee2e2; color: #991b1b; }
+</style>
+</head>
+<body>
+<div class="app">
+  <nav class="side" aria-label="Main"><b>Fernhill Ops</b><a href="#">Overview</a><a href="#" aria-current="page">Orders</a><a href="#">Customers</a><a href="#">Inventory</a><a href="#">Settings</a></nav>
+  <main>
+    <div class="top"><h1>Orders</h1><input type="search" placeholder="Search orders" aria-label="Search orders"><button>Export CSV</button></div>
+    <section class="kpis" aria-label="Key metrics">
+      <div class="kpi"><small>Revenue (30d)</small><strong>$182,940</strong><small class="up">+8.4% vs prior</small></div>
+      <div class="kpi"><small>Orders</small><strong>2,318</strong><small class="up">+3.1%</small></div>
+      <div class="kpi"><small>Refund rate</small><strong>1.9%</strong><small class="down">+0.4 pts</small></div>
+      <div class="kpi"><small>Top campaign</small><strong>412 orders</strong><code>utm_campaign=autumn_wholesale_partner_reorder_2026</code></div>
+    </section>
+    <div class="chips" role="group" aria-label="Filter by status">
+      <button aria-pressed="true">All orders</button><button>Awaiting payment</button><button>Ready to ship</button><button>Shipped</button><button>Refund requested</button>
+    </div>
+    <section class="card">
+      <h2>Recent orders</h2>
+      <table>
+        <tr><th>Order</th><th>Placed</th><th>Customer</th><th>Channel</th><th>Ship to</th><th>Items</th><th>Subtotal</th><th>Tax</th><th>Total</th><th>Status</th></tr>
+        <tr><td>#58210</td><td>Oct 14, 09:12</td><td>Harbor &amp; Pine Outfitters</td><td>Wholesale portal</td><td>Portland, OR</td><td class="num">24</td><td class="num">$3,120.00</td><td class="num">$249.60</td><td class="num">$3,369.60</td><td><span class="pill paid">Paid</span></td></tr>
+        <tr><td>#58209</td><td>Oct 14, 08:47</td><td>Mossgate Coffee Co.</td><td>Storefront</td><td>Asheville, NC</td><td class="num">3</td><td class="num">$184.50</td><td class="num">$14.76</td><td class="num">$199.26</td><td><span class="pill open">Awaiting payment</span></td></tr>
+        <tr><td>#58208</td><td>Oct 13, 17:30</td><td>Larkspur Home Goods</td><td>Marketplace</td><td>Duluth, MN</td><td class="num">11</td><td class="num">$962.00</td><td class="num">$76.96</td><td class="num">$1,038.96</td><td><span class="pill late">Overdue</span></td></tr>
+        <tr><td>#58207</td><td>Oct 13, 15:05</td><td>Juniper Lane Studio</td><td>Storefront</td><td>Santa Fe, NM</td><td class="num">1</td><td class="num">$48.00</td><td class="num">$3.84</td><td class="num">$51.84</td><td><span class="pill paid">Paid</span></td></tr>
+      </table>
+    </section>
+  </main>
+</div>
+</body>
+</html>

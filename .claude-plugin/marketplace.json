@@ -1,23 +1,37 @@
 {
   "name": "knack",
-  "owner": { "name": "Mayank Gupta", "url": "https://github.com/mayank2424" },
+  "owner": {
+    "name": "Mayank Gupta",
+    "url": "https://github.com/mayank2424"
+  },
   "metadata": {
-    "description": "Agent skills that show their work: motion video, demo recording, responsive QA, accessibility, design-token drift and visual PR diffs.",
+    "description": "Agent skills that show their work: each skill runs real tools (renderers, browsers, audits, diffs) and checks its own output before it reports done.",
     "version": "0.1.0",
-    "homepage": "https://mayank2424.github.io/knack/"
+    "homepage": "https://knack.mayankbuilds.com/"
   },
   "plugins": [
     {
       "name": "knack",
-      "description": "All Knack skills: motion-video, demo-recorder, responsive-qa, a11y-audit, token-drift, pr-visual-diff.",
+      "description": "Every Knack skill in one install. Skills are added over time; update the plugin to get new ones.",
       "version": "0.1.0",
       "source": "./",
       "strict": false,
-      "author": { "name": "Mayank Gupta", "url": "https://github.com/mayank2424" },
-      "homepage": "https://mayank2424.github.io/knack/",
+      "author": {
+        "name": "Mayank Gupta",
+        "url": "https://github.com/mayank2424"
+      },
+      "homepage": "https://knack.mayankbuilds.com/",
       "repository": "https://github.com/mayank2424/knack",
       "license": "MIT",
-      "keywords": ["skills", "video", "motion-design", "accessibility", "design-systems", "qa", "playwright"],
+      "keywords": [
+        "skills",
+        "video",
+        "motion-design",
+        "accessibility",
+        "design-systems",
+        "qa",
+        "playwright"
+      ],
       "category": "productivity",
       "skills": [
         "./skills/motion-video",

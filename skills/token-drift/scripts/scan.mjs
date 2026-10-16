@@ -14,7 +14,7 @@ import { parseArgs, UsageError, walk, rel, shown, c, lineIndex, plural, isTestPa
 import { loadTokens, CATEGORIES } from './tokens.mjs';
 import { extractFile, makeIgnore, isGenerated, SCAN_EXTS } from './lib/extract.mjs';
 import { buildIndex, classify, parseThresholds } from './lib/match.mjs';
-import { propose } from './lib/propose.mjs';
+import { propose, rareLabel } from './lib/propose.mjs';
 import { printSummary, writeReports, toJson, unifiedDiff, STATUS } from './lib/report.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -37,6 +37,8 @@ Fixing
   --dry-run              With --fix: print a unified diff and change nothing.
   --propose              Cluster OFF-SCALE values into a minimal set of proposed new tokens
                          (with no tokens at all, this bootstraps a token set).
+  --min-uses <n>         With --propose: only clusters used at least n times become tokens (default 2);
+                         the rest are listed as one-offs. --min-uses 1 proposes every value.
 
 Matching
   --tokens <path>        Token source file/folder (repeatable). Default: auto-discover.
@@ -133,7 +135,9 @@ function summarize({ root, target, ctx, files, findings, usage, thresholds, text
     e.total++; e[f.status]++;
     files2.set(f.rel, e);
   }
-  for (const v of Object.values(byCategory)) v.score = v.noTokens ? null : v.raw + v.tokenized ? Math.round((v.tokenized / (v.raw + v.tokenized)) * 100) : 100;
+  // with no tokens anywhere there is nothing to score per category: the overall score is simply 0 of N
+  const noTokensAtAll = ctx.tokens.length === 0;
+  for (const v of Object.values(byCategory)) v.score = v.noTokens || noTokensAtAll ? null : v.raw + v.tokenized ? Math.round((v.tokenized / (v.raw + v.tokenized)) * 100) : 100;
   const scored = Object.values(byCategory).filter((v) => !v.noTokens);
   const tokenized = scored.reduce((a, v) => a + v.tokenized, 0);
   const raw = scored.reduce((a, v) => a + v.raw, 0);
@@ -194,7 +198,7 @@ async function main() {
   const a = parseArgs(process.argv.slice(2), {
     bool: ['json', 'md', 'fix', 'dry-run', 'propose', 'strict', 'exec-config', 'json-vars', 'include-tests', 'help'],
     multi: ['tokens', 'include', 'exclude', 'threshold', 'ignore'],
-    value: ['fail-under', 'out', 'tailwind-defaults', 'rem'],
+    value: ['fail-under', 'out', 'tailwind-defaults', 'rem', 'min-uses'],
   });
   if (a.help) { console.log(HELP); return; }
   const target = a._[0] || '.';
@@ -202,6 +206,9 @@ async function main() {
   if (a['dry-run'] && !a.fix) a.fix = true;
   const fixMode = a.fix === true ? 'exact' : a.fix ? String(a.fix) : null;
   if (fixMode && !['exact', 'near'].includes(fixMode)) throw new UsageError(`--fix accepts no value, =exact or =near (got "${fixMode}").`);
+  const minUses = a['min-uses'] == null ? 2 : Number(a['min-uses']);
+  if (!Number.isInteger(minUses) || minUses < 1) throw new UsageError(`--min-uses needs a whole number ≥ 1 (got "${a['min-uses']}").`);
+  if (a['min-uses'] != null && !a.propose) throw new UsageError('--min-uses only applies with --propose.');
   const opts = {
     tokens: a.tokens, include: a.include, exclude: a.exclude, threshold: a.threshold, ignore: a.ignore, strict: a.strict,
     execConfig: a['exec-config'], tailwindDefaults: a['tailwind-defaults'], rem: a.rem, jsonVars: a['json-vars'], includeTests: a['include-tests'],
@@ -209,7 +216,8 @@ async function main() {
   let r;
   try { r = await scan(target, opts); } catch (e) { if (/--threshold/.test(e.message)) throw new UsageError(e.message); throw e; }
   const outDir = path.resolve(a.out || path.join(process.cwd(), '.knack', 'token-drift'));
-  const proposal = a.propose ? propose(r.findings, r.tokens, r.thresholds, { all: r.tokenCount === 0 }) : null;
+  const proposeOpts = (res) => ({ all: res.tokenCount === 0, minUses });
+  const proposal = a.propose ? propose(r.findings, r.tokens, r.thresholds, proposeOpts(r)) : null;
   const md = writeReports(r, outDir, { proposal });
   r.written = { md: shown(path.join(outDir, 'report.md')) };
   // carry the flags that change what is scanned into the suggested next command
@@ -229,7 +237,7 @@ async function main() {
       }
     } else {
       const after = await scan(target, opts);
-      writeReports(after, outDir, { proposal: a.propose ? propose(after.findings, after.tokens, after.thresholds, { all: after.tokenCount === 0 }) : null });
+      writeReports(after, outDir, { proposal: a.propose ? propose(after.findings, after.tokens, after.thresholds, proposeOpts(after)) : null });
       if (!quietStdout) {
         console.log(`${c.bold('Fixed')} ${plural(res.edits, 'value')} in ${plural(res.files.length, 'file')}: ${res.files.join(', ') || '-'}`);
         console.log(`Drift score ${c.bold(r.score + '%')} → ${c.bold(c.green(after.score + '%'))}  ${c.dim(`(${after.counts.EXACT} exact · ${after.counts.NEAR} near · ${after.counts['OFF-SCALE']} off-scale left)`)}`);
@@ -244,14 +252,18 @@ async function main() {
     }
     for (const s of res.skipped) console.error(c.yellow('! skipped ' + s));
   } else if (!quietStdout) {
-    printSummary(r, { scriptRel });
+    printSummary(r, { scriptRel, showNext: !proposal });
   }
   if (proposal && !quietStdout) {
     console.log('');
-    if (!proposal.proposals.length) console.log(c.dim('  --propose: no repeated off-scale values to cluster (one-offs are listed in the report).'));
+    const rare = proposal.oneOffs.length;
+    if (!proposal.proposals.length) console.log(c.dim(`  --propose: no off-scale values used ${minUses}+ times to cluster${rare ? ` (${plural(rare, 'value')} ${rareLabel(minUses)} are listed in report.md; --min-uses 1 includes them)` : ''}.`));
     else {
-      console.log(c.bold(`  Proposed tokens`) + c.dim(` (${plural(proposal.proposals.length, 'cluster')}, ${plural(proposal.oneOffs.length, 'one-off')}) → ${shown(path.join(outDir, 'proposed-tokens.css'))}`));
-      for (const p of proposal.proposals.slice(0, 10)) console.log(`    ${c.cyan(p.name.padEnd(26))} ${String(p.value).padEnd(14)} ${c.dim(`${p.count} uses: ${p.members.map((m) => m.value).join(', ')}${p.note ? ' · ' + p.note : ''}`)}`);
+      console.log(c.bold(`  Proposed tokens`) + c.dim(` (${plural(proposal.proposals.length, 'cluster')} used ${minUses}+ times) → ${shown(path.join(outDir, 'proposed-tokens.css'))}`));
+      for (const p of proposal.proposals.slice(0, 10)) console.log(`    ${c.cyan(p.name.padEnd(26))} ${String(p.value).padEnd(14)} ${c.dim(`${plural(p.count, 'use')}: ${p.members.map((m) => m.value).join(', ')}${p.note ? ' · ' + p.note : ''}`)}`);
+      if (proposal.proposals.length > 10) console.log(c.dim(`    … ${proposal.proposals.length - 10} more in the file`));
+      if (rare) console.log(c.dim(`  Left out: ${plural(rare, 'value')} ${rareLabel(minUses)}, listed in report.md as one-offs (keep them, or --min-uses 1 to propose them too).`));
+      if (!fixMode) console.log(c.dim(`  Next:   rename and approve the proposals, save them in your token file (e.g. src/styles/tokens.css), then re-run: node ${scriptRel} ${r.argTarget}`));
     }
   }
   for (const w of r.warnings) console.error(c.yellow('! ' + w));

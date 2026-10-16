@@ -6,7 +6,9 @@
  *   node render.mjs comp.html -o out.webm          # format from extension: .mp4 .webm .mov .gif
  *   node render.mjs comp.html -o frames/           # PNG sequence (trailing slash)
  *   node render.mjs comp.html --still 2.5 -o p.png # single frame
- *   node render.mjs comp.html --filmstrip 12       # contact sheet for review
+ *   node render.mjs comp.html --filmstrip 12       # contact sheet for review (--filmstrip-width N)
+ *   node render.mjs comp.html --cuts 2             # ±2 frames around every Motion.cue(), one row per cue
+ *   node render.mjs comp.html --stills 3.9,3.95,4  # several exact moments on one sheet
  *   node render.mjs comp.html --check              # lint layout/timing
  *
  * Options:
@@ -23,6 +25,10 @@
  *   --10bit            MP4 as HEVC Main10: smoothest gradients and smallest files; plays in Safari,
  *                      Chrome, Edge and QuickTime, not in Firefox on macOS/Linux or old players
  *   --audio file       mux audio (trimmed/padded to the video)   --audio-fade S (default 1)
+ *                      Without --audio, a composition that calls Motion.score()/Motion.cue() gets a
+ *                      synthesized, cue-synced score automatically (scripts/score.mjs).
+ *   --no-score         render silent even if the composition defines a score
+ *   --score-only       write the synthesized score as a WAV (-o file.wav) without rendering video
  *   --transparent      keep alpha (WebM VP9 / MOV ProRes 4444; PNG stills)
  *   --gif-fps N        default 20     --gif-width N   default min(960, width)
  *   --gif-colors N     palette size (default 256); fewer = smaller files
@@ -34,9 +40,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { renderScore, writeWav } from './score.mjs';
 
-const VALUE = new Set(['fps', 'scale', 'from', 'to', 'workers', 'crf', 'audio', 'audio-fade', 'gif-fps', 'gif-width', 'gif-colors', 'gif-quality', 'out', 'motion-blur', 'shutter', 'trc']);
-const OPTIONAL_NUM = new Set(['still', 'filmstrip']);
+const VALUE = new Set(['fps', 'scale', 'from', 'to', 'workers', 'crf', 'audio', 'audio-fade', 'gif-fps', 'gif-width', 'gif-colors', 'gif-quality', 'out', 'motion-blur', 'shutter', 'trc', 'stills', 'filmstrip-width', 'thumb-width']);
+const OPTIONAL_NUM = new Set(['still', 'filmstrip', 'cuts']);
 const opts = {};
 let input, outFlag;
 const argv0 = process.argv.slice(2);
@@ -51,6 +58,8 @@ for (let i = 0; i < argv0.length; i++) {
     else opts[k] = true;
   } else input = a;
 }
+// Create the output folder up front so ffmpeg/gifski never fail on a missing directory.
+if (outFlag) fs.mkdirSync(path.dirname(path.resolve(outFlag)), { recursive: true });
 outFlag = outFlag || opts.out;
 const flag = (name, fallback) => (name in opts ? opts[name] : fallback);
 
@@ -102,8 +111,12 @@ async function openPage(browser, cfg, scale = 1) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-  await page.goto(url, { waitUntil: 'load' });
-  await page.waitForFunction(() => window.__KNACK_READY__ === true, null, { timeout: 30000 }).catch(() => {
+  // Generous timeouts with one retry: on a busy machine (other renders, CI) page loads can take a while.
+  for (let attempt = 1; ; attempt++) {
+    try { await page.goto(url, { waitUntil: 'load', timeout: 120000 }); break; }
+    catch (e) { if (attempt >= 2) throw e; console.warn(`\x1b[33m⚠\x1b[0m Page load slow (${e.message.split('\n')[0]}); retrying once…`); }
+  }
+  await page.waitForFunction(() => window.__KNACK_READY__ === true, null, { timeout: 120000 }).catch(() => {
     die('Composition never became ready. Does it load motion.js and contain a #stage element?\n' + errors.join('\n'));
   });
   return { page, ctx, errors };
@@ -198,30 +211,70 @@ async function still(browser, cfg, t, out, scale) {
   log(`Still @ ${t}s${n > 1 ? ` (motion blur ×${n})` : ''} → ${out}`);
 }
 
-async function filmstrip(browser, cfg, n, out) {
-  const cols = n <= 6 ? 3 : 4;
-  const thumbW = cfg.height > cfg.width ? 300 : 480;
+/** Contact sheet: rows of { label, times[] } rendered as thumbnails, one page load for all frames. */
+async function sheetOf(browser, cfg, rows, out, { thumbW: tw, cols: forcedCols, title } = {}) {
+  const thumbW = tw || (cfg.height > cfg.width ? 300 : 480);
   const scale = thumbW / cfg.width;
-  const { page, ctx } = await openPage(browser, cfg, scale);
-  const frames = [];
-  for (let i = 0; i < n; i++) {
-    const t = +(((cfg.duration - 1 / cfg.fps) * i) / (n - 1)).toFixed(3);
-    await page.evaluate((t) => window.Motion.seek(t), t);
-    frames.push({ t, src: 'data:image/png;base64,' + (await shot(page, cfg)).toString('base64') });
+  const { page, ctx } = await openPage(browser, cfg, Math.max(scale, 0.1));
+  for (const row of rows) {
+    row.frames = [];
+    for (const t of row.times) {
+      const tt = Math.max(0, Math.min(cfg.duration - 1 / cfg.fps, t));
+      await page.evaluate((t) => window.Motion.seek(t), tt);
+      row.frames.push({ t: tt, src: 'data:image/png;base64,' + (await shot(page, cfg)).toString('base64') });
+    }
   }
   await ctx.close();
   const thumbH = Math.round(cfg.height * scale);
-  const sheet = await browser.newPage({ viewport: { width: cols * (thumbW + 16) + 16, height: 200 } });
+  const cols = forcedCols || Math.max(...rows.map((r) => r.frames.length));
+  const width = cols * (thumbW + 12) + 28;
+  const sheet = await browser.newPage({ viewport: { width, height: 200 } });
+  const head = `${path.basename(path.dirname(compPath))}/${path.basename(compPath)} · ${cfg.width}×${cfg.height} · ${cfg.fps}fps · ${cfg.duration}s${title ? ' · ' + title : ''}`;
   await sheet.setContent(`<!doctype html><body style="margin:0;background:#16161a;font:600 13px ui-monospace,Menlo,monospace;color:#cfcfd6">
-    <div style="padding:12px 16px 0;opacity:.7">${path.basename(path.dirname(compPath))}/${path.basename(compPath)} · ${cfg.width}×${cfg.height} · ${cfg.fps}fps · ${cfg.duration}s</div>
-    <div style="display:grid;grid-template-columns:repeat(${cols},${thumbW}px);gap:16px;padding:12px 16px 16px">
-    ${frames.map((f) => `<figure style="margin:0"><img src="${f.src}" style="width:${thumbW}px;height:${thumbH}px;display:block;border-radius:6px;outline:1px solid #2a2a30"/><figcaption style="padding-top:6px">${f.t.toFixed(2)}s</figcaption></figure>`).join('')}
-    </div></body>`);
+    <div style="padding:12px 16px 0;opacity:.7">${head}</div>
+    ${rows.map((r) => `${r.label ? `<div style="padding:12px 16px 0;color:#f0c674">${r.label}</div>` : ''}
+    <div style="display:grid;grid-template-columns:repeat(${cols},${thumbW}px);gap:12px;padding:8px 16px 12px">
+    ${r.frames.map((f, i) => `<figure style="margin:0"><img src="${f.src}" style="width:${thumbW}px;height:${thumbH}px;display:block;border-radius:6px;outline:${r.mark === i ? '2px solid #f0c674' : '1px solid #2a2a30'}"/><figcaption style="padding-top:6px">${f.t.toFixed(3)}s${r.caps ? ' · ' + r.caps[i] : ''}</figcaption></figure>`).join('')}
+    </div>`).join('')}</body>`);
   const h = await sheet.evaluate(() => document.body.scrollHeight);
-  await sheet.setViewportSize({ width: cols * (thumbW + 16) + 16, height: h });
+  await sheet.setViewportSize({ width, height: h });
   await sheet.screenshot({ path: out, fullPage: true });
   await sheet.close();
+}
+
+async function filmstrip(browser, cfg, n, out) {
+  const times = Array.from({ length: n }, (_, i) => +(((cfg.duration - 1 / cfg.fps) * i) / (n - 1)).toFixed(3));
+  const cols = n <= 6 ? 3 : 4;
+  const rows = [];
+  for (let i = 0; i < times.length; i += cols) rows.push({ times: times.slice(i, i + cols) });
+  // Default keeps the whole sheet ≤ 1600px wide (web/README budget); --filmstrip-width overrides.
+  const tw = +flag('filmstrip-width', 0) || Math.floor((1600 - 28) / cols) - 12;
+  await sheetOf(browser, cfg, rows, out, { thumbW: tw, cols });
   log(`Filmstrip (${n} frames) → ${out}`);
+}
+
+/** --stills 3.9,3.95,4.0: several exact moments on one sheet (one browser launch). */
+async function stillsSheet(browser, cfg, list, out) {
+  const times = String(list).split(',').map(Number).filter((x) => !isNaN(x));
+  const cols = Math.min(4, times.length);
+  const rows = [];
+  for (let i = 0; i < times.length; i += cols) rows.push({ times: times.slice(i, i + cols) });
+  await sheetOf(browser, cfg, rows, out, { thumbW: +flag('thumb-width', 0) || (cfg.height > cfg.width ? 300 : 560), cols });
+  log(`Stills (${times.length}) → ${out}`);
+}
+
+/** --cuts [N]: for every cue (cut, hit, drop…) render N frames either side, one row per cue. */
+async function cutsSheet(browser, cfg, n, out) {
+  const seen = new Set();
+  const cues = (cfg.cues || []).filter((c) => { const k = Math.round(c.t * cfg.fps); if (seen.has(k)) return false; seen.add(k); return true; });
+  if (!cues.length) die('No Motion.cue() calls found. --cuts uses cue times; add cues or use --stills t1,t2,…');
+  const rows = cues.slice(0, 40).map((c) => {
+    const f0 = Math.round(c.t * cfg.fps);
+    const offs = Array.from({ length: 2 * n + 1 }, (_, i) => i - n);
+    return { label: `${c.type} @ ${c.t.toFixed(3)}s (frame ${f0})`, times: offs.map((o) => (f0 + o) / cfg.fps), caps: offs.map((o) => (o === 0 ? 'cue' : (o > 0 ? '+' : '') + o + 'f')), mark: n };
+  });
+  await sheetOf(browser, cfg, rows, out, { thumbW: +flag('thumb-width', 0) || (cfg.height > cfg.width ? 180 : 300), title: `${rows.length} cues · ±${n} frames` });
+  log(`Cuts sheet (${rows.length} cues × ${2 * n + 1} frames) → ${out}${cues.length > 40 ? ' (first 40 cues)' : ''}`);
 }
 
 async function check(browser, cfg) {
@@ -270,7 +323,19 @@ async function check(browser, cfg) {
         const box = el.getBoundingClientRect();
         const scale = el.offsetHeight ? box.height / el.offsetHeight : 1;
         const fs = parseFloat(getComputedStyle(el).fontSize) * scale;
-        if (fs < H * 0.02) out.push(['small', `Text "${label}" renders at ${Math.round(fs)}px; below ~${Math.round(H * 0.02)}px it gets hard to read on phones.`]);
+        // Large display type: the range rect spans the font's ascent/descent, not the glyphs.
+        // Measure the real ink so big numerals and outline type aren't flagged for empty space.
+        if (fs >= 96 && rr.bottom - rr.top < fs * 1.7) {
+          const ics = getComputedStyle(el);
+          const cv = (window.__knackMeasure ||= document.createElement('canvas').getContext('2d'));
+          cv.font = `${ics.fontStyle} ${ics.fontWeight} ${ics.fontSize} ${ics.fontFamily}`;
+          const m = cv.measureText(node.textContent.trim());
+          if (m.fontBoundingBoxAscent) {
+            const base = rr.top + m.fontBoundingBoxAscent * scale;
+            r = { ...r, top: Math.max(r.top, base - m.actualBoundingBoxAscent * scale), bottom: Math.min(r.bottom, base + m.actualBoundingBoxDescent * scale) };
+          }
+        }
+        if (fs < H * 0.02 && !el.closest('[data-knack-small]')) out.push(['small', `Text "${label}" renders at ${Math.round(fs)}px; below ~${Math.round(H * 0.02)}px it gets hard to read on phones.`]);
         if (r.left < W * safe - 1 || r.top < H * safe - 1 || r.right > W * (1 - safe) + 1 || r.bottom > H * (1 - safe) + 1) {
           const off = r.right < 0 || r.left > W || r.bottom < 0 || r.top > H;
           if (!off) out.push(['edge', `Text "${label}" breaks the ${safe * 100}% safe area (${Math.round(r.left)},${Math.round(r.top)} → ${Math.round(r.right)},${Math.round(r.bottom)}).`]);
@@ -349,7 +414,14 @@ async function video(browser, cfg, out) {
   const frames = ['-framerate', String(fps * blur), '-i', path.join(tmp, 'f%06d.png')];
   const pre = blurFilter(blur, fps);
   const even = 'pad=ceil(iw/2)*2:ceil(ih/2)*2,';
-  const audio = flag('audio');
+  let audio = flag('audio');
+  if (!audio && !flag('no-score') && !['gif', 'png'].includes(ext) && (cfg.score || cfg.cues?.length)) {
+    audio = path.join(os.tmpdir(), `knack-score-${process.pid}.wav`);
+    const res = renderScore({ duration: cfg.duration, score: cfg.score || {}, cues: cfg.cues || [] });
+    writeWav(audio, res);
+    process.on('exit', () => fs.rmSync(audio, { force: true }));
+    log(`Score synthesized (${cfg.score?.mood || 'cues only'}${cfg.score ? `, ${cfg.score.bpm} BPM` : ''}, ${cfg.cues?.length || 0} cues, ${res.lufs.toFixed(1)} LUFS)`);
+  }
   const useAudio = audio && typeof audio === 'string' && !['gif', 'png'].includes(ext);
   if (useAudio && !fs.existsSync(path.resolve(audio))) die(`Audio file not found: ${audio}`);
   const dur = +(total / fps).toFixed(6);
@@ -407,11 +479,21 @@ const browser = await launch(chromium);
 try {
   const cfg = await readConfig(browser);
   const base = compPath.replace(/\.html?$/i, '');
-  if (flag('check')) {
+  if (flag('score-only')) {
+    const out = outFlag || `${base}.wav`;
+    const res = renderScore({ duration: cfg.duration, score: cfg.score || {}, cues: cfg.cues || [] });
+    writeWav(out, res);
+    log(`Score → ${out} (${cfg.duration}s, ${cfg.cues?.length || 0} cues, ${res.lufs.toFixed(1)} LUFS, peak ${res.peakDb.toFixed(1)} dBFS)`);
+  } else if (flag('check')) {
     process.exitCode = (await check(browser, cfg)) ? 2 : 0;
   } else if (flag('still') !== undefined) {
     const t = flag('still') === true ? cfg.duration / 2 : +flag('still');
     await still(browser, cfg, t, outFlag || `${base}-${t}s.png`, +flag('scale', 1));
+  } else if (flag('stills') !== undefined) {
+    await stillsSheet(browser, cfg, flag('stills'), outFlag || `${base}-stills.png`);
+  } else if (flag('cuts') !== undefined) {
+    const n = flag('cuts') === true ? 2 : Math.max(1, +flag('cuts'));
+    await cutsSheet(browser, cfg, n, outFlag || `${base}-cuts.png`);
   } else if (flag('filmstrip') !== undefined) {
     const n = flag('filmstrip') === true ? 12 : Math.max(3, +flag('filmstrip'));
     await filmstrip(browser, cfg, n, outFlag || `${base}-filmstrip.png`);

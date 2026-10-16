@@ -3,15 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Knack · Agent skills that show their work</title>
-<meta name="description" content="Six open-source agent skills for developers and designers. Each runs real tools (Playwright, axe-core, ffmpeg, pixel diffs) and checks the result before it reports done." />
+{{seo}}
 <meta name="theme-color" content="#fafafa" />
-<meta property="og:title" content="Knack · Agent skills that show their work" />
-<meta property="og:description" content="Open-source skills for Claude Code and any Agent Skills agent: motion video, demo recording, responsive QA, accessibility, design-token drift and visual PR diffs." />
-<meta property="og:image" content="https://mayank2424.github.io/knack/assets/og.png" />
-<meta property="og:type" content="website" />
-<meta name="twitter:card" content="summary_large_image" />
 <link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="{{base}}assets/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -21,14 +16,17 @@
 {{header}}
 
 <main id="main">
+  <div class="hero-shell">
+  <canvas id="heroNet" aria-hidden="true"></canvas>
   <section class="hero wrap">
     <div class="hero-copy">
-      <h1>Agent skills that show their work.</h1>
-      <p class="lede">Six open-source skills for developers and designers. Each one runs real tools, looks at what they produce, and fixes the problems before it tells you it's done.</p>
+      <h1 id="heroTitle"><span class="w">Agent</span> <span class="w">skills</span> <span class="w">that</span> <span class="hl"><span class="w">show</span> <span class="w">their</span> <span class="w">work.</span><svg class="scribble" viewBox="0 0 400 24" preserveAspectRatio="none" aria-hidden="true"><path d="M3 15 C 70 7, 150 5, 225 9 S 345 17, 397 7" /></svg></span></h1>
+      <p class="doing" aria-live="off"><span class="doing-k mono">Right now it</span> <span class="doing-v" id="doing">renders a film and checks every frame</span></p>
+      <p class="lede">Open-source agent skills for developers and designers. Each one runs real tools, looks at what they produce, and fixes the problems before it tells you it's done.</p>
 
       <div class="install" id="install">
         <div class="tabs" role="tablist" aria-label="Install method">
-          <button role="tab" id="t-claude" aria-controls="p-claude" aria-selected="true">Claude Code</button>
+          <button role="tab" id="t-claude" aria-controls="p-claude" aria-selected="true"><img class="cc-icon" src="{{base}}assets/brand/claude-code.svg" alt="" width="16" height="16" />Claude Code</button>
           <button role="tab" id="t-npx" aria-controls="p-npx" aria-selected="false" tabindex="-1">Other agents</button>
           <button role="tab" id="t-manual" aria-controls="p-manual" aria-selected="false" tabindex="-1">Manual</button>
         </div>
@@ -48,30 +46,53 @@
       <p class="facts">MIT licensed · Agent Skills format · Node 18+, no telemetry</p>
     </div>
 
-    <figure class="run" aria-label="Example run of the responsive-qa skill">
-      <div class="run-head">
-        <span class="mono">responsive-qa</span>
-        <span class="mono muted">examples/broken-page.html</span>
-      </div>
-      <p class="run-prompt"><span class="mono muted">You</span>Check the landing page on mobile and fix what breaks.</p>
-      <div class="run-shots">
-        <div class="shot">
-          <img src="{{base}}assets/evidence/responsive-before.png" width="375" height="812" alt="The broken landing page at 375px with numbered boxes on each layout bug" />
-          <span class="tally bad">12 errors</span>
+    <div class="vision-wrap">
+      <div class="vision" id="vision" aria-hidden="true">
+        <div class="v-head">
+          <img class="cc-icon" src="{{base}}assets/brand/claude-code.svg" alt="" width="18" height="18" />
+          <span class="v-app">Claude Code</span><span class="sep">/</span><span class="v-skill" id="vSkill">knack</span>
+          <span class="v-status" id="vStatus"><i></i><b>reading</b></span>
         </div>
-        <div class="shot">
-          <img src="{{base}}assets/evidence/responsive-after.png" width="375" height="812" alt="The same page after fixes at 375px, with no boxes" />
-          <span class="tally good">0 errors</span>
+        <div class="v-body" id="vBody">
+          <canvas id="vCanvas"></canvas>
+          <div class="v-reticle" id="vReticle"></div>
+          <div class="v-marks" id="vMarks"></div>
+          <div class="v-result" id="vResult"></div>
         </div>
+        <ol class="v-log" id="vLog"></ol>
       </div>
-      <pre class="run-log" tabindex="0" aria-label="Excerpt of the skill's output"><span class="bad">✖</span> horizontal-overflow  table.compare   runs 409px past the 375px viewport
-  ↳ wrap it in an overflow-x: auto container
-<span class="bad">✖</span> image-overflow       img.hero-shot   640px wide, 45% cut off at 375px
-<span class="bad">✖</span> tap-target           4× .social a    18×18px, below the 24×24px minimum
-<span class="muted">… 9 more, fixed in source, then re-run</span>
-<span class="good">✓</span> No errors  no warnings  2 viewports · 3.4s</pre>
-    </figure>
+      <div class="v-tabs" id="vTabs" role="group" aria-label="Skill shown in the agent preview"></div>
+    </div>
   </section>
+  </div>
+
+  <div class="band band-ink">
+  <section class="replay wrap" aria-labelledby="replay-h">
+    <div class="replay-copy">
+      <h2 id="replay-h">Watch an agent use a skill</h2>
+      <p>A replay of real runs. The commands, numbers and screenshots come from the skills' own output on their bundled examples.</p>
+      <div class="runs" id="agentRuns" role="group" aria-label="Choose a run to replay"></div>
+    </div>
+    <section class="agent" id="agent" aria-label="Replay of a real agent run">
+      <header class="agent-head">
+        <span class="agent-title"><img class="cc-icon" src="{{base}}assets/brand/claude-code.svg" alt="Claude Code" width="18" height="18" /><span class="agent-app">Claude Code</span><span class="sep" aria-hidden="true">/</span><span class="live" aria-hidden="true"></span><span id="agentSkill">responsive-qa</span></span>
+        <span class="agent-meta mono">Replay of a real run</span>
+        <button class="agent-replay" id="agentReplay" type="button" aria-label="Replay">↻</button>
+      </header>
+      <div class="agent-body">
+        <p class="agent-prompt"><span class="who mono">You</span><span id="agentPrompt">Check the landing page on mobile and fix what breaks.</span></p>
+        <ol class="agent-steps" id="agentSteps" aria-live="polite"></ol>
+        <figure class="agent-view" id="agentView">
+          <img id="viewBefore" src="{{base}}assets/evidence/responsive-before.png" alt="" />
+          <img id="viewAfter" src="{{base}}assets/evidence/responsive-after.png" alt="" />
+          <span class="view-tag mono" id="viewTag">375px · 12 errors</span>
+        </figure>
+        <p class="agent-done" id="agentDone"></p>
+      </div>
+      <noscript><p class="agent-done">Fixed 12 layout bugs, verified at 375px and 1280px.</p></noscript>
+    </section>
+  </section>
+  </div>
 
   <section class="skills wrap" id="skills" aria-labelledby="skills-h">
     <header class="section-head">
@@ -81,7 +102,8 @@
     {{skills}}
   </section>
 
-  <section class="loop wrap" aria-labelledby="loop-h">
+  <div class="band band-soft">
+  <section class="loop wrap" id="how" aria-labelledby="loop-h">
     <header class="section-head">
       <h2 id="loop-h">How a Knack skill works</h2>
       <p>A skill is a folder: a <code>SKILL.md</code> the agent follows, scripts it runs, and references it reads when it needs them. The scripts turn "looks done" into something the agent can check.</p>
@@ -98,6 +120,7 @@
 ├── references/       <span class="muted">fix recipes, manual checks</span>
 └── examples/         <span class="muted">a broken page and its fixed twin</span></pre>
   </section>
+  </div>
 
   <section class="catalog wrap" id="catalog" aria-labelledby="catalog-h">
     <header class="section-head row">
@@ -127,7 +150,8 @@
     <p class="more">More lists: {{lists}}</p>
   </section>
 
-  <section class="contribute wrap" aria-labelledby="contrib-h">
+  <div class="band band-green">
+  <section class="contribute wrap" id="contribute" aria-labelledby="contrib-h">
     <div>
       <h2 id="contrib-h">Add a skill</h2>
       <p>Knack takes skills that check their own output. If yours renders, measures or diffs something real, open a pull request and it will appear here.</p>
@@ -140,9 +164,13 @@
       <li>A preview image made from the skill's real output</li>
     </ul>
   </section>
+  </div>
 </main>
 
 {{footer}}
+<script type="application/json" id="orbit-data">{{orbit}}</script>
+<script src="https://cdn.jsdelivr.net/npm/motion@12.43.0/dist/motion.js" defer></script>
 <script src="{{base}}app.js" defer></script>
+<script src="{{base}}hero.js" defer></script>
 </body>
 </html>

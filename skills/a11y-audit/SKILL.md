@@ -64,7 +64,7 @@ Useful flags (full list: `--help`):
 | `--json` | report.json to stdout. |
 | `--verbose` | Phase timings on stderr (when a page seems slow or stuck). |
 
-For a modal, `--state "<button that opens it>"` also checks that Escape closes it and focus returns to that button.
+For a modal, `--state "<button that opens it>"` also checks that Escape closes it, focus returns to that button, and Tab does not wander onto the page behind it.
 
 The run prints a one-line summary per page and the paths of `report.md`, `report.json`, and `<page>.annotated.png` (long pages also get readable `<page>.annotated.partN.png` slices).
 
@@ -72,7 +72,7 @@ The run prints a one-line summary per page and the paths of `report.md`, `report
 
 1. Read `report.md`. It opens with **Fix first** (highest impact, most elements per fix) and any **Coverage warnings** (iframes skipped, Tab cycle cut short, page JS errors): mention those in the hand-off. Rules follow critical → minor; identical markup is grouped ("and 12 more with identical markup" = one shared component), each with the HTML snippet, why it failed, the fix, a stack-specific note when the framework was detected, and a `rg` hint.
 2. **Look at the annotated screenshot** with the Read tool (the `.partN.png` slices on long pages; the full image is too tall to read). Solid boxes = axe findings, dashed = keyboard pass, blue numbered badges = focus order, magenta = no visible focus (or focus removed by script), gray = not measured (iframe). Check that the numbers follow the visual reading order.
-3. The keyboard table lists every focus stop with its visible-focus verdict (`yes (via …)` says where the indicator was found), `removed by script`, and `covered by <selector>` for 2.4.11.
+3. The keyboard table lists every focus stop with its visible-focus verdict (`yes (via …)` says where the indicator was found), `removed by script`, `covered by <selector>` for 2.4.11, and `behind open modal <selector>` when Tab leaves an open modal.
 ## 5. Map each finding to source
 
 Reports show the rendered DOM, so find the component that renders it:
@@ -119,10 +119,11 @@ Tell the user, briefly:
 
 - **axe-core 4.13** (injected, CSP bypassed, lazy iframes loaded first): ~90 rules for names, labels, contrast, ARIA validity, landmarks, headings, lang, viewport zoom, target size.
 - **Keyboard pass** (real Tab presses, up to `--max-tabs`):
-  - focus order, traps (a cycle that never reaches the rest of the page; open modals are reported as intended), positive tabindex, backwards visual jumps;
+  - focus order, traps (a cycle that never reaches the rest of the page; open modals are reported as intended; Tab stepping through a `<video controls>` or date field's built-in controls is not a trap), positive tabindex, backwards visual jumps;
   - visible focus: screenshot before vs after focus, pixel diff on the element, then a changed ancestor (card rings via `:has`/`:focus-within`), the `<label>` of a visually hidden native input, then any change within 160px (sibling indicators); fixed/sticky layers are hidden while measuring;
   - `kbd-focus-removed`: focus arrives and a script blurs it (F55); the pass continues instead of stopping there;
   - `kbd-focus-obscured` (2.4.11): the focused element is entirely covered by an opaque fixed/sticky layer;
+  - `kbd-focus-outside-modal`: that layer is an open modal or its backdrop, so focus has left the modal for the page behind it (fix: `showModal()` or `inert`, not scroll padding);
   - `kbd-unreachable`: cursor:pointer, onclick, interactive role, or a real click listener (DevTools protocol) on something Tab never reaches; focus landing on invisible elements;
   - `kbd-hover-only`: hidden link groups that hovering reveals but focusing (or Enter/ArrowDown on a disclosure button) does not;
   - `kbd-change-on-input` (3.2.2): picks another option in each `<select>`; navigations, submits and popups are blocked and reported;

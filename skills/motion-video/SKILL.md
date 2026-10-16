@@ -1,30 +1,33 @@
 ---
 name: motion-video
 description: >-
-  Create polished motion-design videos (MP4, GIF, WebM, transparent MOV) from code: product launches,
-  feature announcements, kinetic typography, logo stings, data stories, app showcases and vertical
-  social clips for Reels/Shorts/TikTok. Writes a storyboard, builds an HTML composition on a
-  deterministic timeline, reviews its own frames (filmstrip + layout lint) and renders frame-accurate
-  video with Playwright and ffmpeg. Use when the user asks for a video, animation, motion graphics,
-  promo, teaser, intro/outro, launch video, animated explainer, social clip or an animated GIF.
+  Create motion-design videos (MP4, GIF, WebM, transparent MOV) from code, with synced sound design:
+  showreels and "go all out" creative pieces, product launches, kinetic typography, logo stings, data
+  stories, app showcases and vertical social clips. Plans a shot list, builds an HTML/canvas composition
+  on a deterministic timeline, scores it with synthesized music and cue-synced sound effects, reviews its
+  own frames (filmstrip + lint) and renders frame-accurate video with Playwright and ffmpeg. Use when the
+  user asks for a video, showreel, motion graphics, animation, promo, teaser, intro/outro, launch video,
+  explainer, social clip or animated GIF, including open briefs like "show what you can do".
 license: MIT
-model: opus
-effort: high
-argument-hint: "[what the video is about, platform, length]"
+compatibility: Tuned and tested on Claude Opus 5.5 (claude-opus-5-5) with high effort. Other models are untested. Needs Node 18+, ffmpeg and Chromium (installed by scripts/setup.sh).
+model: claude-opus-5-5
+effort: xhigh
+argument-hint: "[what the video is about, or 'go all out']"
 allowed-tools:
   - Bash(node ${CLAUDE_SKILL_DIR}/scripts/*)
   - Bash(bash ${CLAUDE_SKILL_DIR}/scripts/setup.sh)
 metadata:
   title: Motion Video
   category: media
-  tags: video, motion design, animation, remotion alternative, gif, social
-  version: 0.1.0
+  tags: video, motion design, showreel, animation, sound design, gif
+  version: 0.3.0
   author: Mayank Gupta
+  tested-models: claude-opus-5-5
 ---
 
 # Motion Video
 
-You are a senior motion designer who codes. You turn a brief into a short, intentional, on-brand video: storyboard first, then a composition on a deterministic timeline, then a visual self-review, then the render.
+You are a senior motion designer who codes, and a director. You make short videos where every frame is intentional, every cut lands on the beat, and the sound is designed with the picture.
 
 Paths below use `${CLAUDE_SKILL_DIR}`, this skill's folder. Other agents should resolve it relative to this file.
 
@@ -36,9 +39,20 @@ bash ${CLAUDE_SKILL_DIR}/scripts/setup.sh   # installs Playwright and Chromium n
 
 If ffmpeg is missing, tell the user the install command the script prints. Don't try to work around it.
 
-## 1. Brief: decide what you're making
+## 1. Pick the mode first
 
-Pin down these six things. Infer whatever you can from the request and the repo, and ask at most 3 short questions about the rest. If the user said "just make it", choose sensible defaults and state them.
+| The request sounds like… | Mode | What changes |
+|---|---|---|
+| A specific product, feature, brand, stat, logo, screenshot or message | **Brief mode** (§2) | Ask ≤ 3 questions, get a 👍 on the storyboard, follow the brand |
+| "go all out", "showreel", "impress me", "show what you can do", "anything you want", a style challenge, or no real content constraints | **Creative-freedom mode** (§3) | No questions, no approval wait. You are the director: choose the concept, art direction, music and edit yourself, then deliver a finished video with sound |
+
+If a creative request names a product or URL ("a showreel for acme.com"), use creative-freedom mode and treat the product as the subject: real name, real colors, real screenshots if available.
+
+## 2. Brief mode
+
+### 2a. Decide what you're making
+
+Infer what you can from the request and the repo, and ask at most 3 short questions about the rest. If the user said "just make it", choose sensible defaults and state them.
 
 | Decision | Default | Where to look first |
 |---|---|---|
@@ -46,150 +60,168 @@ Pin down these six things. Infer whatever you can from the request and the repo,
 | Platform and aspect ratio | 16:9 1920×1080 | `references/formats.md` (safe zones and lengths) |
 | Duration | 8–15s (stings 3–5s) | Platform norms in `references/formats.md` |
 | Brand: colors, fonts, logo | A tasteful palette that fits the content | `tailwind.config.*`, CSS variables, `public/*.svg`, favicon |
-| Copy (every on-screen word) | Write it: short, concrete, verbs | Keep each beat to ≤ 7 words where you can |
-| Assets: screenshots, logo, music | Pure typography and shapes | Ask for screenshots for app videos |
+| Copy (every on-screen word) | Write it: short, concrete, verbs | ≤ 7 words per beat |
+| Assets and sound | Typography and shapes; synthesized score | Ask for screenshots for app videos |
 
-## 2. Storyboard before code
+### 2b. Storyboard before code
 
-Write `storyboard.md` next to the composition. Use the beat-sheet format in `references/storyboard.md`. Each beat has a time range, the on-screen text or visual, the motion, and why the beat exists.
-
-These rules are not optional:
-- **Hook fast.** Something meaningful moves within 0.5s, and the core promise reads by 1s on social or 2s elsewhere. On social, frame 0 is the poster: it should already show the hook.
-- **One idea per beat.** Give each beat one focal point. Nothing else should compete with it.
+Write `storyboard.md` next to the composition, using the beat-sheet format in `references/storyboard.md`. These rules are not optional:
+- **Hook fast.** Something meaningful moves within 0.5s, and the core promise reads by 1–2s. On social, frame 0 is the poster.
+- **One idea per beat**, with one focal point.
 - **Reading time.** Hold text for at least `0.3s × words + 0.8s` after it finishes entering.
-- **End card.** Hold the logo or CTA for at least 2s on a still final frame.
-- **Exits are quicker.** Make exits about 60–70% of the entrance duration so they never steal focus.
+- **End card.** Hold the logo or CTA still for at least 2s.
+- **Exits are quicker**, about 60–70% of the entrance duration.
 
-Show the storyboard to the user and get a 👍 before building. Skip this only if they asked you to go straight to the video. Changing a table costs far less than re-timing a composition.
+Show the storyboard to the user and get a 👍 before building, unless they asked you to go straight to the video.
 
-## 3. Build the composition
+## 3. Creative-freedom mode ("go all out")
 
-Scaffold from the closest template. Each template is also a worked example of good practice, so read the one you pick.
+Read `references/showreel.md` before planning. It has the concept seeds, the technique palette with code, the editing and sound rules, and the reel review rubric. The short version:
+
+1. **Concept before effects.** Choose one *thread* that carries through every shot: one object, line, word, grid or color that keeps transforming. The thread makes your transitions match cuts and turns a list of tricks into a piece. Write the concept in one sentence.
+2. **Don't make the reel everyone makes.** Thousands of people have run this prompt. The default output is:
+   - **Look:** a dark background, a white grotesk, one orange or neon accent, grain, vignette and a timecode HUD.
+   - **Shots:** "MOTION", "PRINCIPLES", dots bursting into particles that spell a word, a bezier graph, a grid of loops.
+   - **End card:** an italic serif role line.
+
+   If your plan resembles that, change the concept or the art direction. Pick something you can defend as a choice.
+3. **Art direction.** Two neutrals + one accent, one type family (two weights or widths), one texture rule. Background flips (an ink flood on the drop) are punctuation, not decoration.
+4. **Structure on a beat grid.** Choose 118–128 BPM. Use `const B = Motion.beats({ bpm })` and place every cut on a beat. 15s means:
+   - a hook that's striking from the first frame
+   - 5–7 shots of 3–5 beats, each showing **one named technique**, escalating to a peak at about 70% of the runtime
+   - an end card on a downbeat, held for 2s or more
+5. **Range.** Use at least 5 *different* techniques from the palette: physics, typography, 3D, morphing, particles, camera, graph editor, generative systems, color transitions. Two variants of the same trick count as one.
+6. **Every frame earns its place.** No dead beat over 0.5s; while a shot holds, something small still lives. No text collisions or illegible type, even mid-transition.
+7. **Sound is half the piece.** Call `Motion.score({ bpm, key, mood, sections })` and add a `Motion.cue()` at every cut, impact and reveal. Use `sections` to arrange it: a breakdown with a filter build before the peak, and the full kit on the drop. The renderer synthesizes a mixed, cue-synced score automatically.
+8. **Plan in writing, don't wait.** Write `storyboard.md` (concept, palette, BPM, shot list in beats, cue list) for yourself, then build. Show the user the finished video, not a question.
+9. **Render at 60fps.** Add `--motion-blur 8` to the final render if fast moves dominate.
+
+Scaffold from `blank` (camera wrapper, beat grid, score sections and cue scaffolding, no design). Read `templates/showreel.html` as a worked reference for the techniques (thread, floods, match cuts, morph, particles, graph editor, cue-synced score), but never copy its concept or look.
+
+## 4. Build the composition
 
 ```bash
 node ${CLAUDE_SKILL_DIR}/scripts/new.mjs --list
-node ${CLAUDE_SKILL_DIR}/scripts/new.mjs product-launch videos/<slug> [--size 1080x1920] [--duration 12]
+node ${CLAUDE_SKILL_DIR}/scripts/new.mjs showreel videos/<slug> [--size 1080x1920] [--duration 12]
 ```
 
 | Template | Use for |
 |---|---|
+| `blank` | Creative-freedom pieces: camera, beat grid, score sections, cue scaffolding, no design |
+| `showreel` | Reference only: a full creative piece showing the techniques (read it, don't copy it) |
 | `kinetic-type` | Manifesto or quote videos, words as the hero |
-| `product-launch` | Feature or version announcements: hook, UI card, callouts, CTA |
+| `product-launch` | Feature or version announcements: hook, real UI, feature line, CTA |
 | `logo-sting` | Intros and outros, 3–5s brand reveals |
 | `data-story` | A stat, a chart, a takeaway |
-| `app-showcase` | A real screenshot with camera push and pan onto highlights |
+| `app-showcase` | A real screenshot with camera moves onto highlights |
 | `social-vertical` | 9:16 tips or promo with safe zones and a progress bar |
 
-A composition is one HTML file plus `motion.js`. The model is:
+A composition is one HTML file plus `motion.js`:
 - The scene lives inside `<div id="stage">`.
 - `Motion.config({ width, height, fps, duration })` declares the video.
 - Every visual state is a pure function of time `t`.
 
-The core API is below. The full reference is `references/runtime-api.md`.
+The full reference is `references/runtime-api.md`.
 
 ```js
-Motion.config({ width: 1920, height: 1080, fps: 30, duration: 10, background: '#0b0b10' });
-Motion.from('#title', { opacity: 0, y: 40 }, { start: 0.3, duration: 0.8, ease: 'strong' }); // entrance
-Motion.to('#title', { start: 2.6, duration: 0.4, ease: 'inCubic', to: { opacity: 0, y: -30 } }); // exit
-Motion.to('.card', { start: 1, duration: 0.6, stagger: 0.08, from: { scale: 0.9 }, to: { scale: 1 } });
-Motion.to('#hero', { start: 0, duration: 1, ease: { stiffness: 170, damping: 18 }, from: {...}, to: {...} }); // spring
-Motion.split('#headline', 'words');          // -> spans you can stagger
-Motion.counter('#n', { from: 0, to: 74, start: 1, duration: 1.5 });
-Motion.draw('svg path', { start: 1, duration: 0.8 });   // stroke draw-on
-Motion.on((t) => { /* any custom per-frame drawing: canvas, SVG, text */ });
+Motion.config({ width: 1920, height: 1080, fps: 60, duration: 15 });
+const B = Motion.beats({ bpm: 124 });                      // B(n) = time of beat n, B.pulse(t) = beat envelope
+Motion.score({ bpm: 124, key: 'E', mood: 'driving',        // music bed: driving | minimal | cinematic
+  sections: [{ at: B(16), drums: false, filter: 600 }, { at: B(20), drums: true, filter: 20000 }] }); // breakdown → drop
+Motion.cue(B(8), 'impact');                                // sfx: whoosh impact hit drop riser swell pop tick glitch
+                                                           // riser/swell END at t; whoosh peaks just before t
+Motion.from('#title', { opacity: 0, y: 40 }, { start: B(1), duration: 0.7, ease: 'strong' });
+Motion.to('.cell', { start: B(4), duration: 0.5, stagger: { each: 0.04, from: 'center', grid: [8, 4] }, from: { scale: 0.4 }, to: { scale: 1 } });
+Motion.morph('#shape', { start: B(12), duration: 0.45, shapes: [squareD, blobD, starD] });
+Motion.ready(() => { pts = Motion.textPoints('MOTION', { font: "700 300px 'Plex Sans'" }); }); // after fonts load
+Motion.canvas((ctx, t, { w, h }) => { /* particles, generative art; use Motion.noise(x, y, z) */ }); // goes inside #cam
+Motion.on((t) => { /* any custom per-frame logic; Motion.spring({...}) / Motion.resolveEase(e) give you eases */ });
+Motion.split('#headline', 'words'); Motion.counter('#n', {...}); Motion.draw('svg path', {...}); Motion.type('#code', {...});
 ```
 
 Animatable props:
 - Transforms: `x y z scale scaleX scaleY rotate rotateX rotateY skewX skewY`
-- Visual: `opacity`, `blur`, colors, any CSS length (`width: 0 → 520`), and CSS variables (`'--r': '0%' → '100%'`)
+- Visual: `opacity`, `blur`, colors, any CSS length, and CSS variables (`'--r': '0%' → '100%'`)
 
-Easing names: `strong` (the premium default for entrances: long, soft landing), `strongInOut` (decisive on-screen moves: selections, swaps), `snappy` (UI entrances), `smooth` (camera moves and morphs), `outCubic`, `inCubic` (exits), `outExpo`, `outBack`, `anticipate`, a cubic-bezier array, or a spring object. Targets can be a selector, an element, or an array mixing both (`['#a', '#b']`).
+Easing names: `strong` (premium entrances), `strongInOut` (decisive moves, morphs), `snappy`, `smooth` (camera), `outCubic`, `inCubic` (exits), `outExpo`, `outBack`, `anticipate`, a cubic-bezier array, or a spring object.
 
 ### Avoid the "made by AI" look
 
-These are the tells people call out in generated videos. Don't ship them unless the brand demands it:
-- a purple-to-cyan gradient (as text fill or backdrop glow), everything centered, and the same fade-up on every element
-- skeleton bars standing in for a product (use real copy and real UI, or a real screenshot)
-- bouncy springs everywhere (one confident overshoot on a hero moment, at most), anything scaling from `0` (start at 0.5–0.95 with opacity)
-- slow crossfades between scenes; prefer a zoom-through (exit: scale up + blur ≤ 10px, `inCubic`, ~0.3s) or a masked hand-off where the next element starts while the last one leaves
-- one neutral palette + **one** accent, 2 type weights with real contrast (400 vs 700+), tight display tracking (−0.03 to −0.05em)
+- A purple-to-cyan gradient, glows, everything centered, the same fade-up on every element.
+- Skeleton bars standing in for a product (use real copy and real UI).
+- Bouncy springs everywhere (one confident overshoot at most), anything scaling from `0`.
+- Slow crossfades between scenes. Use match cuts, zoom-throughs, floods, masked hand-offs.
 
 ### Determinism rules (renders break if you ignore these)
 
-- **No wall clock.** Never use `Date.now`, `performance.now`, `setTimeout`, `requestAnimationFrame` or `Math.random`. Use `Motion.random(seed)` and `Motion.on(t => …)` instead.
-- **CSS `@keyframes` are fine.** The renderer seeks them. Class-triggered CSS `transition`s are not deterministic, so don't use them.
-- **Transforms compose.** Motion writes the individual `translate` / `rotate` / `scale` properties, so a CSS `transform: translate(-50%,-50%)` used for centering survives. Once you animate `rotateX`, `rotateY` or `skew*`, Motion owns `transform`, so center that element another way (inset + margin, or a wrapper).
-- **Fonts.** Load Google Fonts with `&display=block`. The runtime preloads every declared face before frame 0 (canvas text included). Local images are referenced relative to the HTML file.
-- **Masked text.** When text rises out of an `overflow: hidden` mask, travel `±130%`, not `±100%`: the glyph box is taller than the line box, so 100% leaves descender slivers in the mask (`--check` flags this as an overlap).
-- **Per-format CSS.** The renderer tags `<html>` with `knack-out-<ext>`. Always add `.knack-out-gif .grain { display: none; }`: per-frame grain makes a GIF ~50× bigger.
-- **Camera moves.** Animate one wrapper element (see `app-showcase`), not each child.
-- **Scaled-down content.** Mark screenshots and UI mockups with `data-knack-ignore` so the lint skips their small text.
+- **No wall clock.** Never use `Date.now`, `performance.now`, `setTimeout`, `requestAnimationFrame` or `Math.random`. Use `Motion.random(seed)`, `Motion.noise()` and `Motion.on(t => …)`.
+- **Setup that measures text** (textPoints, getBoundingClientRect) goes in `Motion.ready()`, which runs after fonts and images load.
+- **CSS `@keyframes` are fine** (the renderer seeks them). Class-triggered CSS `transition`s are not.
+- **Transforms compose.** Motion writes individual `translate`/`rotate`/`scale`. Once you animate `rotateX`/`rotateY`/`skew*`, Motion owns `transform`.
+- **Camera shake and moves** go on an inner wrapper with slight overscan (`scale: 1.012`), never on `#stage` (that reveals the edge).
+- **Fonts.** Load Google Fonts with `&display=block`.
+- **Masked text** travels `±110–130%` so descenders clear the mask.
+- **Per-format CSS.** Add `.knack-out-gif .grain { display: none; }` (grain makes GIFs about 50× bigger).
+- **3D objects and scaled UI** get `data-knack-ignore` so the lint doesn't flag hidden faces or tiny mock text. For deliberate small UI-style labels, use `data-knack-small`: it skips only the size check and keeps collision checks.
+- **Measuring glyphs for match cuts.** A rect measured inside an `overflow: hidden` inline-block mask sits on the mask's baseline, not the text's. Measure an element *inside* the mask.
+- **Elements hold their first tween's `from` value before it starts.** An element whose first tween begins later shows that value from frame 0. Give it a `from` of `opacity: 0`, or a zero-length tween at t=0.
 
-Open `index.html` in a browser to preview. It has a scrubber, space toggles play, ←/→ step one frame, and `?t=3.2` opens paused at that time. Offer this to the user for live feedback.
+Open `index.html` in a browser to preview. It has a scrubber, space toggles play, ←/→ step one frame, and `?t=3.2` opens paused at that time.
 
-## 4. Self-review loop (required)
+## 5. Self-review loop (required)
 
-You can't watch video, but you can look at frames. Do at least one pass of this loop, and up to three:
+You can't watch video, but you can look at frames. Do at least two passes:
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --check          # layout + timing lint
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --filmstrip 12   # contact sheet PNG
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --still 4.2      # inspect one moment
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --check            # layout, timing and overlap lint
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --filmstrip 20     # contact sheet PNG (--filmstrip-width N)
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --cuts 2           # ±2 frames around EVERY Motion.cue(), one row per cue
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --stills 4.1,4.2,4.3  # several exact moments, one sheet
 ```
 
-1. Read the filmstrip PNG and judge it against `references/review-checklist.md`. Check hierarchy, collisions, empty frames, legibility, brand fit, and whether each beat reads on its own.
+1. Read the filmstrip and judge it against `references/review-checklist.md`. Creative pieces also use the reel rubric in `references/showreel.md`. Be the harshest critic in the room: name what's weak, then fix it.
 2. Fix every `--check` warning unless you can explain why it's intentional.
-3. For transitions, render stills a few frames apart (e.g. 2.9, 3.0, 3.1) to catch overlaps and pops. For fast moves, preview the blur too: `--still 0.6 --motion-blur 8`.
-4. Fix, re-run, and look again. Don't render the final video until a filmstrip looks right.
+3. Run `--cuts 2` and read every row. Most bugs hide at cuts: pops, wrong timing, elements landing early. Use `--stills` for moments that have no cue. It renders them all in one browser launch, which is much faster than separate `--still` calls.
+4. Don't render the final video until a filmstrip looks right.
 
-## 5. Render
+## 6. Render
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html                          # MP4 (H.264, CRF 18, BT.709-tagged)
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o videos/<slug>/demo.gif # README/PR GIF (captured at 20fps, ≤960px)
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o out.mov               # ProRes 4444 + alpha
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --audio music.mp3        # mux audio (trimmed/padded), 1s fade-out
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --motion-blur 8           # film-style motion blur (8× render time)
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --trc srgb               # MP4 + synthesized score if the comp defines one
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --motion-blur 8          # film-style blur (8× render time)
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --audio music.mp3        # use the user's music instead
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --score-only -o score.wav # just the audio
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o demo.gif              # GIF (silent, ≤960px)
 ```
 
-Other flags: `--fps 60`, `--scale 2` (4K from a 1080p comp, crisp text) or `0.5` (fast drafts), `--from 2 --to 5` (range; audio is offset to match), `--workers 6`, `--transparent`, `--crf 23` (smaller), `-o frames/` (PNG sequence), `--gifski` (smaller GIFs if gifski is installed).
+Other flags: `--no-score`, `--fps 60`, `--scale 2` (4K) or `0.5` (drafts), `--from 2 --to 5`, `--transparent`, `--crf 23`, `-o out.mov` (ProRes 4444 + alpha), `--dither` or `--10bit` for big dark gradients.
 
-Quality choices (each one measured; details in `references/formats.md`):
-- **Color.** Output is converted with the BT.709 matrix and tagged, so brand colors match the browser (mean ΔE2000 ≈ 0.2 in Chrome). Apple players (QuickTime, Safari, iOS) apply their own gamma to BT.709 and show midtones a little lighter; for files people will watch directly on Apple devices or in a web page, add `--trc srgb`, which measured exact in both Chrome and AVFoundation.
-- **Banding.** Big dark gradients and glows band in 8-bit. Add `--dither` (static ±1-level dither) or `--10bit` (HEVC Main10: smoothest and smallest; plays in Safari, Chrome, Edge, QuickTime, not Firefox on macOS/Linux).
-- **Motion blur.** `--motion-blur 8` (12–16 for whip pans) averages sub-frames over a 180° shutter, like a real camera. Use it for stings, whip pans and fast UI moves; skip it for calm typographic pieces, where it only costs render time. Static elements stay perfectly sharp.
-- **Frame rate.** 30fps for type and social. 60fps for camera pans, fast horizontal moves and stings (they judder at 30). Motion blur at 30fps is the cheaper alternative for most pieces.
+- **Color.** The output is BT.709-converted and tagged. Use `--trc srgb` for files watched directly (web, README, Apple devices); it measured exact in Chrome and Safari.
+- **Sound.** The score's integrated loudness is measured per ITU-R BS.1770 and normalized to -14 LUFS, with a -1 dBFS sample-peak ceiling. Check it alone with `--score-only -o score.wav`. Very quiet intros sit well below the body after normalization, so give them some level.
+- **File size.** 60fps UI pieces at the default CRF 18 run about 4 MB per 15s. `--crf 20–22` is visually identical for web and README use.
+- **Screenshots for camera moves.** 1× screenshots blur above about 1.4× zoom. When a real product is the subject, ask for 2× captures (or capture them yourself at `deviceScaleFactor: 2`).
 
-To make a transparent overlay, remove the stage background. Set `background: 'transparent'` in `config` and don't set a `#stage` background in CSS.
-
-## 6. Deliver
+## 7. Deliver
 
 Report:
-- the output path, duration, resolution and file size
-- the storyboard in 3 bullets
-- how to tweak it: "timings live in the beat comments; open `index.html` to scrub"
+- the output path, duration, resolution, fps and file size
+- the concept in one sentence, the shot list in 3–6 bullets, and the techniques used
+- how to tweak it: "every timing is a beat number; open `index.html` to scrub"
 
-Offer useful variants such as a 9:16 cut, a 6s bumper, a GIF for the README, or a version with music.
+Offer variants such as a 9:16 cut, a 6s bumper, a silent GIF for a README, or a re-score in a different mood.
 
-Never claim the video looks good without having read at least one filmstrip of the final version.
+Never claim the video looks good without having read a filmstrip of the final version.
 
 ## Motion design principles (quick reference)
 
-Read `references/motion-principles.md` for depth. Use it when choreographing anything beyond the templates.
+Read `references/motion-principles.md` for depth.
 
-- **Durations.**
-  - Micro (chips, small UI): 200–400ms.
-  - Text and card entrances: 500–900ms.
-  - Camera moves and big reveals: 900–1400ms.
-  - Nothing important happens in under 150ms.
-- **Easing.**
-  - Entrances decelerate (`strong`, `snappy`, `outCubic`, `outExpo`). Exits accelerate (`inCubic`) and take 60–70% of the entrance time.
-  - Moves from one on-screen place to another use `smooth` (camera) or `strongInOut` (UI selection, swaps).
-  - Use linear only for progress bars, tickers and endless loops.
-- **Springs.** Use them for playful or physical moments. stiffness 120–260, damping 12–20. Lower damping gives more bounce, so use it sparingly.
-- **Stagger.** 40–90ms between siblings. Lead with the most important element. Cap the whole stagger at about 600ms.
-- **Direction is meaning.** Keep entrance and exit directions consistent within a piece (e.g. in from below, out through the top).
-- **Overlap.** Start the next beat 100–200ms before the previous one finishes. Gaps feel dead and hard cuts feel jumpy.
-- **Hierarchy through motion.** The hero element moves most and first. Supporting elements move less, later and with less distance.
-- **Restraint.** If everything moves, nothing matters. Grain or one slow light is enough ambient life; never add a slow push or drift late in a scene just to fill it. Stillness beats filler motion.
-- **Audio sync.** With music, put major entrances on beats (120 BPM = every 0.5s; `Motion.config` time is seconds, so beat n is at `n * 60 / bpm`). Land the end card on a downbeat.
+- **Durations.** Micro 200–400ms; text and cards 500–900ms; camera and big reveals 900–1400ms. Nothing important happens in under 150ms.
+- **Easing.** Entrances decelerate (`strong`). Exits accelerate (`inCubic`) and take 60–70% of the entrance time. Camera moves use `smooth`. Linear is only for tickers and loops.
+- **Springs.** Only for physical moments: stiffness 120–260, damping 12–20.
+- **Stagger.** 30–90ms between siblings. Use grid/center staggers (`{ from: 'center', grid }`) for systems.
+- **Direction is meaning.** Keep flow directions consistent, or break them on purpose on a beat.
+- **Overlap.** The next shot starts before the last one fully leaves, or cut hard exactly on the beat. Never leave a gap.
+- **Hierarchy through motion.** The hero moves most and first.
+- **Brand pieces.** Restraint wins: one or two ambient motions, stillness over filler.
+- **Creative pieces.** Density wins, but it must be organized. One thread, one palette, cuts on the grid.

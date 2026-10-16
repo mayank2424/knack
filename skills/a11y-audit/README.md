@@ -16,7 +16,7 @@ Generated UIs look fine and are often unusable with a keyboard or a screen reade
    - **clickable elements keyboard users can't reach** (cursor:pointer, `onclick`, interactive roles, real click listeners)
    - **menus that open on hover but not from the keyboard**
    - `<select>`s that **navigate as soon as they change** (3.2.2; the navigation is blocked, nothing new loads)
-   - with `--state` on a modal: does **Escape** close it, and does focus **return to the trigger**
+   - with `--state` on a modal: does **Escape** close it, does focus **return to the trigger**, and does Tab **leak out to the page behind it**
    - focus landing on invisible elements, positive `tabindex`, focus jumping backwards on screen
 3. **Report**: `report.md` opens with a prioritized "Fix first" list, groups identical markup, gives each rule the WCAG criteria, a fix, a note for your stack when it detects one (Next/React, Vue/Nuxt, Svelte, Angular, Astro, Tailwind, MUI, Radix), and an `rg` command to find the element in source; `report.json` for tooling; an **annotated screenshot** per page, sliced into readable parts on long pages.
 4. **Fix loop**: the agent maps each finding to your components, fixes them semantic HTML first, re-runs until there are zero critical/serious issues, then tells you what still needs a human.
@@ -45,6 +45,14 @@ node scripts/audit.mjs examples/inaccessible-page.html     # 19 planted bugs, al
 node scripts/audit.mjs examples/accessible-page.html       # same page, fixed: 0 issues
 node scripts/contrast.mjs "#777" "#fff"
 ```
+
+## Examples
+
+Three worked examples in [`examples/`](examples/), each a real run on a fixture next to its fixed twin (manifest: [`examples/examples.json`](examples/examples.json), output images in `examples/output/`):
+
+- **Marketing page** (`inaccessible-page.html`): 19 planted bugs → 4 critical · 12 serious · 4 moderate rules; the fixed twin scores 0.
+- **Signup form** (`signup-form.html`): placeholder-only fields, low-contrast error and hint text with `contrast.mjs` suggestions, custom checkboxes with no focus ring, a `<div>` submit button.
+- **App shell with modals** (`app-shell.html`, `--state` for each modal): focus escaping behind the backdrop, Escape ignored, focus not returned, a hover-only menu; native `<dialog>` fixes all three states.
 
 ## Sample output
 
@@ -98,7 +106,7 @@ Measured in October 2026 against public pages (re-run the same commands to repro
 | `scripts/contrast.mjs` | Contrast ratio and nearest passing color |
 | `references/fix-recipes.md` | Before/after fixes (HTML, JSX, Tailwind) for ~35 rules, including every keyboard-pass rule |
 | `references/manual-checks.md` | The checks no tool can do: screen reader, zoom/reflow, motion, captions |
-| `examples/` | A page with planted issues and its fixed twin |
+| `examples/` | Three example pairs, each a fixture with planted issues and its fixed twin (marketing page, signup form, app shell with modals), plus `examples.json` (prompts, commands, results) and the annotated output images in `output/` |
 
 ## Honest limits
 

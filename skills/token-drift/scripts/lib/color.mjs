@@ -1,6 +1,7 @@
 // Color parsing + perceptual distance (CIEDE2000 and OKLab). Zero dependencies.
 // Supports #rgb #rgba #rrggbb #rrggbbaa, rgb()/rgba(), hsl()/hsla(), oklch(), oklab()
 // in both legacy comma and modern space/slash syntax.
+import { V4, SHADES } from './palette.mjs';
 
 export const COLOR_RE = /(?<![\w&#-])#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{3,4})(?![\w-])|\b(?:rgba?|hsla?|oklch|oklab)\([^()]*\)/g;
 
@@ -166,22 +167,75 @@ export function deltaE2000(l1, l2) {
 
 export const oklabDistance = (a, b) => Math.hypot(a.L - b.L, a.a - b.a, a.b - b.b);
 
-/** Rough hue family + tone step, used to name proposed tokens. */
+/**
+ * Pure white / black are almost always deliberate. A value only counts as "the same as" white or
+ * black (NEAR, or one proposed cluster) within this ΔE2000, in either direction: #fdfdfd is drift,
+ * #fafafa (Tailwind neutral-50) is a design decision.
+ */
+export const BW_MAX_DE = 0.5;
+export const isPureBW = (c) => !!c && (c.key === '#ffffff' || c.key === '#000000');
+
+// Tailwind v4's palette in OKLab, used to name proposed tokens the way a Tailwind user would.
+const GRAY_FAMILIES = new Set(['slate', 'gray', 'zinc', 'neutral', 'stone']);
+const SHADE_NUM = SHADES.map(Number);
+let swatchCache = null;
+function swatches() {
+  if (swatchCache) return swatchCache;
+  swatchCache = [];
+  for (const [family, list] of Object.entries(V4)) {
+    list.split(',').forEach((entry, i) => {
+      const [l, c, h] = entry.trim().split(/\s+/);
+      const L = parseFloat(l) / 100, C = Number(c), H = (Number(h) * Math.PI) / 180;
+      swatchCache.push({ family, i, L, h: Number(h), a: C * Math.cos(H), b: C * Math.sin(H), gray: GRAY_FAMILIES.has(family) });
+    });
+  }
+  return swatchCache;
+}
+
+/**
+ * Hue family + tone step for naming a proposed token, calibrated on Tailwind v4. Gray when chroma
+ * is ≤ 0.01 or the nearest palette swatch is one of Tailwind's grays (#6b7280 is gray-500, not
+ * blue); otherwise the chromatic family whose hue at this lightness is closest, so faint tints like
+ * #fdecea still get their hue. The step is where the lightness falls on that family's 50–950
+ * ladder; `fine` is the interpolated step (e.g. 649 between 600 and 700), used to tell duplicates apart.
+ */
 export function colorFamily(d) {
+  if (d.key === '#ffffff') return { family: 'white', step: null, fine: null };
+  if (d.key === '#000000') return { family: 'black', step: null, fine: null };
   const { L, a, b } = d.oklab;
-  const C = Math.hypot(a, b);
-  let h = (Math.atan2(b, a) * 180) / Math.PI; if (h < 0) h += 360;
-  let family;
-  if (C < 0.03) family = 'gray';
-  else if (h < 20 || h >= 350) family = 'pink';
-  else if (h < 45) family = 'red';
-  else if (h < 75) family = 'orange';
-  else if (h < 110) family = 'yellow';
-  else if (h < 165) family = 'green';
-  else if (h < 210) family = 'teal';
-  else if (h < 275) family = 'blue';
-  else if (h < 310) family = 'violet';
-  else family = 'purple';
-  const step = Math.max(50, Math.min(950, Math.round((1 - L) * 10) * 100 || 50));
-  return { family, step };
+  const sw = swatches();
+  let family = 'neutral';
+  if (Math.hypot(a, b) > 0.01) {
+    let nearest = null, best = Infinity;
+    for (const s of sw) {
+      const dist = (L - s.L) ** 2 + (a - s.a) ** 2 + (b - s.b) ** 2;
+      if (dist < best) { best = dist; nearest = s; }
+    }
+    if (!nearest.gray) {
+      let h = (Math.atan2(b, a) * 180) / Math.PI; if (h < 0) h += 360;
+      const byFamily = new Map();
+      for (const s of sw) {
+        if (s.gray) continue;
+        const cur = byFamily.get(s.family);
+        if (!cur || Math.abs(s.L - L) < Math.abs(cur.L - L)) byFamily.set(s.family, s);
+      }
+      let bestHue = Infinity;
+      for (const [fam, s] of byFamily) {
+        const dh = Math.abs(((h - s.h + 540) % 360) - 180);
+        if (dh < bestHue) { bestHue = dh; family = fam; }
+      }
+    }
+  }
+  const gray = GRAY_FAMILIES.has(family);
+  const ladder = sw.filter((s) => s.family === (gray ? 'neutral' : family)).map((s) => s.L); // 50 → 950, descending L
+  let step, fine;
+  if (L >= ladder[0]) { step = fine = SHADE_NUM[0]; }
+  else if (L <= ladder[ladder.length - 1]) { step = fine = SHADE_NUM[SHADE_NUM.length - 1]; }
+  else {
+    const i = ladder.findIndex((l, k) => l >= L && L > ladder[k + 1]);
+    const t = (ladder[i] - L) / (ladder[i] - ladder[i + 1]);
+    step = t < 0.5 ? SHADE_NUM[i] : SHADE_NUM[i + 1];
+    fine = SHADE_NUM[i] + t * (SHADE_NUM[i + 1] - SHADE_NUM[i]);
+  }
+  return { family: gray ? 'gray' : family, step, fine };
 }

@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Blank starter for creative pieces: camera wrapper, beat grid, score and cue scaffolding, no design (16:9, 60fps, 15s)" />
+<title>Untitled</title>
+<!-- Pick ONE type family with real width/weight range for your concept; load with display=block. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  /* Art direction: two neutrals + one accent. Replace these before you build anything. */
+  :root { --bg: #f2f0ea; --ink: #141414; --accent: #ff3d00; }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; }
+  /* #cam is the camera: move/scale/shake it, never #stage. Canvases from Motion.canvas() go inside it. */
+  #cam { position: absolute; inset: 0; background: var(--bg); }
+  .layer { position: absolute; inset: 0; }
+  .knack-out-gif .grain { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <!-- One .layer per shot. Keep the thread element(s) outside the shot layers if they cross cuts. -->
+    <div class="layer" id="s1"></div>
+  </div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 15 });
+  const B = Motion.beats({ bpm: 122 });              // every cut lands on B(n)
+
+  // Music bed + arrangement. Sections switch parts on/off from `at` onward; `filter` sweeps the bed.
+  // A breakdown before the peak and a full return on it makes the drop land musically.
+  Motion.score({
+    bpm: 122, key: 'D', scale: 'minor', mood: 'driving',
+    sections: [
+      // { at: B(16), drums: false, filter: 600 },   // breakdown + filter build into the peak
+      // { at: B(20), drums: true, filter: 20000 },  // the drop
+    ],
+  });
+
+  // Shot list in beats (fill this from storyboard.md). Vary lengths: 3, 4, 4.5, 3.5…
+  const SHOTS = [
+    // [0, 'hook'], [4, '…'], [8, '…'], …
+  ];
+  SHOTS.slice(1).forEach(([b]) => Motion.cue(B(b), 'whoosh', { gain: 0.8 })); // whoosh peaks just before each cut
+
+  // Shot 1 · hook: something physical happens in the first beat, and frame 0 is already worth a poster.
+  // Motion.to(…), Motion.morph(…), Motion.canvas((ctx, t) => …), Motion.on((t) => …)
+
+  // Setup that measures text or layout (textPoints, glyph rects) goes here: fonts are loaded by then.
+  // Note: rects measured inside an overflow:hidden inline-block mask sit on the mask's baseline, not the text's.
+  Motion.ready(() => {});
+</script>
+</body>
+</html>

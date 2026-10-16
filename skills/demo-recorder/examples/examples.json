@@ -1,0 +1,47 @@
+{
+  "examples": [
+    {
+      "id": "orbit-todo",
+      "title": "A todo app tour with zoom, a ⌘K palette and dark mode",
+      "prompt": "Make a short demo of adding and completing a task in Orbit, then switching to dark mode with ⌘K. I need a GIF for the README and an MP4 for the changelog.",
+      "summary": "The bundled Orbit app recorded in one take: a task is typed in, the camera zooms in while another is ticked off, then the ⌘K palette switches the app to dark mode. One run writes both the MP4 and a full-palette GIF, plus the contact sheet the agent reads to check the take.",
+      "input": ["app.html", "flow.json"],
+      "command": "node scripts/record.mjs examples/flow.json",
+      "result": "14.8 s clip: MP4 1.26 MB and GIF 2.08 MB from one take",
+      "media": [
+        { "type": "video", "src": "output/orbit-todo/orbit-demo.mp4", "alt": "Orbit todo app in a macOS window on a purple gradient: a task is typed and added, the view zooms in as a task is checked off, then the command palette opens and switches the app to dark mode.", "caption": "MP4, 1024×680 at 2x, with captions, zoom, the ⌘K keystroke HUD and a window frame." },
+        { "type": "gif", "src": "output/orbit-todo/orbit-demo.gif", "alt": "The same Orbit demo as a looping GIF.", "caption": "GIF from the same take (960 px wide, 15 fps, one palette for the whole clip)." },
+        { "type": "image", "src": "output/orbit-todo/contact-sheet.png", "alt": "Twelve frames from the Orbit clip in a grid, each labelled with its time and the step that was running.", "caption": "Contact sheet: what the agent reviews before handing the clip over." }
+      ],
+      "excerpt": "◆ [8/12] caption \"⌘K runs any command\"\n◆ [9/12] press \"Meta+K\"\n◆ [10/12] type \"dark\"\n◆ [11/12] press \"Enter\"\n◆ [12/12] highlight \"#progress\"\n◆ Captured 444 frames (15.0s of timeline) in 20.5s, 109 unchanged frames reused\n◆ Encoding MP4, GIF…\n◆ Encoded in 4.1s\n✓ MP4 → .knack/demo-recorder/orbit-demo.mp4 (1.26 MB, 14.8s)\n✓ GIF → .knack/demo-recorder/orbit-demo.gif (2.08 MB, 14.8s)\n✓ Legibility: typical text is 15px; shown ~11.6px at README width (880px), ~5.1px on a phone.\n✓ Contact sheet (open this to review) → .knack/demo-recorder/orbit-demo-sheet.png"
+    },
+    {
+      "id": "docs-search",
+      "title": "⌘K search on a dark docs site, zoomed in for a changelog post",
+      "prompt": "Make a short MP4 showing the new ⌘K search on our docs site for the changelog post on X.",
+      "summary": "A dark docs site for a fictional job-queue library. The clip opens search with ⌘K, zooms in on the palette while \"backoff\" filters the results, clicks the guide, and lands on the right section with the code sample highlighted. The caption and keystroke HUD are drawn in screen space, so they stay put at their normal size while the camera zooms in on the palette.",
+      "input": ["docs-search.html", "docs-search.flow.json"],
+      "command": "node scripts/record.mjs examples/docs-search.flow.json",
+      "result": "11.3 s MP4, 1.70 MB, 1280×800, dark, no frame",
+      "media": [
+        { "type": "video", "src": "output/docs-search/docs-search.mp4", "alt": "Wayfern Docs in dark mode: the search palette opens with Command K, the view zooms in as 'backoff' is typed and the results narrow to two, a result is clicked and the Retries and backoff guide opens with its code sample highlighted.", "caption": "MP4 at 1280×800 for social: the caption stays on screen through the zoom on the palette, then a click and a dimmed highlight on the code sample." },
+        { "type": "image", "src": "output/docs-search/contact-sheet.png", "alt": "Twelve frames from the docs search clip, from the Quickstart page through the zoomed search palette to the Retries and backoff guide.", "caption": "Contact sheet of the final take." }
+      ],
+      "excerpt": "◆ [4/9] zoom {\"to\":\"#palette\"}\n◆ [5/9] type \"backoff\"\n◆ [6/9] click \".hit[data-title=\"Retries and backoff\"]\"\n◆ [7/9] zoom \"out\"\n◆ [8/9] cursor [1150,600]\n◆ [9/9] highlight \"#main pre\"\n◆ Captured 338 frames (11.4s of timeline) in 28.7s, 128 unchanged frames reused\n◆ Encoding MP4…\n◆ Encoded in 2.0s\n✓ MP4 → .knack/demo-recorder/docs-search.mp4 (1.70 MB, 11.3s)\n⚠ Legibility: typical text is 14px; shown ~9.6px at README width (880px), ~4.3px on a phone. Small: use a smaller viewport (e.g. 960x600) or zoom on the detail.\n✓ Contact sheet (open this to review) → .knack/demo-recorder/docs-search-sheet.png"
+    },
+    {
+      "id": "signup-form",
+      "title": "A signup form as a small, framed README GIF",
+      "prompt": "Record a GIF of the signup flow for the README.",
+      "summary": "A SaaS signup screen filled with fake data: fields are tabbed through (the keystroke HUD shows each Tab), a team size is picked, the annual-billing switch updates the price, and the submit lands on the success state. Recorded in a window frame on the neutral mono background. The first GIF showed banding rings in the panel's orange radial gradient, so the fixture was changed to flat fills and the clip was recorded again.",
+      "input": ["signup.html", "signup.flow.json"],
+      "command": "node scripts/record.mjs examples/signup.flow.json",
+      "result": "14.8 s GIF, 406 KB, framed for a README",
+      "media": [
+        { "type": "gif", "src": "output/signup-form/signup.gif", "alt": "Marigold signup form in a macOS window on a light grey background: name, email and studio name are typed with Tab between fields, the 2–5 team size and yearly billing are selected, the price drops to $23, and submitting shows a 'You're in, Ada!' success screen.", "caption": "GIF with the keystroke HUD and a window frame on the neutral mono background." },
+        { "type": "image", "src": "output/signup-form/contact-sheet.png", "alt": "Twelve frames from the signup clip, from the empty form through the filled form to the success screen.", "caption": "Contact sheet of the final take." }
+      ],
+      "excerpt": "◆ [5/10] type \"Fernhill Studio\"\n◆ [6/10] click \"role=radio[name=\"2–5\"]\"\n◆ [7/10] click \"#annual\"\n◆ [8/10] click \"#submit\"\n◆ [9/10] wait \"text=You're in, Ada!\"\n◆ [10/10] cursor [330,615]\n◆ Captured 443 frames (14.9s of timeline) in 16.5s, 145 unchanged frames reused\n◆ Encoding GIF…\n◆ Encoded in 2.0s\n✓ GIF → .knack/demo-recorder/signup.gif (406 KB, 14.8s)\n⚠ Legibility: typical text is 14px; shown ~10.8px at README width (880px), ~4.8px on a phone. Small: use a smaller viewport (e.g. 960x600), zoom on the detail or drop the window frame (--no-frame).\n✓ Contact sheet (open this to review) → .knack/demo-recorder/signup-sheet.png"
+    }
+  ]
+}

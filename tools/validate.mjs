@@ -54,6 +54,32 @@ for (const name of names) {
     if (r.includes('*') || r.includes('<')) continue;
     if (!fs.existsSync(path.join(dir, r))) err(name, `SKILL.md references missing file: ${r}`);
   }
+  // Worked examples (EXAMPLES_SPEC.md): 2–4 per skill, every media file present and within budget.
+  const exFile = path.join(dir, 'examples', 'examples.json');
+  if (!fs.existsSync(exFile)) warn(name, 'no examples/examples.json (see EXAMPLES_SPEC.md)');
+  else {
+    let ex;
+    try { ex = JSON.parse(fs.readFileSync(exFile, 'utf8')).examples; } catch (e) { err(name, `examples.json: ${e.message}`); ex = []; }
+    if (!Array.isArray(ex) || ex.length < 2 || ex.length > 4) warn(name, `examples.json should list 2–4 examples (has ${ex?.length ?? 0})`);
+    const ids = new Set();
+    let total = 0;
+    for (const e of ex || []) {
+      for (const k of ['id', 'title', 'summary', 'media']) if (!e[k]) err(name, `example "${e.id || '?'}" is missing "${k}"`);
+      if (ids.has(e.id)) err(name, `duplicate example id "${e.id}"`); ids.add(e.id);
+      for (const m of e.media || []) {
+        const f = path.join(dir, 'examples', m.src || '');
+        if (!m.src || !fs.existsSync(f)) { err(name, `example "${e.id}" media not found: ${m.src}`); continue; }
+        const kb = fs.statSync(f).size / 1024; total += kb;
+        const limit = m.type === 'video' ? 4096 : m.type === 'gif' ? 3072 : 500;
+        if (kb > limit) warn(name, `example media ${m.src} is ${Math.round(kb)} KB (budget ${limit} KB)`);
+        if (!m.alt && m.type !== 'video') warn(name, `example media ${m.src} has no alt text`);
+      }
+      for (const f of e.input || []) if (!fs.existsSync(path.join(dir, 'examples', f))) err(name, `example "${e.id}" input not found: ${f}`);
+    }
+    const budget = (ex || []).some((e) => (e.media || []).some((m) => m.type === 'video')) && data.metadata?.category === 'media' ? 16384 : 8192;
+    if (total > budget) warn(name, `example media totals ${Math.round(total / 1024)} MB (budget ${budget / 1024} MB)`);
+  }
+
   if (fs.existsSync(path.join(dir, 'scripts', 'package.json'))) {
     const pkg = JSON.parse(fs.readFileSync(path.join(dir, 'scripts', 'package.json'), 'utf8'));
     for (const [dep, v] of Object.entries(pkg.dependencies || {})) if (/^[\^~*]|latest/.test(v)) warn(name, `dependency ${dep}@${v} should be pinned to an exact version`);

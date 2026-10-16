@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Tidzy 9:16 ad: a lost screenshot, found by what's inside it, space freed safely, end card. Real app screenshots, brand colors, synthesized score (12s, 60fps)" />
+<title>Tidzy vertical ad</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400..700&family=Geist+Mono:wght@400;500&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  /* gettidzy.app brand tokens */
+  :root {
+    --g1: #2BD3AE; --g2: #0E9F86; --g3: #0A7A6A; --g4: #06574C;
+    --grad: linear-gradient(120deg, #2BD3AE 0%, #0E9F86 48%, #0A7A6A 100%);
+    --ink: #0A1613; --ink2: #43534E; --ink3: #7B8A85;
+    --soft: #F5FAF8; --mint: #E9F8F3; --line2: rgba(8,40,32,.13);
+  }
+  #stage { background: #FBFDFC; color: var(--ink); font-family: Geist, sans-serif; overflow: hidden; }
+  #stage * { box-sizing: border-box; }
+  .abs { position: absolute; }
+
+  /* Background: the site's dot grid + soft mint aurora */
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(rgba(10,122,106,.16) 1.6px, transparent 1.6px); background-size: 34px 34px;
+    -webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 45%, #000 20%, transparent 80%); mask-image: radial-gradient(ellipse 80% 60% at 50% 45%, #000 20%, transparent 80%); }
+  .aur { position: absolute; border-radius: 50%; filter: blur(90px); }
+  #a1 { width: 900px; height: 700px; left: -300px; top: 80px; background: #c4f3e4; opacity: .7; }
+  #a2 { width: 800px; height: 700px; right: -320px; top: 900px; background: #d6f7ec; opacity: .8; }
+  #a3 { width: 700px; height: 600px; left: 120px; top: 1500px; background: #a9ecd8; opacity: .45; }
+
+  /* Progress bar (retention cue) */
+  .progress { position: absolute; left: 90px; right: 150px; top: 196px; height: 8px; border-radius: 4px; background: rgba(10,122,106,.12); overflow: hidden; z-index: 30; }
+  .progress b { display: block; height: 100%; width: 100%; background: var(--grad); transform-origin: left; }
+
+  /* Shared caption style: masked line rise */
+  .cap { position: absolute; left: 90px; top: 296px; width: 860px; margin: 0; font-size: 104px; line-height: 1.02; letter-spacing: -0.052em; font-weight: 700; }
+  .ln { display: block; overflow: hidden; padding-bottom: .06em; }
+  .ln > span { display: inline-block; }
+  .g { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; padding-right: .04em; }
+
+  /* S1 hook */
+  #wall { position: absolute; left: -40px; top: 0; width: 1200px; font-family: 'Geist Mono', monospace; font-size: 30px; line-height: 58px; color: #A3B0AC; white-space: nowrap; opacity: .75; }
+  #wall div:nth-child(odd) { padding-left: 64px; }
+  #wall .hot { color: var(--g3); }
+  #veil { position: absolute; inset: 0; background: radial-gradient(ellipse 88% 30% at 44% 48%, rgba(251,253,252,.97) 48%, rgba(251,253,252,0) 100%); }
+  #tag { position: absolute; left: 90px; top: 300px; display: flex; align-items: center; gap: 18px; padding: 10px 28px 10px 10px; border-radius: 999px; background: rgba(255,255,255,.9); border: 1.5px solid var(--line2); box-shadow: 0 14px 40px -18px rgba(8,60,48,.3); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; }
+  #tag img { width: 64px; height: 64px; }
+  #tag span { color: var(--ink3); font-weight: 500; }
+  #hook { position: absolute; left: 90px; top: 690px; transform-origin: 0 50%; margin: 0; font-size: 146px; line-height: .96; letter-spacing: -0.058em; font-weight: 700; }
+  #hook .ln { padding-bottom: .1em; margin-bottom: -.06em; }
+  #hword { position: relative; display: inline-block; }
+  #swoosh { position: absolute; left: 1%; bottom: -.12em; width: 98%; height: .26em; overflow: visible; }
+  #swoosh path { fill: none; stroke: url(#sw); stroke-width: 9; stroke-linecap: round; }
+
+  /* S2 search */
+  #bar { position: absolute; left: 90px; top: 790px; width: 900px; height: 144px; }
+  #barbg { position: absolute; inset: 0; border-radius: 72px; background: #fff; border: 1.5px solid var(--line2);
+    box-shadow: 0 1px 0 #fff inset, 0 34px 80px -30px rgba(8,90,70,.45), 0 0 0 12px rgba(43,211,174,.09); }
+  #qicon { position: absolute; left: 26px; top: 26px; width: 92px; height: 92px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; box-shadow: 0 10px 22px -10px rgba(14,159,134,.9); }
+  #qicon svg { width: 46px; height: 46px; color: #fff; }
+  #qtext { position: absolute; left: 140px; top: 0; height: 144px; display: flex; align-items: center; font-size: 52px; font-weight: 500; letter-spacing: -0.02em; white-space: nowrap; }
+  #qword { display: inline-block; transform-origin: 0 0; }
+  #caret { display: inline-block; width: 4px; height: 62px; margin-left: 3px; border-radius: 2px; background: var(--g2); }
+  #und { position: absolute; left: 96px; top: 1000px; width: 840px; }
+  #und .lbl { display: flex; align-items: center; gap: 12px; font-size: 40px; color: var(--ink3); font-weight: 500; margin-bottom: 22px; }
+  #und .lbl svg { width: 34px; height: 34px; color: var(--g2); }
+  .chips { display: flex; flex-wrap: wrap; gap: 18px; }
+  .chip { display: inline-flex; align-items: center; gap: 14px; padding: 16px 26px 16px 22px; border-radius: 999px; background: var(--mint); color: var(--g4); font-size: 44px; font-weight: 600; letter-spacing: -0.015em; border: 1.5px solid rgba(14,159,134,.25); }
+  .chip svg { width: 36px; height: 36px; }
+  .chip i { font-style: normal; color: rgba(6,87,76,.55); font-weight: 500; margin-left: 4px; }
+
+  /* S3 found */
+  #card { position: absolute; left: 100px; top: 556px; width: 470px; border-radius: 34px; box-shadow: 0 40px 90px -40px rgba(8,60,48,.45); rotate: -3deg; }
+  #panel { position: absolute; left: 90px; top: 990px; width: 842px; padding: 24px 22px 18px 24px; border-radius: 34px; background: #f6f7f6; border: 1.5px solid var(--line2);
+    box-shadow: 0 2px 4px rgba(10,40,30,.04), 0 40px 90px -30px rgba(8,60,48,.42); }
+  #panel img { display: block; width: 792px; }
+  #hl { position: absolute; left: 20px; top: 256px; width: 488px; height: 52px; border-radius: 9px; background: rgba(43,211,174,.38); mix-blend-mode: multiply; clip-path: inset(0 calc(100% - var(--r, 0%)) 0 0 round 9px); }
+  #s3cam { position: absolute; inset: 0; transform-origin: 330px 560px; }
+
+  /* S4 clean up */
+  .ccard { position: absolute; left: 90px; width: 840px; border-radius: 30px; box-shadow: 0 2px 4px rgba(10,40,30,.04), 0 34px 70px -34px rgba(8,60,48,.4); }
+  #c1 { top: 536px; z-index: 3; } #c2 { top: 786px; z-index: 2; } #c3 { top: 1036px; z-index: 1; }
+  #toast { position: absolute; left: 130px; top: 900px; width: 760px; height: 136px; border-radius: 68px; background: var(--ink); color: #fff; display: flex; align-items: center; gap: 24px; padding: 0 44px 0 30px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.12) inset, 0 40px 80px -30px rgba(10,22,19,.6); font-size: 46px; font-weight: 600; letter-spacing: -0.02em; z-index: 5; }
+  #tcheck { width: 76px; height: 76px; border-radius: 50%; background: var(--grad); display: grid; place-items: center; flex: none; }
+  #tcheck svg { width: 42px; height: 42px; color: #fff; }
+  #toast .undo { margin-left: auto; color: #7EF0D2; }
+
+  /* Flood + end card */
+  #flood { position: absolute; inset: 0; background: var(--grad); z-index: 40; clip-path: circle(0px at 50% 50%); }
+  #end { position: absolute; inset: 0; z-index: 41; text-align: center; }
+  #icon { position: absolute; left: 380px; top: 520px; width: 320px; height: 320px; filter: drop-shadow(0 34px 40px rgba(8,60,48,.28)); }
+  #word { position: absolute; left: 0; right: 0; top: 860px; margin: 0; font-size: 210px; line-height: 1; letter-spacing: -0.06em; font-weight: 700; }
+  #tagline { position: absolute; left: 0; right: 0; top: 1092px; font-size: 76px; letter-spacing: -0.045em; font-weight: 600; color: var(--ink2); }
+  #pill { position: absolute; left: 290px; top: 1236px; width: 500px; height: 116px; border-radius: 58px; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: center; gap: 20px;
+    font-size: 54px; font-weight: 600; letter-spacing: -0.03em; box-shadow: 0 30px 60px -26px rgba(10,22,19,.6); }
+  #pill i { width: 26px; height: 26px; border-radius: 50%; background: var(--g1); box-shadow: 0 0 0 7px rgba(43,211,174,.22); }
+  #fine { position: absolute; left: 0; right: 0; top: 1392px; font-size: 40px; color: var(--ink3); font-weight: 500; letter-spacing: -0.01em; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="sw" x1="0" x2="1"><stop offset="0" stop-color="#2BD3AE"/><stop offset="1" stop-color="#0A7A6A"/></linearGradient>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-sparkle" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5c.5 4.6 2.9 7 7.5 7.5-4.6.5-7 2.9-7.5 7.5-.5-4.6-2.9-7-7.5-7.5 4.6-.5 7-2.9 7.5-7.5Z"/><path d="M19 15.5c.2 1.9 1.1 2.8 3 3-1.9.2-2.8 1.1-3 3-.2-1.9-1.1-2.8-3-3 1.9-.2 2.8-1.1 3-3Z" opacity=".7"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-textscan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8 9.5h8M8 12.5h8M8 15.5h5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5 10 17.5 19 7"/></symbol>
+  </defs>
+</svg>
+<div id="stage">
+  <div class="aur" id="a1"></div><div class="aur" id="a2"></div><div class="aur" id="a3"></div>
+  <div class="dots"></div>
+  <div class="progress"><b id="prog"></b></div>
+
+  <!-- S1 · hook (frame 0 is the poster) -->
+  <div id="s1" class="abs" style="inset:0">
+    <div id="wall" data-knack-ignore></div>
+    <div id="veil"></div>
+    <div id="tag"><img src="assets/icon.png" alt="" />Tidzy <span>for Mac</span></div>
+    <h1 id="hook">
+      <span class="ln"><span id="h1a">Can't find</span></span>
+      <span class="ln"><span id="h1b">that</span></span>
+      <span class="ln" style="overflow:visible"><span id="h1c"><span id="hword">screenshot<svg id="swoosh" viewBox="0 0 400 30" preserveAspectRatio="none"><path d="M6 20 C 90 8, 220 4, 394 14"/></svg></span><span id="hq">?</span></span></span>
+    </h1>
+  </div>
+
+  <!-- S2 · describe it -->
+  <div id="s2" class="abs" style="inset:0">
+    <h2 class="cap" id="cap2"><span class="ln"><span>Just</span></span><span class="ln"><span><span class="g">describe</span> it.</span></span></h2>
+    <div id="bar">
+      <div id="barbg"></div>
+      <div id="qicon"><svg><use href="#i-search"/></svg></div>
+      <div id="qtext"><span id="qword">screenshot</span><span id="qrest"></span><span id="caret"></span></div>
+    </div>
+    <div id="und">
+      <div class="lbl" id="ulbl"><svg><use href="#i-sparkle"/></svg>Understood as</div>
+      <div class="chips">
+        <span class="chip" id="ch1"><svg><use href="#i-camera"/></svg>Screenshots<i>×</i></span>
+        <span class="chip" id="ch2"><svg><use href="#i-textscan"/></svg>Containing “wifi password”<i>×</i></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- S3 · found by what's inside (real result card + real "Text in this file" panel) -->
+  <div id="s3" class="abs" style="inset:0">
+    <h2 class="cap" id="cap3"><span class="ln"><span>Found by</span></span><span class="ln"><span class="g">what's inside.</span></span></h2>
+    <div id="s3cam">
+      <img id="card" src="assets/found-card.png" alt="" data-knack-ignore />
+      <div id="panel" data-knack-ignore><img src="assets/found-text.png" alt="" /><div id="hl"></div></div>
+    </div>
+  </div>
+
+  <!-- S4 · free up space (real Clean Up cards) -->
+  <div id="s4" class="abs" style="inset:0">
+    <h2 class="cap" id="cap4"><span class="ln"><span>Free up space.</span></span><span class="ln"><span class="g">Safely.</span></span></h2>
+    <img class="ccard" id="c1" src="assets/clean-installers.png" alt="" />
+    <img class="ccard" id="c2" src="assets/clean-downloads.png" alt="" />
+    <img class="ccard" id="c3" src="assets/clean-duplicates.png" alt="" />
+    <div id="toast"><div id="tcheck"><svg><use href="#i-check"/></svg></div>Moved to Trash<span class="undo">Undo</span></div>
+  </div>
+
+  <div id="flood"></div>
+
+  <!-- S5 · end card -->
+  <div id="end">
+    <img id="icon" src="assets/icon.png" alt="Tidzy" />
+    <h2 id="word">Tidzy</h2>
+    <div id="tagline">Your Mac, <span class="g">neat.</span></div>
+    <div id="pill"><i></i>gettidzy.app</div>
+    <div id="fine">100% on-device · macOS 14+</div>
+  </div>
+</div>
+<script>
+  const W = 1080, H = 1920, DUR = 12, HOOK_SCALE = 1.045;
+  Motion.config({ width: W, height: H, fps: 60, duration: DUR, background: '#FBFDFC' });
+  const B = Motion.beats({ bpm: 120 });              // B(n) = n × 0.5s; every cut sits on this grid
+  const $ = (s) => document.querySelector(s);
+  const I = Motion.interpolate;
+
+  // ---------------------------------------------------------------- score + cues
+  Motion.score({ bpm: 120, key: 'D', scale: 'major', mood: 'driving', sections: [
+    { at: 0, drums: false, bass: true, arp: false, filter: 1300 },   // filtered intro under the hook, opening into the cut
+    { at: B(4), drums: true, bass: true, arp: true, filter: 20000 }, // opens on the match cut
+    { at: B(16.4), filter: 20000 },
+    { at: B(16.6), drums: false, arp: false, filter: 900 },          // breath under the toast
+    { at: B(18), drums: true, arp: true, filter: 20000 },            // slam back on the flood
+    { at: B(22), drums: false, arp: false },                         // pad-only outro
+  ] });
+  Motion.cue(0.04, 'hit', { gain: 0.7 });
+  Motion.cue(0.62, 'whoosh', { gain: 0.35, length: 0.35 });
+  Motion.cue(B(4), 'riser', { length: 1.3, gain: 0.55 });
+  Motion.cue(B(4) - 0.05, 'whoosh', { gain: 0.8 });
+  Motion.cue(B(4), 'hit');
+  const TYPE0 = B(4.9), CPS = 27, REST = ' with wifi password';
+  for (let i = 0; i < REST.length; i += 1) if (REST[i] !== ' ') Motion.cue(TYPE0 + (i + 0.5) / CPS, 'tick', { gain: 0.45 });
+  Motion.cue(B(6.6), 'pop', { gain: 0.7 });
+  Motion.cue(B(6.9), 'pop', { gain: 0.7 });
+  Motion.cue(B(8), 'whoosh', { gain: 0.7 });
+  Motion.cue(B(8) + 0.04, 'hit', { gain: 0.6 });
+  Motion.cue(B(9.6), 'pop', { gain: 0.8 });
+  Motion.cue(B(12), 'whoosh', { gain: 0.7 });
+  [0, 0.12, 0.24].forEach((d) => Motion.cue(B(12) + 0.1 + d, 'pop', { gain: 0.55 }));
+  Motion.cue(B(15.4), 'whoosh', { gain: 0.6 });
+  Motion.cue(B(16.15), 'pop', { gain: 0.9 });
+  Motion.cue(B(18), 'riser', { length: 1.1, gain: 0.8 });
+  Motion.cue(B(18) + 0.02, 'drop');
+  Motion.cue(B(19), 'hit', { gain: 0.6 });
+  Motion.cue(B(19.5), 'pop', { gain: 0.7 });
+
+  // ---------------------------------------------------------------- ambient
+  Motion.to('#prog', { start: 0, duration: DUR, ease: 'linear', from: { scaleX: 0 }, to: { scaleX: 1 } });
+  Motion.on((t) => {
+    $('#a1').style.translate = `${Math.sin(t * .7) * 70}px ${Math.cos(t * .5) * 50}px`;
+    $('#a2').style.translate = `${Math.cos(t * .6) * 60}px ${Math.sin(t * .8) * 70}px`;
+    $('#a3').style.translate = `${Math.sin(t * .5 + 1) * 80}px ${Math.cos(t * .4) * 40}px`;
+  });
+
+  // ---------------------------------------------------------------- S1 · hook (0 → B4)
+  // A wall of identical screenshot names: the pain, made visible.
+  {
+    const r = Motion.random(11), wall = $('#wall');
+    for (let i = 0; i < 44; i += 1) {
+      const d = 1 + Math.floor(r() * 9), h = 1 + Math.floor(r() * 11), m = String(Math.floor(r() * 60)).padStart(2, '0'), s = String(Math.floor(r() * 60)).padStart(2, '0');
+      const row = document.createElement('div');
+      const a = `Screenshot 2026-10-0${d} at ${h}.${m}.${s} PM.png`;
+      const b = `Screenshot 2026-10-0${1 + Math.floor(r() * 9)} at ${1 + Math.floor(r() * 11)}.${String(Math.floor(r() * 60)).padStart(2, '0')}.${String(Math.floor(r() * 60)).padStart(2, '0')} AM.png`;
+      row.textContent = `${a}    ${b}`;
+      wall.appendChild(row);
+    }
+  }
+  Motion.on((t) => { $('#wall').style.translate = `0 ${-120 - t * 150}px`; });
+  // Negative starts: frame 0 is already mid-entrance, so the poster frame shows the whole hook.
+  Motion.from('#tag', { opacity: 0, y: 30 }, { start: -0.25, duration: 0.6, ease: 'strong' });
+  Motion.from(['#h1a', '#h1b', '#h1c'], { y: '30%', opacity: 0.0 }, { start: -0.42, duration: 0.7, ease: 'strong', stagger: 0.06 });
+  Motion.draw('#swoosh path', { start: 0.3, duration: 0.6, ease: 'strong' });
+  // Slow push on the headline so the poster never sits dead while the viewer reads.
+  Motion.to('#hook', { start: 0, duration: B(3.5), ease: 'smooth', from: { scale: 1 }, to: { scale: HOOK_SCALE } });
+  // Exit (B4): everything but the word leaves upward; the word becomes the query.
+  Motion.to(['#tag', '#h1a', '#h1b'], { start: B(3.45), duration: 0.26, ease: 'inCubic', stagger: 0.04, to: { y: -110, opacity: 0 } });
+  Motion.to('#hq', { start: B(3.45), duration: 0.2, ease: 'inCubic', to: { opacity: 0 } });
+  Motion.to('#swoosh', { start: B(3.6), duration: 0.2, ease: 'inCubic', to: { opacity: 0 } });
+  Motion.to(['#wall', '#veil'], { start: B(3.6), duration: 0.35, ease: 'inCubic', to: { opacity: 0, blur: 8 } });
+
+  // ---------------------------------------------------------------- S2 · describe it (B4 → B8)
+  const fly = { dx: 0, dy: 0, s: 1 };
+  Motion.ready(() => {
+    // Match cut: measure where the headline word sits and where the query word will sit.
+    const st = $('#stage').getBoundingClientRect(), k = st.width / W;
+    const a = $('#hword').getBoundingClientRect(), b = $('#qword').getBoundingClientRect(), h = $('#hook').getBoundingClientRect();
+    // The headline is pushed in to HOOK_SCALE (origin: left, vertical centre) by the time the word lifts off.
+    const ox = h.left, oy = h.top + h.height / 2;
+    const left = ox + (a.left - ox) * HOOK_SCALE, top = oy + (a.top - oy) * HOOK_SCALE;
+    // Scale by font size (the two line boxes have different line-heights) and align vertical centres.
+    const fs = (el) => parseFloat(getComputedStyle(el).fontSize);
+    fly.s = (fs($('#hword')) * HOOK_SCALE) / fs($('#qword'));
+    fly.dx = (left - b.left) / k;
+    fly.dy = (top + (a.height * HOOK_SCALE) / 2 - (b.top + (b.height * fly.s) / 2)) / k;
+  });
+  const FLY0 = B(3.9), FLY1 = B(4.85);
+  Motion.on((t) => {
+    const p = Motion.ease.strongInOut(Motion.clamp((t - FLY0) / (FLY1 - FLY0), 0, 1));
+    const q = $('#qword');
+    q.style.translate = `${fly.dx * (1 - p)}px ${fly.dy * (1 - p)}px`;
+    q.style.scale = String(fly.s + (1 - fly.s) * p);
+    // Bold headline word relaxes into the bar's medium weight and tracking as it lands (variable Geist).
+    q.style.fontWeight = String(Math.round(700 - 200 * p));
+    q.style.letterSpacing = `${-0.058 + 0.038 * p}em`;
+    q.style.opacity = t < FLY0 ? 0 : 1;
+    $('#hword').style.opacity = t < FLY0 ? 1 : 0;   // hard hand-off: exactly one copy of the word on screen
+  });
+  // The pill grows in around the word (the word itself is never faded: it is the match cut).
+  Motion.from(['#barbg', '#qicon'], { opacity: 0, scale: 0.94 }, { start: B(4), duration: 0.5, ease: 'strong' });
+  Motion.from('#cap2 .ln > span', { y: '130%' }, { start: B(4.1), duration: 0.6, ease: 'strong', stagger: 0.07 });
+  // Typing, with a caret that blinks only while idle.
+  Motion.on((t) => {
+    const n = Math.floor(Motion.clamp((t - TYPE0) * CPS, 0, REST.length));
+    $('#qrest').textContent = REST.slice(0, n).replace(/ /g, ' ');
+    const typing = t >= TYPE0 && t <= TYPE0 + REST.length / CPS + 0.1;
+    $('#caret').style.opacity = t < FLY1 - 0.1 ? 0 : (typing || Math.floor(t * 2.4) % 2 === 0 ? 1 : 0);
+  });
+  Motion.from('#ulbl', { opacity: 0, y: 20 }, { start: B(6.4), duration: 0.45, ease: 'strong' });
+  Motion.from('#ch1', { opacity: 0, y: 24, scale: 0.9 }, { start: B(6.55), duration: 0.45, ease: 'outBack' });
+  Motion.from('#ch2', { opacity: 0, y: 24, scale: 0.9 }, { start: B(6.85), duration: 0.45, ease: 'outBack' });
+  // Exit (B8): the whole search scrolls up and out.
+  Motion.to('#cap2 .ln > span', { start: B(7.75), duration: 0.28, ease: 'inCubic', to: { y: '-130%' } });
+  Motion.to(['#bar', '#und'], { start: B(7.6), duration: 0.3, ease: 'inCubic', stagger: 0.03, to: { y: -420 } });
+  Motion.to(['#bar', '#und'], { start: B(7.6) + 0.05, duration: 0.17, ease: 'linear', stagger: 0.03, to: { opacity: 0 } });
+
+  // ---------------------------------------------------------------- S3 · found (B8 → B12)
+  Motion.from('#cap3 .ln > span', { y: '130%' }, { start: B(8), duration: 0.6, ease: 'strong', stagger: 0.07 });
+  Motion.from('#card', { y: 700, rotate: 4, opacity: 0 }, { start: B(8.1), duration: 0.7, ease: 'strong' });
+  Motion.from('#panel', { y: 620, opacity: 0 }, { start: B(8.25), duration: 0.7, ease: 'strong' });
+  Motion.to('#hl', { start: B(9.55), duration: 0.42, ease: 'strongInOut', from: { '--r': '0%' }, to: { '--r': '100%' } });
+  Motion.to('#s3cam', { start: B(9.2), duration: 1.3, ease: 'smooth', from: { scale: 1 }, to: { scale: 1.13 } });
+  Motion.to('#cap3 .ln > span', { start: B(11.75), duration: 0.28, ease: 'inCubic', to: { y: '-130%' } });
+  Motion.to(['#card', '#panel'], { start: B(11.75), duration: 0.32, ease: 'inCubic', stagger: 0.04, to: { y: -620 } });
+  Motion.to(['#card', '#panel'], { start: B(11.75) + 0.04, duration: 0.16, ease: 'linear', stagger: 0.04, to: { opacity: 0 } });
+
+  // ---------------------------------------------------------------- S4 · free up space (B12 → B18)
+  Motion.from('#cap4 .ln > span', { y: '130%' }, { start: B(12), duration: 0.6, ease: 'strong', stagger: 0.07 });
+  Motion.from(['#c1', '#c2', '#c3'], { y: 640, opacity: 0 }, { start: B(12.1), duration: 0.65, ease: 'strong', stagger: 0.12 });
+  // Fold the cards into the toast: "moved to Trash".
+  // Each card travels to the toast's centre line while shrinking away.
+  [['#c1', 220], ['#c2', -30], ['#c3', -280]].forEach(([sel, dy], i) =>
+    Motion.to(sel, { start: B(15.4) + (2 - i) * 0.04, duration: 0.32, ease: 'inCubic', to: { y: dy, scale: 0.6 } }));
+  Motion.to(['#c3', '#c2', '#c1'], { start: B(15.4) + 0.06, duration: 0.2, ease: 'linear', stagger: 0.04, to: { opacity: 0 } });
+  Motion.from('#toast', { opacity: 0, y: 60, scale: 0.92 }, { start: B(16.05), duration: 0.45, ease: 'strong' });
+
+  // ---------------------------------------------------------------- S5 · flood → icon → end card (B18 → B24)
+  const fl = { cx: 540, cy: 960, ix: 0, iy: 0, iw: 0 };
+  Motion.ready(() => {
+    const st = $('#stage').getBoundingClientRect(), k = st.width / W;
+    const c = $('#tcheck').getBoundingClientRect(), ic = $('#icon').getBoundingClientRect();
+    fl.cx = (c.left + c.width / 2 - st.left) / k; fl.cy = (c.top + c.height / 2 - st.top) / k;
+    // The icon artwork's squircle fills ~80% of the PNG.
+    fl.iw = (ic.width / k) * 0.805; fl.ix = (ic.left - st.left) / k + (ic.width / k) * 0.0975; fl.iy = (ic.top - st.top) / k + (ic.height / k) * 0.087;
+  });
+  const F0 = B(17.45), F1 = B(18.1), S0 = B(18.25), S1 = B(19.05);
+  Motion.on((t) => {
+    const el = $('#flood');
+    if (t < S0) {
+      const p = Motion.ease.inCubic(Motion.clamp((t - F0) / (F1 - F0), 0, 1));
+      el.style.clipPath = `circle(${p * 2300}px at ${fl.cx}px ${fl.cy}px)`;
+      el.style.opacity = 1;
+    } else {
+      // Contract the full-screen flood into the icon's squircle.
+      const p = Motion.ease.strongInOut(Motion.clamp((t - S0) / (S1 - S0), 0, 1));
+      const top = fl.iy * p, left = fl.ix * p, right = (W - fl.ix - fl.iw) * p, bottom = (H - fl.iy - fl.iw) * p;
+      el.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px round ${p * fl.iw * 0.225}px)`;
+      el.style.opacity = I(t, [S1 - 0.12, S1 + 0.02], [1, 0]);
+    }
+  });
+  // Swap scenes while the flood covers the frame.
+  Motion.to('#s4', { start: F1, duration: 0.02, to: { opacity: 0 } });
+  Motion.to('#end', { start: F1, duration: 0.02, from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#icon', { start: S1 - 0.14, duration: 0.12, ease: 'linear', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#icon', { start: S1 - 0.02, duration: 0.5, ease: 'strong', from: { scale: 1 }, to: { scale: 1.04 } });
+  Motion.from('#word', { opacity: 0, y: 70 }, { start: B(18.7), duration: 0.65, ease: 'strong' });
+  Motion.from('#tagline', { opacity: 0, y: 50 }, { start: B(18.9), duration: 0.6, ease: 'strong' });
+  Motion.from('#pill', { opacity: 0, y: 40, scale: 0.9 }, { start: B(19.3), duration: 0.6, ease: { stiffness: 220, damping: 18 } });
+  Motion.from('#fine', { opacity: 0 }, { start: B(19.6), duration: 0.5, ease: 'strong' });
+</script>
+</body>
+</html>

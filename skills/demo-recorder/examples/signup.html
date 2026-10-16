@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create your workspace · Marigold</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1c1917; --muted: #78716c; --faint: #a8a29e; --line: #e7e5e4; --field: #fafaf9; --bg: #ffffff;
+    --brand: #ea7b16; --brand-deep: #c2410c; --brand-soft: #fff4e8; --ok: #16a34a; --ok-soft: #dcfce7;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 15px/1.5 "DM Sans", ui-sans-serif, -apple-system, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); -webkit-font-smoothing: antialiased; }
+  .wrap { display: grid; grid-template-columns: 1.08fr 1fr; height: 100%; }
+
+  /* Form side */
+  .form-side { padding: 30px 56px 28px; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+  .brand { display: flex; align-items: center; gap: 9px; font-weight: 700; font-size: 17px; letter-spacing: -.01em; }
+  .flower { width: 26px; height: 26px; position: relative; }
+  .flower i { position: absolute; left: 9px; top: 0; width: 8px; height: 13px; border-radius: 8px 8px 3px 3px; background: var(--brand); transform-origin: 4px 13px; }
+  .flower b { position: absolute; left: 8px; top: 8px; width: 10px; height: 10px; border-radius: 50%; background: #7c2d12; box-shadow: 0 0 0 2px #fff; }
+  .steps { margin-left: auto; font-size: 13px; color: var(--muted); }
+  .panel { margin: auto 0; width: 100%; max-width: 420px; }
+  h1 { font: 600 28px/1.15 Fraunces, Georgia, serif; letter-spacing: -.015em; margin: 0 0 6px; }
+  .sub { color: var(--muted); margin: 0 0 22px; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .field { margin-bottom: 14px; }
+  label.l { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+  .input { display: flex; align-items: center; height: 42px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); transition: border-color .15s, box-shadow .15s, background-color .15s; }
+  .input:focus-within { border-color: var(--brand); background: #fff; box-shadow: 0 0 0 4px rgba(234,123,22,.14); }
+  .input input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; font: inherit; color: var(--ink); padding: 0 13px; }
+  .input input::placeholder { color: var(--faint); }
+  .input .suffix { padding: 0 12px 0 0; color: var(--faint); font-size: 14px; white-space: nowrap; }
+  .hint { font-size: 12.5px; color: var(--muted); margin-top: 6px; display: flex; align-items: center; gap: 6px; min-height: 19px; }
+  .hint .url { font-weight: 600; color: var(--ink); transition: color .2s; }
+  .hint .url.live { color: var(--brand-deep); }
+  .hint .ok { width: 15px; height: 15px; border-radius: 50%; background: var(--ok-soft); color: var(--ok); display: none; place-items: center; font-size: 10px; font-weight: 700; }
+  .hint .ok.on { display: grid; }
+  .seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; padding: 3px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
+  .seg button { height: 34px; border: 0; background: transparent; font: 500 14px "DM Sans", sans-serif; color: var(--muted); border-radius: 7px; cursor: pointer; transition: background-color .2s, color .2s, box-shadow .2s; }
+  .seg button:hover { color: var(--ink); }
+  .seg button.on { background: #fff; color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgba(28,25,23,.08), 0 0 0 1px var(--line); }
+  .billing { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; margin: 4px 0 18px; transition: border-color .25s, background-color .25s; }
+  .billing.on { border-color: #fdd7ae; background: var(--brand-soft); }
+  .switch { width: 40px; height: 24px; border-radius: 999px; background: #d6d3d1; border: 0; padding: 0; position: relative; cursor: pointer; flex: none; transition: background-color .25s; }
+  .switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.2); transition: transform .25s cubic-bezier(.3,.9,.4,1.2); }
+  .switch[aria-checked="true"] { background: var(--brand); }
+  .switch[aria-checked="true"]::after { transform: translateX(16px); }
+  .billing .bt { font-weight: 600; font-size: 14px; }
+  .billing .bs { font-size: 12.5px; color: var(--muted); }
+  .save { font-size: 11px; font-weight: 700; color: var(--brand-deep); background: #ffedd5; padding: 2px 7px; border-radius: 999px; margin-left: 6px; letter-spacing: .02em; }
+  .price { margin-left: auto; text-align: right; font-variant-numeric: tabular-nums; }
+  .price b { font-size: 20px; letter-spacing: -.02em; display: inline-block; transition: transform .25s; }
+  .price s { color: var(--faint); font-size: 13px; margin-right: 4px; display: none; }
+  .billing.on .price s { display: inline; }
+  .price small { display: block; font-size: 12px; color: var(--muted); }
+  .submit { width: 100%; height: 46px; border: 0; border-radius: 11px; background: var(--ink); color: #fff; font: 600 15px "DM Sans", sans-serif; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; transition: background-color .2s, transform .1s; }
+  .submit:hover { background: #292524; }
+  .submit:active { transform: scale(.99); }
+  .submit .spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(255,255,255,.35); border-top-color: #fff; display: none; animation: spin .7s linear infinite; }
+  .submit.busy .spin { display: block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .legal { font-size: 12px; color: var(--faint); text-align: center; margin-top: 12px; }
+  .legal a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+
+  /* Success */
+  .done { display: none; text-align: left; max-width: 420px; }
+  .done.on { display: block; animation: up .5s cubic-bezier(.2,.8,.2,1); }
+  @keyframes up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+  .badge { width: 56px; height: 56px; border-radius: 50%; background: var(--ok-soft); display: grid; place-items: center; margin-bottom: 18px; animation: pop .5s .1s cubic-bezier(.3,1.5,.5,1) both; }
+  .badge svg { width: 28px; height: 28px; stroke: var(--ok); stroke-width: 3; fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 30; stroke-dashoffset: 30; animation: draw .45s .35s ease-out forwards; }
+  @keyframes pop { from { transform: scale(.4); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes draw { to { stroke-dashoffset: 0; } }
+  .done h1 { font-size: 30px; }
+  .done .ws { display: inline-flex; align-items: center; gap: 8px; margin: 4px 0 20px; padding: 7px 12px; border-radius: 9px; background: var(--field); border: 1px solid var(--line); font-weight: 600; }
+  .done .ws i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+  .next { list-style: none; padding: 0; margin: 0 0 22px; }
+  .next li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .next li span { width: 24px; height: 24px; border-radius: 7px; background: var(--brand-soft); color: var(--brand-deep); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+  .next li em { margin-left: auto; font-style: normal; color: var(--faint); font-size: 13px; }
+  .go { display: inline-flex; align-items: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 11px; background: var(--brand); color: #fff; font-weight: 600; text-decoration: none; }
+
+  /* Brand side */
+  /* Flat fills and solid shapes (no smooth gradients) so the panel stays clean in a 256-colour GIF. */
+  .brand-side { position: relative; overflow: hidden; background: #ee6a17; padding: 44px 40px; color: #431407; display: flex; flex-direction: column; }
+  .brand-side::before { content: ""; position: absolute; width: 520px; height: 520px; right: -190px; top: -210px; border-radius: 50%; background: #f27f2e; box-shadow: 0 0 0 70px #f07423, 0 0 0 150px #ef6f1d; }
+  .brand-side::after { content: ""; position: absolute; inset: 0; background: radial-gradient(rgba(255,255,255,.16) 1.2px, transparent 1.7px) 0 0 / 20px 20px; pointer-events: none; }
+  .brand-side > * { position: relative; z-index: 1; }
+  .quote { font: 500 22px/1.3 Fraunces, Georgia, serif; letter-spacing: -.01em; color: #fff; max-width: 360px; text-shadow: 0 1px 0 rgba(124,45,18,.15); }
+  .who { display: flex; align-items: center; gap: 10px; margin-top: 16px; color: #fff7ed; font-size: 13.5px; }
+  .who .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #fef3c7, #fdba74); display: grid; place-items: center; color: #7c2d12; font-weight: 700; font-size: 13px; border: 2px solid rgba(255,255,255,.6); }
+  .who b { color: #fff; display: block; }
+  .cards { margin-top: auto; display: grid; gap: 12px; }
+  .card { background: rgba(255,255,255,.94); border-radius: 14px; padding: 14px 16px; box-shadow: 0 20px 40px -18px rgba(124,45,18,.55); color: var(--ink); }
+  .inv { display: flex; align-items: center; gap: 12px; }
+  .inv .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--ok-soft); color: var(--ok); display: grid; place-items: center; font-weight: 700; }
+  .inv .t { font-weight: 600; font-size: 14px; }
+  .inv .s { font-size: 12.5px; color: var(--muted); }
+  .inv .amt { margin-left: auto; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bars { display: flex; align-items: flex-end; gap: 7px; height: 64px; margin-top: 10px; }
+  .bars i { flex: 1; border-radius: 4px 4px 2px 2px; background: #fed7aa; }
+  .bars i.hi { background: var(--brand); }
+  .card .lbl { display: flex; justify-content: space-between; font-size: 12.5px; color: var(--muted); }
+  .card .lbl b { color: var(--ink); font-size: 18px; letter-spacing: -.02em; }
+  .card.small { margin-left: 34px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="form-side">
+    <div class="brand"><span class="flower" id="flower"></span>Marigold <span class="steps" id="steps">Step 1 of 2 · Workspace</span></div>
+
+    <form class="panel" id="form" autocomplete="off" novalidate>
+      <h1>Set up your studio</h1>
+      <p class="sub">Invoices, time and payments in one place. Free for 14 days.</p>
+      <div class="row">
+        <div class="field"><label class="l" for="name">Your name</label><div class="input"><input id="name" placeholder="Jordan Lee"></div></div>
+        <div class="field"><label class="l" for="email">Work email</label><div class="input"><input id="email" type="email" placeholder="you@studio.com"></div></div>
+      </div>
+      <div class="field">
+        <label class="l" for="studio">Studio name</label>
+        <div class="input"><input id="studio" placeholder="Your studio"><span class="suffix">.marigold.app</span></div>
+        <div class="hint"><span class="ok" id="ok">✓</span><span id="urlLine">Your workspace URL: <span class="url" id="url">yourstudio</span>.marigold.app</span></div>
+      </div>
+      <div class="field">
+        <label class="l">Team size</label>
+        <div class="seg" id="seg" role="radiogroup" aria-label="Team size">
+          <button type="button" class="on" role="radio" aria-checked="true">Just me</button>
+          <button type="button" role="radio" aria-checked="false">2–5</button>
+          <button type="button" role="radio" aria-checked="false">6–15</button>
+          <button type="button" role="radio" aria-checked="false">16+</button>
+        </div>
+      </div>
+      <div class="billing" id="billing">
+        <button type="button" class="switch" id="annual" role="switch" aria-checked="false" aria-label="Annual billing"></button>
+        <div><div class="bt">Bill yearly <span class="save">SAVE 20%</span></div><div class="bs">Switch any time from Settings</div></div>
+        <div class="price"><s id="was">$29</s><b id="price">$29</b><small id="per">per seat / month</small></div>
+      </div>
+      <button class="submit" id="submit" type="submit"><span class="spin"></span><span id="submitLabel">Create workspace</span></button>
+      <div class="legal">By continuing you agree to the <a href="#">Terms</a> and <a href="#">Privacy Policy</a>.</div>
+    </form>
+
+    <div class="panel done" id="done" aria-live="polite">
+      <div class="badge"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h1 id="hello">You're in!</h1>
+      <div class="ws"><i></i><span id="wsUrl">studio.marigold.app</span> is ready</div>
+      <ul class="next">
+        <li><span>1</span>Add your first client<em>1 min</em></li>
+        <li><span>2</span>Connect payouts<em>2 min</em></li>
+        <li><span>3</span>Invite your team<em id="seats">optional</em></li>
+      </ul>
+      <a class="go" href="#">Open dashboard →</a>
+    </div>
+  </section>
+
+  <aside class="brand-side">
+    <div class="quote">“We stopped chasing invoices. Clients pay in two days now, and month-end takes an afternoon.”</div>
+    <div class="who"><span class="av">RO</span><div><b>Rosa Okafor</b>Founder, Lantern &amp; Loom Design</div></div>
+    <div class="cards">
+      <div class="card"><div class="lbl"><span>Paid this quarter</span><span>+18%</span></div><div class="lbl"><b>$48,260</b></div>
+        <div class="bars"><i style="height:38%"></i><i style="height:52%"></i><i style="height:44%"></i><i style="height:61%"></i><i style="height:57%"></i><i style="height:72%"></i><i class="hi" style="height:90%"></i></div></div>
+      <div class="card small"><div class="inv"><span class="ic">✓</span><div><div class="t">Invoice #1042 paid</div><div class="s">Harbor Coffee Co. · just now</div></div><span class="amt">$3,400</span></div></div>
+    </div>
+  </aside>
+</div>
+<script>
+  const $ = (s) => document.querySelector(s);
+  // Logo petals
+  const fl = $('#flower');
+  for (let i = 0; i < 8; i++) { const p = document.createElement('i'); p.style.transform = `rotate(${i * 45}deg)`; p.style.opacity = i % 2 ? .75 : 1; fl.appendChild(p); }
+  fl.appendChild(document.createElement('b'));
+
+  const slug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  $('#studio').addEventListener('input', (e) => {
+    const s = slug(e.target.value);
+    $('#url').textContent = s || 'yourstudio';
+    $('#url').classList.toggle('live', !!s);
+    $('#ok').classList.toggle('on', s.length > 2);
+  });
+  let seats = 'Just me';
+  $('#seg').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => {
+    $('#seg').querySelectorAll('button').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-checked', x === b); });
+    seats = b.textContent;
+  }));
+  $('#annual').addEventListener('click', (e) => {
+    const on = e.currentTarget.getAttribute('aria-checked') !== 'true';
+    e.currentTarget.setAttribute('aria-checked', on);
+    $('#billing').classList.toggle('on', on);
+    $('#price').textContent = on ? '$23' : '$29';
+    $('#per').textContent = on ? 'per seat / mo, billed yearly' : 'per seat / month';
+    $('#price').animate([{ transform: 'translateY(-6px)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 280, easing: 'ease-out' });
+  });
+  $('#form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const btn = $('#submit');
+    btn.classList.add('busy');
+    $('#submitLabel').textContent = 'Creating workspace…';
+    setTimeout(() => {
+      const first = ($('#name').value.trim().split(/\s+/)[0]) || 'there';
+      $('#hello').textContent = `You're in, ${first}!`;
+      $('#wsUrl').textContent = `${slug($('#studio').value) || 'studio'}.marigold.app`;
+      $('#seats').textContent = seats === 'Just me' ? 'optional' : `${seats} seats`;
+      $('#steps').textContent = 'Step 2 of 2 · Done';
+      $('#form').style.display = 'none';
+      $('#done').classList.add('on');
+    }, 1100);
+  });
+</script>
+</body>
+</html>

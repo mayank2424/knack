@@ -1,5 +1,5 @@
 // Cluster OFF-SCALE values into a minimal set of proposed new tokens.
-import { deltaE2000, colorFamily } from './color.mjs';
+import { deltaE2000, colorFamily, isPureBW, BW_MAX_DE } from './color.mjs';
 import { shadowDistance } from './values.mjs';
 
 const PREFIX = { color: '--color-', space: '--space-', radius: '--radius-', 'font-size': '--font-size-', 'font-weight': '--font-weight-',
@@ -25,7 +25,36 @@ function uniqueName(base, taken) {
   return n;
 }
 
-export function propose(findings, tokens, th, { all = false } = {}) {
+/**
+ * A color name for a cluster: the Tailwind-calibrated family-step, and when another cluster already
+ * took it, the neighbouring step this color leans toward (#d9480f next to #e8590c's orange-600 is
+ * orange-700), then the interpolated step (orange-650), and only then a numeric suffix.
+ */
+function colorName(prefix, color, taken) {
+  const { family, step, fine } = colorFamily(color);
+  if (step == null) return uniqueName(`${prefix}${family}`, taken);
+  const tries = [step];
+  if (Math.abs(fine - step) >= 20) {
+    const ladder = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
+    const i = ladder.indexOf(step);
+    const next = ladder[i + Math.sign(fine - step)];
+    if (next) tries.push(next);
+  }
+  const half = Math.round(fine / 50) * 50;
+  if (half !== step) tries.push(half);
+  tries.push(Math.round(fine / 10) * 10);
+  for (const st of tries) {
+    const n = `${prefix}${family}-${st}`;
+    if (!taken.has(n)) { taken.add(n); return n; }
+  }
+  return uniqueName(`${prefix}${family}-${step}`, taken);
+}
+
+/**
+ * Cluster values into proposed tokens. `all` clusters every value (no tokens yet), not only OFF-SCALE ones;
+ * clusters used fewer than `minUses` times are returned as one-offs instead of becoming tokens.
+ */
+export function propose(findings, tokens, th, { all = false, minUses = 2 } = {}) {
   // emails / OG images and JS data colors aren't part of the UI's system; categories with no tokens yet are exactly what to bootstrap
   const pool = findings.filter((f) => (all || f.status === 'OFF-SCALE') && (!f.excluded || f.excluded === 'no-tokens'));
   const taken = new Set(tokens.map((t) => t.name));
@@ -47,7 +76,12 @@ export function propose(findings, tokens, th, { all = false } = {}) {
       const f = it.sample;
       const home = clusters.find((c) => {
         const g = c.center.sample;
-        if (cat === 'color') return Math.abs(g.color.alpha - f.color.alpha) <= 0.05 && deltaE2000(g.color.lab, f.color.lab) <= Math.max(2.5, th.color * 0.75);
+        if (cat === 'color') {
+          const de = deltaE2000(g.color.lab, f.color.lab);
+          // pure white / black don't absorb off-whites (#f5f5f5, #fafafa) or get absorbed by them
+          if ((isPureBW(g.color) || isPureBW(f.color)) && de > BW_MAX_DE) return false;
+          return Math.abs(g.color.alpha - f.color.alpha) <= 0.05 && de <= Math.max(2.5, th.color * 0.75);
+        }
         if (cat === 'shadow') { const d = shadowDistance(g.shadow, f.shadow); return d.d !== Infinity && d.px <= 2 && d.de <= 3; }
         const a = g.px ?? g.n ?? g.ms, b = f.px ?? f.n ?? f.ms;
         if (cat === 'z-index' || cat === 'font-weight') return a === b;
@@ -56,14 +90,18 @@ export function propose(findings, tokens, th, { all = false } = {}) {
       });
       if (home) { home.members.push(it); home.count += it.count; } else clusters.push({ center: it, members: [it], count: it.count });
     }
+    // a cluster that contains pure white / black (within BW_MAX_DE) is that color, not the off-white next to it
+    if (cat === 'color') for (const cl of clusters) { const bw = cl.members.find((m) => isPureBW(m.sample.color)); if (bw) cl.center = bw; }
     const naming = namingFor(cat, tokens);
     for (const cl of clusters) {
       const f = cl.center.sample;
-      if (cl.count < 2 && !all) { oneOffs.push({ category: cat, value: displayValue(f), location: cl.center.locations[0] }); continue; }
+      if (cl.count < minUses) {
+        oneOffs.push({ category: cat, value: displayValue(f), count: cl.count, hex: f.color?.hex, members: cl.members.map((m) => displayValue(m.sample)), location: cl.center.locations[0], locations: cl.members.flatMap((m) => m.locations).slice(0, 5) });
+        continue;
+      }
       let value = displayValue(f), name, note;
       if (cat === 'color') {
-        const { family, step } = colorFamily(f.color);
-        name = uniqueName(`${naming.prefix}${family}-${step}`, taken);
+        name = colorName(naming.prefix, f.color, taken);
       } else if (cat === 'shadow') {
         name = uniqueName(`${naming.prefix}${proposals.filter((p) => p.category === 'shadow').length + 1}`, taken);
       } else if (cat === 'space' || cat === 'radius' || cat === 'font-size') {
@@ -88,7 +126,7 @@ export function propose(findings, tokens, th, { all = false } = {}) {
     }
   }
   proposals.sort((a, b) => b.count - a.count);
-  return { proposals, oneOffs, css: toCss(proposals) };
+  return { proposals, oneOffs, minUses, css: toCss(proposals, oneOffs, minUses) };
 }
 
 function displayValue(f) {
@@ -99,9 +137,14 @@ function displayValue(f) {
   return String(f.n);
 }
 
-function toCss(proposals) {
+/** "used once" / "used fewer than 3 times" */
+export const rareLabel = (minUses) => (minUses <= 2 ? 'used once' : `used fewer than ${minUses} times`);
+
+function toCss(proposals, oneOffs = [], minUses = 2) {
   if (!proposals.length) return '';
-  const lines = [':root {'];
+  const lines = [];
+  if (oneOffs.length) lines.push(`/* Left out: ${oneOffs.length} ${oneOffs.length === 1 ? 'value' : 'values'} ${rareLabel(minUses)} (listed in report.md; --min-uses 1 includes them). */`);
+  lines.push(':root {');
   for (const p of proposals) {
     const from = p.members.map((m) => `${m.value}×${m.count}`).join(', ');
     lines.push(`  /* ${p.count} ${p.count === 1 ? 'use' : 'uses'}: ${from}${p.note ? ' · ' + p.note : ''} */`);

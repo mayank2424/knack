@@ -58,6 +58,21 @@ check /settings and /billing for visual regressions before I merge
 bash scripts/setup.sh
 ```
 
+## Examples
+
+[`examples/`](examples/) holds three worked examples, each a real `capture.mjs` run on a
+fictional fixture, with the images and `summary.md` excerpts listed in
+[`examples/examples.json`](examples/examples.json) (selected images in `examples/output/`):
+
+- **[`hero-cta-regression`](examples/output/hero-cta-regression/)** (`before/` → `after/`):
+  an intended CTA restyle, plus a regression it causes on `/pricing` that `focus.png` makes obvious.
+- **[`theme-token-refresh`](examples/output/theme-token-refresh/)** (`theme-tokens/`): a
+  gray → slate token change too faint to see by eye, reported as `minor` with the colour pair
+  named (`#e5e7eb → #e2e8f0`). The sign-in page correctly stays at 0 pixels.
+- **[`banner-replaces-checklist`](examples/output/banner-replaces-checklist/)** (`layout-shift/`):
+  a banner added and a card removed. The diff reports "50px-tall block added" and "303px of
+  content removed" and shows the rest of the page as a blue moved band, not a regression.
+
 ## Run the example
 
 `examples/` holds two versions of a tiny static site. The "after" version is a PR called
@@ -83,10 +98,10 @@ pages/home/1280/...   pages/pricing/375/...   pages/pricing/1280/...   pages/abo
 
 | Page | Width | Result | Pixels changed | Notes |
 |---|---:|---|---:|---|
-| `/` | 375px | **changed** | 3.08% (+5.98% moved) | height 969 → 1039px; 2 changed regions; content from y≈482px moved down 71px |
-| `/` | 1280px | **changed** | 0.99% (+0.85% moved) | 1 changed region; content from y≈406px moved down 7px |
-| `/pricing` | 375px | **changed** | 3.02% (+3.53% moved) | height 1249 → 1271px; 3 changed regions; content from y≈555px moved down 7px; content from y≈886px moved down 16px |
-| `/pricing` | 1280px | **changed** | 1.23% (+0.20% moved) | 3 changed regions; content from y≈576px moved down 7px |
+| `/` | 375px | **changed** | 3.08% (5.98% moved) | height 969 → 1039px; 2 changed regions; content from y≈482px moved down 71px |
+| `/` | 1280px | **changed** | 0.99% (0.85% moved) | 1 changed region; content from y≈406px moved down 7px |
+| `/pricing` | 375px | **changed** | 3.02% (3.53% moved) | height 1249 → 1271px; 3 changed regions; content from y≈555px moved down 7px; content from y≈886px moved down 16px |
+| `/pricing` | 1280px | **changed** | 1.23% (0.20% moved) | 3 changed regions; content from y≈576px moved down 7px |
 | `/about` | 375px | unchanged | 0% |  |
 | `/about` | 1280px | unchanged | 0% |  |
 

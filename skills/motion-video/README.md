@@ -1,46 +1,51 @@
 # Motion Video
 
-> Storyboard → code → rendered MP4. Your agent becomes a motion designer that checks its own frames.
+> Brief or "go all out" → shot list → code → a scored, frame-accurate video. Your agent becomes a motion designer and director that checks its own frames.
 
 ![Templates rendered by this skill](assets/preview.png)
 
-**Motion Video** turns a one-line brief into a polished launch video, logo sting, kinetic-type piece, data story, app showcase or vertical social clip.
+**Motion Video** makes real MP4s, with synced sound, from one line:
+- open creative briefs such as the viral *"make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are… go all out"*
+- concrete jobs: launch videos, logo stings, kinetic type, data stories, app showcases and vertical social clips
 
-You get a real MP4, GIF, WebM or transparent MOV. The renderer is frame-accurate: Playwright captures every frame and ffmpeg encodes them. The animation is plain HTML and CSS on a tiny deterministic timeline, so anyone can edit it.
+Each video is plain HTML, CSS and canvas on a tiny deterministic timeline. Playwright captures every frame and ffmpeg encodes them, and a built-in synthesizer scores the picture: music on the beat grid, plus whooshes, hits and risers placed on every cut.
 
-The skill pins **Claude Opus** with `model: opus` and `effort: high`. Opus currently means Opus 5.5, the strongest model for taste-heavy, multi-step creative work.
+**Tested on Claude Opus 5.5.** The skill pins `model: claude-opus-5-5` with `effort: xhigh`. Other models are untested, and the instructions are tuned to how Opus 5.5 plans, critiques and iterates.
+
+## Two modes
+
+| Mode | Triggered by | Behaviour |
+|---|---|---|
+| **Creative freedom** | "go all out", "showreel", "impress me", "show what you can do" | No questions, no approval gate. It picks a concept with a single visual thread, an art direction, a BPM and 5–7 shots that each show a different technique. It builds them with match cuts and floods, scores the result, and reviews it against a reel rubric |
+| **Brief** | A product, feature, logo, stat or message | Asks up to 3 questions, gets your 👍 on a storyboard, then follows your brand |
+
+The creative mode is built to avoid the reel everyone gets from that prompt (dark background, neon accent, "MOTION / PRINCIPLES", particles spelling a name, a grain-and-timecode HUD). See [`references/showreel.md`](references/showreel.md).
 
 ## Why it's different
 
-| | Motion Video | Prompting an agent to "make a video" |
+| Aspect | Motion Video | Prompting an agent to "make a video" |
 |---|---|---|
-| Plans first | Writes a beat-sheet storyboard (timing, motion, purpose) and asks for a 👍 | Jumps straight to code |
-| Sees its output | Renders **filmstrips** and stills, reads them, fixes problems | Can't watch video, so ships blind |
-| Lints itself | `--check` flags off-frame text, overlapping text, tiny type, unloaded fonts, cut-off animations, empty poster frames | Not available |
-| Craft built in | Timing tables, easing vocabulary, choreography rules, platform safe zones | Generic tweens |
-| Zero lock-in | One HTML file plus a ~20 KB MIT runtime, no framework or license fees | Not applicable |
+| Plans first | A beat-grid shot list with a concept, palette and sound cues | Jumps straight to code |
+| Sound | Synthesized score and sound effects synced to every cut, mixed to -14 LUFS | Silent, or a separate tool |
+| Sees its output | Reads **filmstrips** and stills at every cut, then fixes what it finds | Can't watch video, so ships blind |
+| Lints itself | `--check` flags off-frame, overlapping or tiny text, unloaded fonts, cut-off animations and empty poster frames | Not available |
+| Craft built in | Concept seeds, a technique palette with code, editing rules, a reel rubric, timing tables and safe zones | Generic tweens |
+| Zero lock-in | One HTML file plus a small MIT runtime: no framework, no license fees | Not applicable |
 
 ## Example prompts
 
+- "Make a dynamic 15-second motion graphics video that shows what an incredible motion designer you are, like it's your showreel for a résumé. Go all out."
 - "Make a 12-second launch video for our v2 release. Use the colors from our Tailwind config."
 - "Create a 4-second logo sting from `public/logo.svg` at 60fps."
 - "Turn these three stats into an animated data story for LinkedIn (4:5)."
 - "Make a vertical Reel with 3 CSS tips, safe zones respected."
-- "Animate this screenshot with a camera push onto the analytics panel, and export a GIF for the README."
 - "Render a transparent lower-third with my name for a YouTube video."
-
-## What happens
-
-1. **Brief.** It infers platform, length and brand from your repo, and asks at most 3 questions.
-2. **Storyboard.** It writes `storyboard.md` with beats, timings and the reason each beat exists.
-3. **Build.** It scaffolds from one of 6 templates into `videos/<slug>/index.html`. Open the file to scrub through it live.
-4. **Self-review.** It runs `--check` and reads the `--filmstrip` contact sheet, fixing collisions, legibility and pacing.
-5. **Render.** It produces an MP4 (H.264), GIF, WebM, ProRes 4444 with alpha, or a PNG sequence, with optional music muxing and film-style motion blur. Colors are converted and tagged as BT.709, so brand colors match the browser (measured mean ΔE2000 ≈ 0.2 in Chrome).
 
 ## Templates
 
 | Template | Size | Length |
 |---|---|---|
+| `showreel` | 16:9, 60fps, scored | 15s |
 | `kinetic-type` | 16:9 | 10s |
 | `product-launch` | 16:9 | 13s |
 | `logo-sting` | 16:9, 60fps | 4s |
@@ -48,7 +53,24 @@ The skill pins **Claude Opus** with `model: opus` and `effort: high`. Opus curre
 | `app-showcase` | 16:9, 60fps | 10s |
 | `social-vertical` | 9:16 | 12s |
 
-`examples/knack-promo/` holds the composition behind the Knack website's hero video, so you can see a complete real-world piece.
+## Examples
+
+Four real runs, each with its composition and rendered output in [`examples/`](examples/). Three are briefs for shipping products, built from each product's own screenshots, copy and brand:
+
+| Example | Mode | Output |
+|---|---|---|
+| [Showreel, "go all out"](examples/showreel/) | Creative freedom | 15s, 60fps, synthesized 25-cue score |
+| [Copse launch film](examples/copse-launch/) | Brief, real Mac app | 15s 16:9, cut on the app's own ⌘⇧V keystroke |
+| [Tidzy vertical ad](examples/tidzy-vertical/) | Brief, real Mac app | 12s 9:16 with safe zones and a match-cut hook |
+| [CodeRelay explainer](examples/coderelay-explainer/) | Brief, real Chrome extension | 15s 16:9 problem → product → result |
+
+## Runtime highlights
+
+- Tweens with grid and center staggers, springs, and named premium easing curves.
+- `Motion.beats({ bpm })` for cutting on the beat, and `Motion.score()` / `Motion.cue()` for sound.
+- `Motion.canvas()`, `Motion.noise()` and `Motion.textPoints()` for particles and generative art.
+- `Motion.morph()` between any SVG shapes, plus `Motion.draw()`, `split()`, `counter()` and `type()`.
+- Seekable CSS animations and video elements, and a live preview player with a scrubber.
 
 ## Requirements
 
@@ -60,10 +82,10 @@ The skill pins **Claude Opus** with `model: opus` and `effort: high`. Opus curre
 
 ```bash
 bash scripts/setup.sh
-node scripts/new.mjs kinetic-type my-video
-open my-video/index.html                              # live preview with scrubber
-node scripts/render.mjs my-video/index.html --filmstrip
-node scripts/render.mjs my-video/index.html           # → my-video/index.mp4
+node scripts/new.mjs showreel my-reel
+open my-reel/index.html                                 # live preview with scrubber
+node scripts/render.mjs my-reel/index.html --filmstrip 20
+node scripts/render.mjs my-reel/index.html --trc srgb   # → my-reel/index.mp4 with the synthesized score
 ```
 
 See [`references/runtime-api.md`](references/runtime-api.md) for the full API.

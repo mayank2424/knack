@@ -12,6 +12,9 @@
  *   node affected-pages.mjs --all               # also list every route found
  *   node affected-pages.mjs --json
  *
+ * --dir and --files paths are relative to the current directory (like any shell path); a path
+ * that only exists relative to the repo root is accepted too.
+ *
  * Changed files = committed changes since the base + uncommitted + untracked files.
  * Confidence: high = the page file itself or a component it imports directly;
  * medium = reached through layouts or deeper imports; low = global/heuristic.
@@ -29,9 +32,31 @@ const IGNORE_DIRS = new Set(['node_modules', '.git', '.next', '.nuxt', '.output'
 const SRC_EXT = ['.tsx', '.ts', '.jsx', '.js', '.mjs', '.cjs', '.vue', '.svelte', '.astro', '.mdx', '.md', '.css', '.scss', '.sass', '.less', '.html'];
 const toPosix = (p) => p.split(path.sep).join('/');
 
+/**
+ * A path the user typed: relative to the current directory first (what a shell path means), then
+ * to the repo root. Returns an absolute real path (symlinks resolved, so it compares with the
+ * repo root git reports), or null when it exists in neither place.
+ */
+function userPath(p) {
+  for (const base of [process.cwd(), repo]) {
+    const abs = path.resolve(base, p);
+    if (fs.existsSync(abs)) return fs.realpathSync(abs);
+  }
+  return null;
+}
+const insideRepo = (abs) => { const r = path.relative(repo, abs); return !r.startsWith('..') && !path.isAbsolute(r); };
+
 // ----------------------------------------------------------- changed files
 let changed, baseInfo = null;
-if (opts.files) changed = list(opts.files).map(toPosix);
+if (opts.files) {
+  changed = list(opts.files).map((f) => {
+    // A deleted file exists nowhere: resolve it like a shell path, against the current directory.
+    let abs = userPath(f);
+    if (!abs) { const raw = path.resolve(f); const dir = userPath(path.dirname(raw)); abs = dir ? path.join(dir, path.basename(raw)) : raw; }
+    if (!insideRepo(abs)) die(`--files: ${f} is outside the repository (${repo}).`);
+    return toPosix(path.relative(repo, abs));
+  });
+}
 else {
   baseInfo = resolveBase(repo, opts.base || opts.ref);
   const committedAndDirty = git(['diff', '--name-only', baseInfo.sha], repo).split('\n');
@@ -42,7 +67,13 @@ if (!changed.length) { console.log('No changed files.'); console.log('PAGES='); 
 
 // ---------------------------------------------------------------- app root
 function findAppRoot() {
-  if (opts.dir) return path.resolve(repo, opts.dir);
+  if (opts.dir) {
+    const abs = userPath(opts.dir);
+    if (!abs) die(`--dir ${opts.dir} does not exist (looked in ${process.cwd()} and in the repo root ${repo}).`);
+    if (!fs.statSync(abs).isDirectory()) die(`--dir ${opts.dir} is not a folder: ${abs}`);
+    if (!insideRepo(abs)) die(`--dir ${opts.dir} is outside the repository (${repo}).`);
+    return abs;
+  }
   // Nearest package.json above each changed file; pick the folder holding the most changes.
   const votes = new Map();
   for (const f of changed) {

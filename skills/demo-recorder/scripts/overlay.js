@@ -1,8 +1,10 @@
 // Injected into the recorded page. Draws the synthetic cursor, click ripples,
 // highlight ring, caption and keystroke HUD inside a closed shadow root that
-// ignores pointer events. record.mjs computes every value per frame and calls
-// window.__knack.render(state), so nothing here depends on timers: output is
-// deterministic.
+// ignores pointer events. The cursor, ripples and highlight belong to the page
+// and zoom with it; the caption and HUD sit in a screen-space layer (.scr) that
+// cancels the camera, so a zoom never enlarges or crops them. record.mjs
+// computes every value per frame and calls window.__knack.render(state), so
+// nothing here depends on timers: output is deterministic.
 (() => {
   if (window.__knack) return;
   const ARROW = `<svg viewBox="0 0 28 28" width="28" height="28"><path d="M6 3.5v18.2l4.6-4.3 2.9 6.6 3.3-1.4-2.9-6.5h6.4z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>`;
@@ -22,7 +24,8 @@
     .rip { position: fixed; left: 0; top: 0; width: 0; height: 0; }
     .rip i { position: absolute; border-radius: 50%; transform: translate(-50%,-50%); }
     .hl { position: fixed; display: none; border-radius: 10px; transition: none; }
-    .cap, .keys { position: fixed; left: 50%; transform: translateX(-50%); display: none; white-space: nowrap;
+    .scr { position: absolute; left: 0; top: 0; width: 100%; height: 100%; transform-origin: 0 0; }
+    .cap, .keys { position: absolute; left: 50%; transform: translateX(-50%); display: none; white-space: nowrap;
       font: 600 22px/1.25 ui-sans-serif, -apple-system, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
       letter-spacing: -.01em; color: #fff; background: rgba(17,17,22,.82); padding: 12px 20px; border-radius: 14px;
       box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 0 0 1px rgba(255,255,255,.08);
@@ -41,11 +44,11 @@
     host.setAttribute('aria-hidden', 'true');
     host.style.cssText = 'position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;pointer-events:none!important;display:block!important;margin:0!important;padding:0!important;border:0!important;background:none!important;transform:none!important;';
     const root = host.attachShadow({ mode: 'closed' });
-    root.innerHTML = `<style>${CSS}</style><div class="hl"></div><div class="rip"></div><div class="cap"></div><div class="keys"></div>
+    root.innerHTML = `<style>${CSS}</style><div class="hl"></div><div class="rip"></div><div class="scr"><div class="cap"></div><div class="keys"></div></div>
       <div class="cg">${'<div class="ghost"></div>'.repeat(GHOSTS)}
       <div class="cur"><div data-k="arrow">${ARROW}</div><div data-k="hand">${HAND}</div><div data-k="ibeam">${IBEAM}</div></div></div>`;
     document.documentElement.appendChild(host);
-    els = { cg: root.querySelector('.cg'), ghosts: [...root.querySelectorAll('.ghost')], cur: root.querySelector('.cur'), rip: root.querySelector('.rip'), hl: root.querySelector('.hl'), cap: root.querySelector('.cap'), keys: root.querySelector('.keys'), kinds: {} };
+    els = { cg: root.querySelector('.cg'), ghosts: [...root.querySelectorAll('.ghost')], cur: root.querySelector('.cur'), rip: root.querySelector('.rip'), hl: root.querySelector('.hl'), scr: root.querySelector('.scr'), cap: root.querySelector('.cap'), keys: root.querySelector('.keys'), kinds: {} };
     root.querySelectorAll('[data-k]').forEach((n) => (els.kinds[n.dataset.k] = n));
     return true;
   }
@@ -125,6 +128,18 @@
         boxShadow: `0 0 0 3px ${h.color}, 0 0 0 9px ${h.color}33${h.dim ? `, 0 0 0 200vmax rgba(8,8,12,${0.45 * h.o})` : ''}`,
       });
     } else els.hl.style.display = 'none';
+    // Screen-space layer. The recorder captures the camera view as a clip of the
+    // page at scale v.s, its origin snapped to the output pixel grid (camClip in
+    // record.mjs). Moving this layer to that same origin and scaling it by 1/z
+    // puts its contents at fixed output pixels and at their normal size, whatever
+    // the zoom; the clip's extra resolution keeps the text sharp.
+    const v = s.view;
+    let scrT = 'none';
+    if (v && (v.z !== 1 || v.x || v.y)) {
+      const ox = Math.round((v.x + out.sx) * v.s) / v.s - out.sx, oy = Math.round((v.y + out.sy) * v.s) / v.s - out.sy;
+      scrT = `translate(${ox}px, ${oy}px) scale(${1 / v.z})`;
+    }
+    if (els.scr.style.transform !== scrT) els.scr.style.transform = scrT;
     // Caption
     const cap = s.caption;
     if (cap && cap.o > 0.001) {

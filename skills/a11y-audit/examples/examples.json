@@ -1,0 +1,91 @@
+{
+  "examples": [
+    {
+      "id": "marketing-page",
+      "title": "A marketing page with 19 planted accessibility bugs",
+      "prompt": "Audit this landing page for accessibility and fix everything serious.",
+      "summary": "A SaaS landing page built the way generated UIs often are: clickable divs, outline:none, placeholder-only fields, a newsletter form that traps Tab, a hover-only menu, a cookie bar that hides focused controls. axe-core plus the keyboard pass flag 20 rules (4 critical, 12 serious) and rank them in a Fix first list. The fixed twin, with semantic HTML, visible focus and real labels, comes back with 0 issues across 29 focus stops.",
+      "input": [
+        "inaccessible-page.html",
+        "accessible-page.html"
+      ],
+      "command": "node scripts/audit.mjs examples/inaccessible-page.html",
+      "result": "4 critical · 12 serious · 4 moderate → 0 on the fixed twin",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/marketing-page/inaccessible-page.annotated.png",
+          "alt": "Annotated screenshot of the Brightly landing page: solid orange boxes mark axe findings (image-alt, color-contrast, placeholder-label, select-name), dashed boxes mark keyboard-pass findings (kbd-unreachable nav items and feature cards, kbd-hover-only on Resources, kbd-focus-trap in the footer form), and magenta numbered badges show focus stops with no visible focus.",
+          "caption": "Before: solid boxes are axe findings, dashed boxes are keyboard-pass findings. Magenta badges are focus stops with no visible focus ring, and their numbers jump around because of a positive tabindex."
+        },
+        {
+          "type": "image",
+          "src": "output/marketing-page/accessible-page.annotated.png",
+          "alt": "Annotated screenshot of the fixed Brightly page: no issue boxes, only blue focus-order badges on the nav, hero buttons, cards, labelled form fields and footer.",
+          "caption": "After: the fixed twin. No issue boxes, and every focus stop is blue, meaning a visible focus indicator was measured."
+        }
+      ],
+      "excerpt": "## Fix first\n\nHighest impact first, then by how many elements one fix touches (fix the shared component or token once).\n\n1. `image-alt` (critical, 2 elements): Images must have alternative text\n2. `select-name` (critical, 2 elements): Select element must have an accessible name\n3. `button-name` (critical, 1 element): Buttons must have discernible text\n4. `kbd-focus-trap` (critical, 1 element): Keyboard focus is trapped\n5. `kbd-focus-not-visible` (serious, 12 elements): Focused element shows no visible focus indicator\n6. `kbd-unreachable` (serious, 8 elements): Clickable element cannot be reached with the keyboard\n7. `color-contrast` (serious, 5 elements): Elements must meet minimum color contrast ratio thresholds\n8. `placeholder-label` (serious, 4 elements): Form field is labelled only by its placeholder"
+    },
+    {
+      "id": "signup-form",
+      "title": "A subscription signup form that only looks finished",
+      "prompt": "Check our checkout signup form for accessibility problems and fix them.",
+      "summary": "A coffee-subscription signup shown right after a failed submit. The audit flags 7 fields named only by a placeholder, a light-red error message and a grey password hint that fail contrast, two custom checkboxes with no focus ring, and a 'Continue to payment' div that Tab never reaches. contrast.mjs gives the nearest passing shade of each color. Two planted bugs are not machine-checkable: the postcode error shown only as a red border, and errors not linked to their fields with aria-describedby. Those are left for the human review step, and the fixed twin fixes all six and passes clean.",
+      "input": [
+        "signup-form.html",
+        "signup-form-fixed.html"
+      ],
+      "command": "node scripts/audit.mjs examples/signup-form.html",
+      "result": "4 serious rules on 12 elements → 0 on the fixed twin",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/signup-form/signup-form.annotated.png",
+          "alt": "Annotated screenshot of the Oatfield Coffee signup form: every text field boxed as placeholder-label, the red error text and grey password hint boxed as color-contrast, the two custom checkboxes marked with magenta badges for no visible focus, and the Continue to payment bar dashed as kbd-unreachable.",
+          "caption": "Before: placeholder-only fields, two contrast failures, checkboxes with no focus ring (magenta badges 11 and 12), and a div submit button the keyboard can't reach."
+        },
+        {
+          "type": "image",
+          "src": "output/signup-form/signup-form-fixed.annotated.png",
+          "alt": "Annotated screenshot of the fixed signup form: visible labels above every field, error messages with an icon in darker red under the email and postcode fields, a darker password hint, and 14 blue focus badges ending on a real Continue to payment button.",
+          "caption": "After: visible labels, errors as text and icon tied to the field, the colors contrast.mjs suggested (#7e7570 hint, #cf474c errors), a focus ring on the checkbox, and a real button as stop 14."
+        }
+      ],
+      "excerpt": "$ node scripts/contrast.mjs \"#a8a29e\" \"#ffffff\"\n#a8a29e on #ffffff  →  2.52:1\n  FAIL  AA                     needs 4.5:1\n  FAIL  AAA                    needs 7:1\n  FAIL  UI / large-text (3:1)  needs 3:1\n\n  Nearest fg for 4.5:1 (same hue; ΔE = OKLab distance, 0.02 ≈ just noticeable):\n    #7e7570  4.50:1  darker  ΔE 0.147  oklch(56.9% 0.014 51.2)"
+    },
+    {
+      "id": "app-shell-modals",
+      "title": "An app shell whose modals leak focus and ignore Escape",
+      "prompt": "Make the inbox nav and the New ticket modal keyboard accessible.",
+      "summary": "A support-desk inbox with a hover-only Reports menu and two hand-rolled modals, audited with --state to open each one. In the New ticket modal, Tab walks through 12 inbox controls hidden behind the backdrop, reported as focus leaking out of the open modal (kbd-focus-outside-modal), and Escape does nothing. The Keyboard shortcuts modal closes on Escape but drops focus to <body> instead of its button. With a disclosure button for the menu and native <dialog> with showModal() for both modals, all three states pass.",
+      "input": [
+        "app-shell.html",
+        "app-shell-fixed.html"
+      ],
+      "command": "node scripts/audit.mjs examples/app-shell.html --state \"#new-ticket\" --state \"#shortcuts-btn\"",
+      "result": "2 serious + 2 moderate across 3 states → 0",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/app-shell-modals/new-ticket-modal.annotated.png",
+          "alt": "Annotated screenshot of the Kitebird inbox with the New ticket modal open: focus badges 1 to 12 sit on the New ticket button, Bulk actions, filter chips and ticket links behind the dimmed backdrop, each dashed and labelled kbd-focus-outside-modal, before badges 13 to 19 reach the modal's own controls.",
+          "caption": "State 1 (after clicking New ticket): focus stays on the trigger, and the first 12 Tab stops are inbox controls behind the open modal's backdrop. The modal's own fields only come at stops 13 to 19."
+        },
+        {
+          "type": "image",
+          "src": "output/app-shell-modals/new-ticket-modal-fixed.annotated.png",
+          "alt": "Annotated screenshot of the fixed New ticket dialog: six blue focus badges, all inside the dialog, from Customer email to Create ticket.",
+          "caption": "Fixed: native <dialog> with showModal(). Focus starts on the autofocused email field, Tab stays inside, Escape closes the dialog and focus returns to New ticket."
+        },
+        {
+          "type": "image",
+          "src": "output/app-shell-modals/reports-menu.annotated.png",
+          "alt": "Top bar of the Kitebird inbox with focus badges on each tab and the Reports tab boxed with a dashed kbd-hover-only label.",
+          "caption": "Base page: hovering Reports opens a 3-link submenu, but focusing it does not, so kbd-hover-only."
+        }
+      ],
+      "excerpt": "1. `kbd-focus-outside-modal` (serious, 12 elements, 1 page): Focus leaves the open modal for the page hidden behind it\n2. `kbd-hover-only` (serious, 1 element, 1 page): Menu opens on mouse hover but not from the keyboard\n3. `kbd-dialog-escape` (moderate, 1 element, 1 page): Escape does not close the open modal dialog (ARIA APG dialog pattern)\n4. `kbd-dialog-focus-return` (moderate, 1 element, 1 page): Closing the dialog does not return focus to its trigger\n\n## Keyboard: app-shell--state-1 (state: `#new-ticket`)\n| 1 | `#new-ticket` | New ticket | yes · **behind open modal `#ticket-backdrop > div.modal`** |\n| 2 | `div.head:nth-of-type(1) > button.btn.btn-ghost` | Bulk actions | yes · **behind open modal `#ticket-backdrop > div.modal`** |\n\n  - After Escape closed the dialog, focus went to the page body instead of the trigger `#shortcuts-btn`."
+    }
+  ]
+}

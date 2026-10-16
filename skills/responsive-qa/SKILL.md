@@ -76,7 +76,9 @@ Output goes to `./.knack/responsive-qa/` in the current project: `contact-sheet.
 
 1. **Read the contact sheet image.** Each column is one viewport, labelled with its error/warning counts and `↔ +Npx` when the page scrolls sideways. Red solid boxes are errors, amber dashed boxes are warnings. Numbers match the list under each column.
 2. For any viewport with errors, **Read its screenshot** in `shots/` at full size to see exactly what breaks. A `+Npx →` marker on the right edge means the element runs N px off-screen.
-3. Read the terminal summary (also printed at the top of the contact sheet), which groups each bug once with the widths where it occurs (`@320–414`) and folds sibling elements into one line (`4× div.social > a`). Read `report.json` for details: each issue has `check`, `severity`, `selector`, `message`, `box` (page coordinates), `element` (tag, id, classes, text) and `details.hints` (the likely cause, such as `min-width: auto`, `width="640" attribute`, or `flex row without flex-wrap`).
+3. Read the terminal summary (also printed at the top of the contact sheet), which groups each bug once with the widths where it occurs (`@320–414`) and folds sibling elements into one line (`4× div.social > a`). Read `report.json` for details: each issue has `check`, `severity`, `selector`, `message`, `box` (page coordinates), `element` (tag, id, classes, text) and `details.hints` (the likely cause, such as `min-width: auto`, `CSS width: 720px`, `width="640" attribute` (only when the attribute, not CSS, sets the width), or `flex row without flex-wrap`).
+4. When a grid/flex item is blamed for not shrinking (`grid item wider than its track`), the hint also says **what makes it wide**: the sweep lets the item shrink for a moment and lists what inside it would still overflow (`details.causes`, printed as `·` lines with their own hints). Fix the item and those causes in the same pass.
+5. For `anchor-hidden`, the screenshot hatches the strip the header covers right after the jump, and `shots/<page>/<w>x<h>-jump-<id>.png` (`details.jumpScreenshot`) shows the screen the reader actually sees after clicking the link.
 
 Checks and their default severity:
 
@@ -131,7 +133,7 @@ Fix the shared component or stylesheet rule, not each call site.
 ```bash
 node "${CLAUDE_SKILL_DIR}/scripts/sweep.mjs" <same url + options> --compare
 ```
-`--compare` prints `✓ N fixed · ✖ N new · N remaining` and lists both. Look at the new contact sheet again. A fix at one width can break another (new issues show up as `+`). Repeat steps 3–6 until there are **zero errors** and every remaining warning is fixed or deliberately accepted. If HMR doesn't pick up a change (rare), reload the dev server.
+`--compare` prints `✓ N fixed · ✖ N new · N remaining` and lists both (up to 10 grouped lines each, then `+N more`; the full lists are `compare.newIssues` / `compare.fixedIssues` in `report.json`). Look at the new contact sheet again. A fix at one width can break another (new issues show up as `+`). Repeat steps 3–6 until there are **zero errors** and every remaining warning is fixed or deliberately accepted. If HMR doesn't pick up a change (rare), reload the dev server.
 
 ## 8. Report back
 

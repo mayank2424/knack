@@ -25,6 +25,7 @@
  *   --gif-width N         GIF width (default 960)      --gif-fps N   GIF frame rate (default 15)
  *   --crf N               MP4 quality, lower = better/larger (default 20)
  *   --sheet N             Frames in the contact sheet (default 12); --no-sheet to skip
+ *   --sheet-width N       Width of the contact sheet / dry-run steps sheet in px (default 1600)
  *   --realtime            Do not virtualise time (use for pages with <video>/WebGL that break under it)
  *   --no-cursor           Hide the synthetic cursor
  *   --cursor-size N       Cursor scale (default 1.35)    --cursor-blur N   Motion-blur shutter, 0 = off (default 0.5)
@@ -48,7 +49,7 @@ import {
 import { candidatesInPage } from './candidates.mjs';
 
 const opts = parseArgs(process.argv.slice(2), {
-  value: ['out', 'format', 'viewport', 'scale', 'fps', 'background', 'title', 'max-seconds', 'speed', 'max-width', 'gif-width', 'gif-fps', 'crf', 'name', 'timeout', 'cursor-size', 'cursor-blur'],
+  value: ['out', 'format', 'viewport', 'scale', 'fps', 'background', 'title', 'max-seconds', 'speed', 'max-width', 'gif-width', 'gif-fps', 'crf', 'name', 'timeout', 'cursor-size', 'cursor-blur', 'sheet-width'],
   optional: ['trim-idle', 'sheet'],
   alias: { '-o': '--out', '-h': '--help' },
 });
@@ -93,6 +94,8 @@ const formats = (Array.isArray(formatSrc) ? formatSrc : String(formatSrc).split(
 for (const f of formats) if (!['mp4', 'gif', 'webm'].includes(f)) die(`Unsupported format "${f}". Use mp4, gif or webm.`);
 const outDir = outFlag ? path.dirname(path.resolve(outFlag)) : path.resolve('.knack/demo-recorder');
 const outBase = outFlag ? path.resolve(outFlag).replace(/\.(mp4|gif|webm)$/i, '') : path.join(outDir, name);
+// Paths in messages: relative when inside the working directory, so logs are short and shareable.
+const shown = (p) => { const r = path.relative(process.cwd(), p); return r && !r.startsWith('..') && !path.isAbsolute(r) ? r : p; };
 const trimIdle = opts['trim-idle'] === true ? 1000 : +pick('trim-idle', 'trimIdle', 0) || 0;
 const maxSeconds = +pick('max-seconds', 'maxSeconds', 0) || 0;
 const speed = +pick('speed', 'speed', 1) || 1;
@@ -101,6 +104,7 @@ const gifWidth = +pick('gif-width', 'gifWidth', Math.min(960, W));
 const gifFps = +pick('gif-fps', 'gifFps', 15);
 const crf = +pick('crf', 'crf', 20);
 const sheetN = opts.sheet === false ? 0 : opts.sheet === true || opts.sheet === undefined ? +(flow.sheet ?? 12) : +opts.sheet;
+const sheetWidth = clamp(Math.round(+pick('sheet-width', 'sheetWidth', 1600)) || 1600, 480, 4000);
 const STEP_TIMEOUT = +pick('timeout', 'timeout', 8000);
 
 const frameRaw = opts.frame !== undefined ? opts.frame : flow.frame;
@@ -242,8 +246,11 @@ function cursorAt(t) {
   return { x: u * u * m.fx + 2 * u * e * m.cx + e * e * m.x, y: u * u * m.fy + 2 * u * e * m.cy + e * e * m.y };
 }
 
-function overlayState(t) {
+function overlayState(t, shotScale = SCALE * S.cam.z) {
   const st = { cursor: { ...S.cursor, size: cursorCfg.size, down: 0, kind: undefined }, ripples: [], scroll: S.scroll };
+  // Camera view (origin in viewport CSS px, zoom, capture scale): the overlay uses it
+  // to keep captions and the keystroke HUD in screen space while the page zooms.
+  st.view = { ...camView(), s: shotScale };
   const sinceKey = t - S.lastInput;
   st.caretOn = sinceKey < 600 || Math.floor((sinceKey - 600) / 530) % 2 === 1;
   // Cursor motion blur: extra samples spread over the shutter interval behind the
@@ -299,16 +306,23 @@ function updateCamera(t) {
     c.cy = cy + (ty - cy) * k;
   }
 }
-function camClip(sx, sy, padPx = 6) {
+/** Top-left of the camera view in viewport CSS px, and its zoom. */
+function camView() {
   const { z } = S.cam, vw = W / z, vh = H / z;
+  return { x: clamp(S.cam.cx - vw / 2, 0, W - vw), y: clamp(S.cam.cy - vh / 2, 0, H - vh), z };
+}
+function camClip(sx, sy, padPx = 6) {
+  const { z } = S.cam;
   const s = SCALE * z;
   // Snap the clip origin to the output pixel grid so content never shifts by a
   // fraction of a pixel between frames. Chrome places the origin exactly but
   // truncates the clip size by 1-3 px at fractional scales; scaling those frames
   // back up to W*SCALE x H*SCALE stretched them non-uniformly (visible wobble
   // during zooms). So capture a few pixels extra and crop exactly at encode time.
+  // overlay.js snaps its screen-space layer with the same formula.
   const snap = (v) => Math.round(v * s) / s;
-  const x = snap(clamp(S.cam.cx - vw / 2, 0, W - vw) + sx), y = snap(clamp(S.cam.cy - vh / 2, 0, H - vh) + sy);
+  const v = camView();
+  const x = snap(v.x + sx), y = snap(v.y + sy);
   return { x, y, width: (W * SCALE + padPx) / s, height: (H * SCALE + padPx) / s, scale: s };
 }
 const pngSize = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
@@ -450,6 +464,18 @@ async function animate(dur, fn) {
   const t0 = now();
   let p = 0;
   do { await tick((t) => { p = dur > 0 ? clamp((t - t0) / dur, 0, 1) : 1; fn(p); }); } while (p < 1);
+}
+
+// Dry run: a blocking highlight or caption has ended by the time the step is
+// over, so the after-step screenshot would miss it. Take that step's screenshot
+// while it shows instead (same total hold, so timing is unchanged).
+let midShot = null;
+async function holdWithShot(ms, visibleMs) {
+  if (!midShot) return hold(ms);
+  const at = clamp(Math.min(visibleMs / 2, 600), 0, ms);
+  await hold(at);
+  await midShot();
+  await hold(ms - at);
 }
 
 // ------------------------------------------------------------------ targets
@@ -708,14 +734,14 @@ async function runStep(step) {
       await loc.evaluate((el) => { window.__knackHl = el; });
       const dur = +(step.duration ?? 1500);
       S.highlight = { t0: now(), t1: now() + dur, dim: !!step.dim, color: step.color || cursorCfg.color, padding: step.padding ?? 8, radius: step.radius ?? 12 };
-      if (step.block !== false) await hold(dur + 300);
+      if (step.block !== false) await holdWithShot(dur + 300, dur);
       break;
     }
     case 'caption': {
       if (v === false) { if (S.caption) S.caption.t1 = Math.min(S.caption.t1, now()); break; }
       const dur = step.duration === 0 ? Infinity : +(step.duration ?? 2200);
       S.caption = { text: String(v), position: step.position || 'bottom', t0: now(), t1: now() + dur };
-      if (step.block) await hold(dur === Infinity ? 1500 : dur);
+      if (step.block) await holdWithShot(dur === Infinity ? 1500 : dur, dur);
       break;
     }
     case 'cursor': {
@@ -734,16 +760,17 @@ async function runStep(step) {
 
 // Dry-run screenshot of what the viewer will see after a step: the camera view
 // (zoom) at 1x, with captions, keystroke HUD and highlights drawn at full opacity
-// even if they are still fading in, so the steps sheet shows them.
-async function dryShot(file) {
-  const t = now(), st = overlayState(t);
-  for (const k of ['caption', 'keys', 'highlight']) if (st[k] && S[k] && t < S[k].t1) st[k].o = 1;
+// even if they are still fading in, so the steps sheet shows them. A keystroke HUD
+// that appeared during the step is drawn even if a long pause outlasted it.
+async function dryShot(file, stepT0 = -Infinity) {
+  const t = now(), { z } = S.cam, st = overlayState(t, z);
+  for (const k of ['caption', 'keys', 'highlight']) if (st[k] && S[k] && (t < S[k].t1 || (k === 'keys' && S[k].t0 >= stepT0))) st[k].o = 1;
   st.ripples = [];
   delete st.cursor.trail;
   const r = await page.evaluate(FRAME_FN, [0, st]).catch(() => null);
-  const { z } = S.cam, vw = W / z, vh = H / z;
-  const sx = r?.sx ?? 0, sy = r?.sy ?? 0;
-  const clip = { x: clamp(S.cam.cx - vw / 2, 0, W - vw) + sx, y: clamp(S.cam.cy - vh / 2, 0, H - vh) + sy, width: vw, height: vh, scale: z };
+  const v = camView(), vw = W / z, vh = H / z;
+  const sx = r?.sx ?? 0, sy = r?.sy ?? 0, snap = (n) => Math.round(n * z) / z;
+  const clip = { x: snap(v.x + sx), y: snap(v.y + sy), width: vw, height: vh, scale: z };
   const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip }).catch(() => null);
   if (shot) fs.writeFileSync(file, Buffer.from(shot.data, 'base64')); else await page.screenshot({ path: file });
 }
@@ -764,6 +791,10 @@ async function run(list, { label, shoot }) {
     const step = list[i];
     if (label === 'steps') curStep = i;
     log(`[${label === 'setup' ? 'setup ' : ''}${i + 1}/${list.length}] ${describe(step)}`);
+    const shotFile = shoot ? path.join(stepsDir, `${String(i + 1).padStart(2, '0')}-${actionOf(step)}.png`) : null;
+    const stepT0 = now();
+    let shotT = null;
+    if (shoot) midShot = async () => { await dryShot(shotFile, stepT0); shotT = now(); midShot = null; };
     try {
       await runStep(step);
     } catch (e) {
@@ -777,16 +808,16 @@ async function run(list, { label, shoot }) {
         console.error('  Visible elements that look similar (selector → what it is):');
         for (const c of cands) console.error(`    ${c.selector}   ← ${c.role} "${c.name}"`);
       }
-      console.error(`  Screenshot of the page at failure: ${errShot}`);
+      console.error(`  Screenshot of the page at failure: ${shown(errShot)}`);
       console.error('  Tip: run inspect.mjs on the URL to list selectors, then fix the flow and re-run with --dry-run.');
       if (pageErrors.length) console.error(`  Page errors: ${pageErrors.slice(-3).join(' | ')}`);
       await browser.close();
       process.exit(1);
     }
+    midShot = null;
     if (shoot) {
-      const f = path.join(stepsDir, `${String(i + 1).padStart(2, '0')}-${actionOf(step)}.png`);
-      await dryShot(f);
-      stepShots.push({ file: f, label: `${i + 1}. ${describe(step)}`, t: now() });
+      if (shotT === null) await dryShot(shotFile, stepT0);
+      stepShots.push({ file: shotFile, label: `${i + 1}. ${describe(step)}`, t: shotT ?? now() });
     }
   }
 }
@@ -809,8 +840,8 @@ if (DRY) {
   const sheet = `${outBase}-steps.png`;
   await buildSheet(stepShots.map((s) => ({ src: s.file, caption: s.label })), sheet, `${name} · dry run · ${flow.steps.length} steps · ~${est.toFixed(1)}s`);
   ok(`All ${flow.steps.length} steps passed. Estimated length ≈ ${est.toFixed(1)}s${est > 15 ? ' (long: aim for < 15s)' : ''}.`);
-  ok(`Step screenshots → ${stepsDir}`);
-  ok(`Steps sheet (open this to review) → ${sheet}`);
+  ok(`Step screenshots → ${shown(stepsDir)}`);
+  ok(`Steps sheet (open this to review) → ${shown(sheet)}`);
   if (pageErrors.length) warn(`Page errors during run: ${pageErrors.slice(-3).join(' | ')}`);
   await browser.close();
   process.exit(0);
@@ -962,9 +993,14 @@ catch (e) { await browser.close(); die(`Encoding failed:\n${e.message}`); }
 log(`Encoded in ${((Date.now() - encStart) / 1000).toFixed(1)}s`);
 
 // ------------------------------------------------------------------ contact sheet
+// Contact sheet: a grid of frames sheetWidth px wide, written as a 256-colour
+// palette PNG when ffmpeg is available. A 24-bit 1840 px sheet was 400-530 KB;
+// 1600 px (about what an image reader shows without downscaling) with one palette
+// for the whole sheet is 108-149 KB on the bundled examples, and UI text survives
+// 256 colours well.
 async function buildSheet(items, out, header) {
   const cols = items.length <= 4 ? 2 : items.length <= 9 ? 3 : 4;
-  const thumbW = cols === 2 ? 720 : cols === 3 ? 560 : 440;
+  const thumbW = Math.floor((sheetWidth - 16) / cols) - 16;
   const p = await browser.newPage({ viewport: { width: cols * (thumbW + 16) + 16, height: 200 } });
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
   await p.setContent(`<!doctype html><body style="margin:0;background:#141418;font:600 13px/1.35 ui-monospace,Menlo,monospace;color:#d4d4d8">
@@ -975,8 +1011,16 @@ async function buildSheet(items, out, header) {
   await p.waitForLoadState('load');
   const h = await p.evaluate(() => document.body.scrollHeight);
   await p.setViewportSize({ width: cols * (thumbW + 16) + 16, height: h });
-  await p.screenshot({ path: out, fullPage: true });
+  const buf = await p.screenshot({ fullPage: true });
   await p.close();
+  if (!hasFfmpeg()) { fs.writeFileSync(out, buf); return; }
+  // No dithering: it adds noise around text and makes the PNG larger.
+  const tmp = `${out}.rgb.png`;
+  fs.writeFileSync(tmp, buf);
+  try {
+    await ffmpeg(['-y', '-i', tmp, '-vf', 'split[a][b];[a]palettegen=max_colors=256:stats_mode=full:reserve_transparent=0[p];[b][p]paletteuse=dither=none', '-frames:v', '1', '-compression_level', '9', out]);
+    fs.rmSync(tmp);
+  } catch { fs.renameSync(tmp, out); }
 }
 let sheetPath = null;
 if (sheetN > 0 && outputs.length) {
@@ -1014,7 +1058,7 @@ await browser.close();
 if (opts['keep-frames']) ok(`Raw frames kept → ${frameDir}`);
 else fs.rmSync(frameDir, { recursive: true, force: true });
 for (const o of outputs) {
-  ok(`${o.fmt.toUpperCase()} → ${o.out} (${fmtBytes(o.size)}, ${(total / 1000).toFixed(1)}s)`);
+  ok(`${o.fmt.toUpperCase()} → ${shown(o.out)} (${fmtBytes(o.size)}, ${(total / 1000).toFixed(1)}s)`);
   if (o.size > 10e6) warn(`${path.basename(o.out)} is over 10 MB: GitHub rejects larger ${o.fmt === 'gif' ? 'images' : 'videos on free plans'}. ${o.fmt === 'gif' ? 'Try --gif-width 720 --gif-fps 12, --trim-idle, a shorter flow, or ship the MP4.' : 'Try --crf 26, --max-width 1280 or a shorter flow.'}`);
 }
 if (textPx > 0) {
@@ -1022,10 +1066,11 @@ if (textPx > 0) {
   const canvasW = FG ? FG.CW : W;
   const at = (w) => (textPx * Math.min(1, w / canvasW)).toFixed(1);
   const msg = `Legibility: typical text is ${textPx}px; shown ~${at(880)}px at README width (880px), ~${at(390)}px on a phone.`;
-  if (+at(880) < 11) warn(`${msg} Small: use a smaller viewport (e.g. 960x600), zoom on the detail, or drop --frame.`); else ok(msg);
+  const fixes = [W > 960 ? 'use a smaller viewport (e.g. 960x600)' : null, 'zoom on the detail', FG ? 'drop the window frame (--no-frame)' : null].filter(Boolean);
+  if (+at(880) < 11) warn(`${msg} Small: ${fixes.slice(0, -1).join(', ')}${fixes.length > 1 ? ' or ' : ''}${fixes[fixes.length - 1]}.`); else ok(msg);
 }
 if (total / 1000 > 15) warn(`Clip is ${(total / 1000).toFixed(1)}s. Demos under ~15s get watched to the end; consider splitting it or --trim-idle / --speed 1.2.`);
-if (sheetPath) ok(`Contact sheet (open this to review) → ${sheetPath}`);
+if (sheetPath) ok(`Contact sheet (open this to review) → ${shown(sheetPath)}`);
 if (pageErrors.length) warn(`Page errors during recording: ${pageErrors.slice(-3).join(' | ')}`);
 
 function mulberry32(a) {

@@ -91,6 +91,14 @@ Reports land in `./.knack/token-drift/` (`report.md` with color swatches, a "Wha
 
 The fixture has planted drift in five flavors: near-miss hex colors, `15px` vs a `16px` token, Tailwind arbitrary values, JSX inline styles and an `oklch()` near-match. It also includes traps the scanner must ignore: comments, SVG path data, a commented-out `<div>`, and JSX text with apostrophes.
 
+## Examples
+
+Three worked examples in [`examples/`](examples/), each a real run of `tokens.mjs` / `scan.mjs` on a bundled fixture, with rendered report sections and terminal excerpts in [`examples/output/`](examples/output/) (manifest: [`examples/examples.json`](examples/examples.json)):
+
+- **Tailwind v3 dashboard** (`acme-dashboard/`): Tailwind config, CSS variables and SCSS. 48 EXACT, 10 NEAR, 14 OFF-SCALE. `--fix` rewrites 41 values (13% → 63%) and lists the 3 that will now follow dark mode. `--fix=near` takes it to 74%.
+- **Tailwind v4 + shadcn-style tokens** (`nimbus-notes/`): `@theme inline` over light/dark CSS variables, with components full of `p-[13px]`, `text-[#0a0a0a]` and `bg-[oklch(…)]`. 49 safe fixes to semantic classes (18% → 85%), 15 of them flagged as theme-aware. Midway values like `p-[13px]` are left for a human.
+- **No tokens yet** (`crumb-orders/`): CSS modules and styled-components with 119 hard-coded values. `--propose` clusters them into a starter set (`#333333`/`#323232`/`#343434` → one gray). Values used once are listed as one-offs rather than turned into tokens; adopting the 25 proposed tokens lets `--fix` take the score from 0% to 74%.
+
 ## Limitations
 
 - Static analysis only. Values computed at runtime (`padding: ${size * 4}px`, `cn(isBig ? 'p-[13px]' : …)` built from variables) aren't followed, and values chosen by JS expressions are reported but never rewritten.

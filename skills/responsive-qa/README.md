@@ -55,6 +55,7 @@ Output (in `./.knack/responsive-qa/`):
 
 - `contact-sheet.png`: grouped findings on top, then every viewport side by side with issues outlined and numbered
 - `shots/<page>/<w>x<h>.png`: full-size annotated screenshot per viewport
+- `shots/<page>/<w>x<h>-jump-<id>.png`: for `anchor-hidden`, the screen right after the jump, with the header and the hidden heading outlined
 - `report.json`: machine-readable issues with selector, bounding box, element classes/text and cause hints, plus info items (44px targets, CLS) and notes (screenshot cap, infinite scroll)
 - `report.prev.json`: the previous run, used by `--compare`
 
@@ -93,6 +94,14 @@ node scripts/sweep.mjs examples/broken-page.html --full-page   # 11 bugs found
 node scripts/sweep.mjs examples/fixed-page.html --full-page    # 0 errors, 0 warnings
 node scripts/selftest.mjs                                      # every fixture: planted bugs found, clean pages clean
 ```
+
+## Examples
+
+Three worked examples in [`examples/`](examples/), each one real `sweep.mjs` runs on a bundled page with cropped evidence in [`examples/output/`](examples/output/) (manifest: [`examples/examples.json`](examples/examples.json)):
+
+- **Landing page** (`broken-page.html` → `fixed-page.html`): 11 classic phone bugs found with their culprits. 42 errors / 24 warnings → 0 / 0, with `--compare` reporting 66 fixed.
+- **Orders dashboard** (`dashboard/broken.html` → `shell-fixed.html` → `fixed.html`): a `232px 1fr` app shell stretched by a wide table. The first run blames `main`, suggests `minmax(0, 1fr)` and already lists the three culprits inside it (table, filter chips, KPI grid) by letting `main` shrink for a moment. The second run confirms them, and the third run is clean.
+- **Blog post** (`fixtures/blog.html` → `blog/fixed.html`): a runaway `<pre>`, a 720px diagram, TOC anchors landing under a fixed header, and a `100vw` band that only breaks with a classic scrollbar. 24 errors → 0.
 
 ## Limits
 

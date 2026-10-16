@@ -1,0 +1,14 @@
+{
+  "name": "nimbus-notes",
+  "private": true,
+  "description": "Fixture for the token-drift skill: a small Tailwind v4 + shadcn-style app with light/dark tokens and arbitrary-value drift.",
+  "type": "module",
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "4.1.11",
+    "tailwindcss": "4.1.11"
+  }
+}

@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Settings · Tallyhouse</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <a class="logo" href="index.html"><i>T</i>Tallyhouse</a>
+      <nav>
+        <a href="index.html">Overview</a>
+        <a href="invoices.html">Invoices</a>
+        <a href="settings.html" aria-current="page">Settings</a>
+      </nav>
+      <p class="foot">Juniper &amp; Vale Studio<br>Pro plan</p>
+    </aside>
+    <main>
+      <div class="head">
+        <div>
+          <h1>Settings</h1>
+          <p>Business details printed on every invoice.</p>
+        </div>
+      </div>
+
+      <form class="form" onsubmit="return false">
+        <div class="field">
+          <label for="biz">Business name</label>
+          <input id="biz" value="Juniper &amp; Vale Studio">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label for="email">Billing email</label>
+            <input id="email" value="billing@junipervale.example">
+          </div>
+          <div class="field">
+            <label for="cur">Currency</label>
+            <select id="cur"><option>USD: US dollar</option></select>
+          </div>
+        </div>
+        <div class="section">
+          <h2>Payment terms</h2>
+          <p>Applied to new invoices. You can override them per client.</p>
+          <div class="row2">
+            <div class="field">
+              <label for="terms">Due after</label>
+              <select id="terms"><option>14 days</option></select>
+            </div>
+            <div class="field">
+              <label for="late">Late fee</label>
+              <input id="late" value="1.5% per month">
+              <div class="hint">Added automatically after the due date.</div>
+            </div>
+          </div>
+        </div>
+        <button class="btn" type="submit">Save changes</button>
+        <button class="btn quiet" type="button">Cancel</button>
+      </form>
+    </main>
+  </div>
+</body>
+</html>

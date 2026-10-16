@@ -1,0 +1,23 @@
+{
+  // Marigold signup: fill the form with Tab, pick a team size, flip annual billing, submit.
+  //   node scripts/record.mjs examples/signup.flow.json
+  "name": "signup",
+  "url": "./signup.html",
+  "viewport": "1024x680",
+  "format": ["gif"],
+  "frame": { "background": "mono", "title": "marigold.app/signup" },
+  "typeDelay": 48,
+  "cursor": { "color": "#ea7b16", "start": [300, 652] },
+  "steps": [
+    { "type": "Ada Moreno", "into": "#name" },
+    { "press": "Tab" },
+    { "type": "ada@fernhill.studio" },
+    { "press": "Tab" },
+    { "type": "Fernhill Studio", "pause": 700 },
+    { "click": "role=radio[name=\"2–5\"]" },
+    { "click": "#annual", "pause": 900 },
+    { "click": "#submit", "pause": 300 },
+    { "wait": "text=You're in, Ada!" },
+    { "cursor": [330, 615], "pause": 900 }
+  ]
+}

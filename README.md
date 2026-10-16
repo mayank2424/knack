@@ -6,9 +6,9 @@
 
 **Agent skills that show their work.**
 
-Six open-source skills for developers and designers. Each one ships real tooling (Playwright, axe-core, ffmpeg, pixel diffs) so your agent can see its own output and fix it before you ever look.
+Open-source agent skills for developers and designers. Each one ships real tooling (Playwright, axe-core, ffmpeg, pixel diffs) so your agent can see its own output and fix it before you ever look.
 
-[Website](https://mayank2424.github.io/knack/) · [Skills](#skills) · [Install](#install) · [Contributing](CONTRIBUTING.md)
+[Website](https://knack.mayankbuilds.com/) · [Skills](#skills) · [Install](#install) · [Contributing](CONTRIBUTING.md)
 
 [![Validate skills](https://github.com/mayank2424/knack/actions/workflows/validate.yml/badge.svg)](https://github.com/mayank2424/knack/actions/workflows/validate.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-ff5a1f.svg)](LICENSE)
@@ -94,7 +94,7 @@ Skills use the open [Agent Skills](https://agentskills.io) format. Plain Markdow
 
 ## Popular skills from the ecosystem
 
-The [website](https://mayank2424.github.io/knack/#community) also keeps a curated, star-ranked list of the best third-party skills: Anthropic's official set, Superpowers, Vercel, Remotion, HyperFrames and more. The list lives in [`catalog/community.json`](catalog/community.json), and PRs to add great skills are welcome.
+The [website](https://knack.mayankbuilds.com/#community) also keeps a curated, star-ranked list of the best third-party skills: Anthropic's official set, Superpowers, Vercel, Remotion, HyperFrames and more. The list lives in [`catalog/community.json`](catalog/community.json), and PRs to add great skills are welcome.
 
 ## Repository layout
 

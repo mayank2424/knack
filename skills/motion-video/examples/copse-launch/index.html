@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Copse launch film: the real macOS panel, a keystroke-cut edit and a synthesized score (16:9, 15s)" />
+<title>Copse launch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  /* Copse "Slate" dark tokens, straight from the repo (docs/design-system.md, web/landing/src/styles/global.css). */
+  :root {
+    --surface: #141518; --raised: #1b1c20; --hairline: #2a2c31; --ink: #ecedef; --ink-2: #a3a6af; --accent: #9ba7db;
+    --grad: linear-gradient(92deg, #9ba7db 0%, #b3a6ff 50%, #8fd0f5 100%);
+  }
+  #stage {
+    background: radial-gradient(1200px 760px at 66% 46%, #1b1e2c 0%, #111219 58%, #0b0c10 100%);
+    color: var(--ink); font-family: 'Geist', sans-serif; font-feature-settings: 'ss01'; overflow: hidden;
+  }
+  #bgEnd { position: absolute; inset: 0; background: radial-gradient(1150px 720px at 50% 47%, #1c1f2e 0%, #111219 58%, #0b0c10 100%); }
+  .glow { position: absolute; left: 760px; top: 60px; width: 1200px; height: 960px; border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(75, 91, 146, 0.30), rgba(75, 91, 146, 0) 100%); }
+
+  /* ---- World: the panel's own pixel space (1240 × 936, 2× retina). The camera scales this one wrapper. */
+  #world { position: absolute; left: 0; top: 0; width: 1240px; height: 936px; transform-origin: 0 0; }
+  #world > * { position: absolute; }
+  #panelBody { left: 0; top: 0; width: 1240px; height: 936px; border-radius: 36px;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.07), 0 60px 120px rgba(0, 0, 0, 0.55), 0 12px 30px rgba(0, 0, 0, 0.35); }
+  #panelBody img, .full { display: block; width: 1240px; height: 936px; }
+  .full { left: 0; top: 0; }
+  .rw { left: 0; top: 0; width: 1240px; height: 936px; }
+  .row { position: absolute; left: 4px; width: 1232px; background-size: 1240px 936px; background-repeat: no-repeat;
+    --card: 1;
+    border-radius: calc(20px * var(--card));
+    --flash: 0;
+    box-shadow: 0 0 0 1.5px rgba(255, 255, 255, calc(0.08 * var(--card))), 0 0 0 calc(3px * var(--flash)) rgba(155, 167, 219, calc(0.75 * var(--flash))), 0 0 calc(60px * var(--flash)) rgba(155, 167, 219, calc(0.3 * var(--flash))), 0 30px 60px rgba(0, 0, 0, calc(0.5 * var(--card))); }
+  .slice { left: 4px; width: 1232px; background: url(assets/panel-search.png) no-repeat; background-size: 1240px 936px; }
+  #phCover { left: 92px; top: 22px; width: 340px; height: 64px; background: var(--surface); }
+  #typed { left: 92px; top: 22px; width: 135px; height: 64px; background: url(assets/panel-search.png) -92px -22px / 1240px 936px no-repeat; }
+  #caret { left: 96px; top: 31px; width: 3px; height: 44px; border-radius: 2px; background: var(--accent); }
+  #listCover { left: 2px; top: 106px; width: 1236px; height: 762px; background: var(--surface); }
+  #actBack { clip-path: polygon(evenodd, 0 0, 1240px 0, 1240px 936px, 0 936px, 0 0, 468px 139px, 1212px 139px, 1212px 856px, 468px 856px, 468px 139px); }
+  #actMenu { clip-path: inset(139px 28px 80px 468px); transform-origin: 1212px 856px; }
+  #phCover, #typed, #listCover, #slices, #searchFull, #caret, #actBack, #actMenu, #pasteFlash { z-index: 30; }
+  #pasteFlash { left: 481px; top: 232px; width: 718px; height: 66px; border-radius: 12px; background: rgba(190, 200, 255, 0.4); }
+
+  /* Left fade so the dimmed panel edge never sits under the caption. */
+  #scrim { position: absolute; inset: 0; background: linear-gradient(90deg, #0d0e13 0%, #0e0f15 36%, rgba(14, 15, 21, 0) 52%); }
+
+  /* ---- Captions: a left column, lines rise through masks. */
+  .cap { position: absolute; left: 140px; }
+  .ln { display: block; overflow: hidden; padding: 0.02em 0 0.12em; margin-bottom: -0.1em; white-space: nowrap; }
+  .ln > span { display: inline-block; }
+  .grad { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .h-hook { font-size: 124px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.02; }
+  .h-key { font-size: 86px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.04; }
+  .h-feat { font-size: 70px; font-weight: 600; letter-spacing: -0.035em; line-height: 1.06; }
+  .sub { margin-top: 30px; font-size: 34px; font-weight: 500; color: var(--ink-2); letter-spacing: -0.01em; }
+  kbd { display: inline-flex; align-items: center; justify-content: center; min-width: 1.5em; height: 1.5em; padding: 0 0.3em; margin: 0 0.06em;
+    font: 500 0.82em 'Geist', sans-serif; color: var(--ink); background: var(--raised); border: 1.5px solid #34363d; border-radius: 0.3em;
+    box-shadow: 0 0.09em 0 #08090c; vertical-align: 0.08em; }
+  .keyrow { margin-top: 36px; display: flex; gap: 34px; font-size: 32px; font-weight: 500; color: var(--ink-2); }
+  .keyrow > div { display: flex; align-items: center; gap: 14px; }
+  .keyrow kbd { --lit: 0; box-shadow: 0 0.09em 0 #08090c, 0 0 0 calc(3px * var(--lit)) rgba(155, 167, 219, 0.55); }
+
+  /* ---- The keystroke: three big keycaps. */
+  #keys { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; display: flex; align-items: center; justify-content: center; gap: 40px; }
+  .key { --press: 0; --lit: 0; width: 210px; height: 210px; border-radius: 40px; display: grid; place-items: center;
+    background: linear-gradient(180deg, #26272d 0%, #1b1c20 100%); border: 1.5px solid #36383f;
+    font-size: 104px; font-weight: 500; color: var(--ink);
+    translate: 0 calc(var(--press) * 10px);
+    box-shadow: 0 calc(14px - var(--press) * 10px) 0 #08090c, 0 40px 80px rgba(0, 0, 0, 0.5), inset 0 1.5px 0 rgba(255, 255, 255, 0.08),
+      0 0 0 calc(var(--lit) * 4px) rgba(155, 167, 219, 0.6), 0 0 calc(var(--lit) * 70px) rgba(155, 167, 219, 0.35); }
+  .key.wide { width: 210px; }
+
+  /* ---- The trees: the icon's three pills in its own 1024 px space. */
+  #grove { position: absolute; left: 0; top: 0; width: 1024px; height: 1024px; transform-origin: 0 0; }
+  #grove > * { position: absolute; }
+  .tree { border-radius: 999px; box-shadow: 0 18px 40px rgba(6, 8, 20, 0.45); }
+  .trunk { width: 22px; background: #2b3157; border-radius: 3px; }
+  #hill { left: -1000px; top: 0; width: 3024px; height: 1400px; overflow: visible; }
+  #iconImg { left: 0; top: 0; width: 1024px; height: 1024px; }
+  .word { top: 770px; width: 300px; text-align: center; font-size: 38px; font-weight: 600; letter-spacing: -0.03em; color: var(--ink); }
+
+  /* ---- End card */
+  #wordmark { position: absolute; top: 352px; font-size: 156px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+  #tagline { position: absolute; left: 0; right: 0; top: 584px; text-align: center; font-size: 50px; font-weight: 500; letter-spacing: -0.025em; }
+  #meta { position: absolute; left: 0; right: 0; top: 690px; text-align: center; font: 500 27px 'Geist Mono', monospace; color: var(--ink-2); letter-spacing: 0.01em; }
+  #meta b { color: var(--ink); font-weight: 500; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="glow" id="glow"></div>
+  <div id="bgEnd"></div>
+
+  <div id="world" data-knack-ignore>
+    <div id="panelBody"><img src="assets/panel.png" alt="" /></div>
+    <div class="rw" id="rw0"><div class="row" id="row0"></div></div>
+    <div class="rw" id="rw1"><div class="row" id="row1"></div></div>
+    <div class="rw" id="rw2"><div class="row" id="row2"></div></div>
+    <div class="rw" id="rw3"><div class="row" id="row3"></div></div>
+    <div class="rw" id="rw4"><div class="row" id="row4"></div></div>
+    <div class="rw" id="rw5"><div class="row" id="row5"></div></div>
+    <div class="rw" id="rw6"><div class="row" id="row6"></div></div>
+    <div id="phCover"></div>
+    <div id="typed"></div>
+    <div id="listCover"></div>
+    <div id="slices"></div>
+    <img class="full" id="searchFull" src="assets/panel-search.png" alt="" />
+    <div id="caret"></div>
+    <img class="full" id="actBack" src="assets/panel-actions.png" alt="" />
+    <img class="full" id="actMenu" src="assets/panel-actions.png" alt="" />
+    <div id="pasteFlash"></div>
+  </div>
+  <div id="scrim"></div>
+
+  <!-- 1 · hook -->
+  <div class="cap h-hook" id="capHook" style="top: 376px">
+    <span class="ln"><span>Everything</span></span>
+    <span class="ln"><span>you copy.</span></span>
+  </div>
+
+  <!-- 2 · the keystroke -->
+  <div id="keys">
+    <div class="key" id="k1">⌘</div>
+    <div class="key" id="k2">⇧</div>
+    <div class="key" id="k3">V</div>
+  </div>
+
+  <!-- 3 · tagline completes -->
+  <div class="cap h-key" id="capKey" style="top: 372px">
+    <span class="ln"><span class="grad">One keystroke</span></span>
+    <span class="ln"><span class="grad">away.</span></span>
+    <div class="sub ln"><span>Press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>V</kbd> in any app.</span></div>
+  </div>
+
+  <!-- 4 · search -->
+  <div class="cap h-feat" id="capFind" style="top: 420px">
+    <span class="ln"><span>Find anything</span></span>
+    <span class="ln"><span class="grad">in a few letters.</span></span>
+  </div>
+
+  <!-- 5 · paste -->
+  <div class="cap h-feat" id="capPaste" style="top: 392px">
+    <span class="ln"><span>Paste it</span></span>
+    <span class="ln"><span class="grad">anywhere.</span></span>
+    <div class="keyrow ln" id="pasteKeys"><span style="display:flex;gap:34px">
+      <div><kbd id="kK1">⌘</kbd><kbd id="kK2">K</kbd>Actions</div>
+      <div><kbd id="kRet">↩</kbd>Paste</div>
+    </span></div>
+  </div>
+
+  <!-- 6 + 7 · the grove becomes the icon -->
+  <div id="grove">
+    <svg id="hill" viewBox="-1000 0 3024 1400">
+      <path id="hillFill" d="M -1000 1237 Q 512 159 2024 1237 L 2024 1400 L -1000 1400 Z" fill="#171c31" />
+      <path id="hillLine" d="M -1000 1237 Q 512 159 2024 1237" fill="none" stroke="rgba(174, 184, 227, 0.55)" stroke-width="3" />
+    </svg>
+    <div class="trunk" id="trunk0" style="left: 337px; top: 650px; height: 60px"></div>
+    <div class="trunk" id="trunk1" style="left: 507px; top: 640px; height: 62px"></div>
+    <div class="trunk" id="trunk2" style="left: 678px; top: 646px; height: 62px"></div>
+    <div class="tree" id="tree0" style="left: 268px; top: 402px; width: 160px; height: 270px; background: linear-gradient(160deg, #c6cced 0%, #a9b3e0 100%)"></div>
+    <div class="tree" id="tree2" style="left: 615px; top: 441px; width: 148px; height: 225px; background: linear-gradient(160deg, #dde1f5 0%, #c5cceb 100%)"></div>
+    <div class="tree" id="tree1" style="left: 428px; top: 287px; width: 180px; height: 373px; background: linear-gradient(160deg, #ffffff 0%, #eceff6 100%)"></div>
+    <!-- hill front edge re-drawn over the trunks so trees rise from behind it -->
+    <svg id="hillFront" viewBox="-1000 0 3024 1400" style="left:-1000px;top:0;width:3024px;height:1400px;overflow:visible">
+      <path d="M -1000 1237 Q 512 159 2024 1237 L 2024 1400 L -1000 1400 Z" fill="#171c31" />
+      <path id="hillLine2" d="M -1000 1237 Q 512 159 2024 1237" fill="none" stroke="rgba(174, 184, 227, 0.55)" stroke-width="3" />
+    </svg>
+    <div class="word ln" style="left: 198px"><span id="w0">Fast.</span></div>
+    <div class="word ln" style="left: 368px"><span id="w1">Private.</span></div>
+    <div class="word ln" style="left: 539px"><span id="w2">Native.</span></div>
+    <img id="iconImg" src="assets/app-icon.png" alt="" />
+  </div>
+
+  <div id="wordmark" class="ln"><span>Copse</span></div>
+  <div id="tagline" class="ln"><span>Everything you copy. <span class="grad">One keystroke away.</span></span></div>
+  <div id="meta" class="ln"><span><b>$2.99 once</b> · macOS 15+ · copse.mayankbuilds.com</span></div>
+</div>
+
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 15 });
+  const W = 1920, H = 1080;
+  const B = Motion.beats({ bpm: 120 });            // B(n) = n × 0.5 s
+  const $ = (s) => document.querySelector(s);
+
+  // ------------------------------------------------------------------ camera
+  // cam(s, cx, cy, fx, fy): put panel pixel (fx, fy) at stage (cx, cy) at scale s.
+  const cam = (s, cx, cy, fx = 620, fy = 468) => ({ scale: s, x: cx - fx * s, y: cy - fy * s });
+  const WIDE = cam(0.84, 1332, 540), WIDE2 = cam(0.87, 1326, 540);
+  const SEARCH = { scale: 1.15, x: 770, y: 112 }, SEARCH2 = { scale: 1.18, x: 758, y: 104 };
+  const MENU = cam(1.12, 1300, 548, 840, 497), MENU2 = cam(1.16, 1300, 548, 840, 497);
+
+  Motion.to('#world', { start: 0, duration: B(6), ease: 'linear', from: WIDE, to: WIDE });
+  Motion.to('#world', { start: B(6), duration: B(5), ease: 'smooth', to: WIDE2 });
+  Motion.to('#world', { start: B(11), duration: 1.15, ease: 'smooth', to: SEARCH });
+  Motion.to('#world', { start: B(11) + 1.15, duration: B(16) - B(11) - 1.15, ease: 'linear', to: SEARCH2 });
+  Motion.to('#world', { start: B(16), duration: 1.0, ease: 'smooth', to: MENU });
+  Motion.to('#world', { start: B(16) + 1.0, duration: 0.75, ease: 'linear', to: MENU2 });
+  Motion.to('#world', { start: B(19.5), duration: 0.02, from: { opacity: 1 }, to: { opacity: 0 } }); // paste closes the panel instantly
+  Motion.to('#bgEnd', { start: B(19.5), duration: 0.02, from: { opacity: 0 }, to: { opacity: 1 } });   // centred light for the grove and the end card
+
+  // ------------------------------------------------------------------ 1 · hook: real clip rows in depth
+  const SLOTS = [[158, 292], [292, 378], [378, 466], [466, 588], [588, 678], [678, 766], [766, 858]];
+  // stage centre, relative scale, depth blur, appear time
+  const SPOTS = [
+    [1450, 470, 1.04, 0, -0.6],   // export async function fetchInvoices (selected row)
+    [1530, 196, 0.78, 2.6, -0.35],// swift.org/documentation
+    [1720, 640, 0.84, 1.4, 0.25], // #4B5B92
+    [1590, 935, 0.78, 2.8, 0.5], // Launch checklist for Friday
+    [1830, 330, 0.66, 5, 0.75],    // Image
+    [1330, 790, 0.9, 0, -0.15],     // maya.chen@northwind.studio
+    [1150, 104, 0.62, 4.5, 1.0], // pnpm --filter web build
+  ];
+  SLOTS.forEach(([y0, y1], i) => {
+    const el = $('#row' + i);
+    $('#rw' + i).style.zIndex = Math.round(20 - SPOTS[i][3] * 2);
+    Object.assign(el.style, { top: y0 + 'px', height: y1 - y0 + 'px', backgroundImage: 'url(assets/panel.png)', backgroundPosition: `-4px -${y0}px` });
+    const [hx, hy, k, b, at] = SPOTS[i];
+    const sx = WIDE.x + 620 * WIDE.scale, sy = WIDE.y + ((y0 + y1) / 2) * WIDE.scale;
+    const dx = (hx - sx) / WIDE.scale, dy = (hy - sy) / WIDE.scale;
+    Motion.to(el, { start: at, duration: 0.55, ease: 'strong', from: { x: dx, y: dy + 18, scale: k * 0.95, opacity: 0, blur: b }, to: { x: dx, y: dy, scale: k, opacity: 1, blur: b } });
+    if (at > 0) Motion.to(el, { start: at, duration: 0.7, ease: 'outCubic', from: { '--flash': 1 }, to: { '--flash': 0 } });
+    Motion.to(el, { start: B(4) - 0.25, duration: 0.45, ease: 'smooth', to: { opacity: 0.28, blur: b + 6, scale: k * 0.93 } });
+    Motion.to(el, { start: B(5) + i * 0.022, duration: 0.62, ease: 'strong', to: { x: 0, y: 0, scale: 1, opacity: 1, blur: 0 } });
+    Motion.to(el, { start: B(5) + i * 0.022, duration: 0.5, ease: 'outCubic', from: { '--card': 1 }, to: { '--card': 0 } });
+  });
+  // Parallax drift while the rows float; it fades out as they fly home.
+  const drifts = SPOTS.map((s, i) => ({ el: $('#rw' + i), k: s[2], seed: i * 7.3 }));
+  Motion.on((t) => {
+    const amp = Motion.interpolate(t, [B(5), B(5) + 0.3], [1, 0]);
+    for (const d of drifts) {
+      const px = (-t * 26 * d.k + Motion.noise(d.seed, t * 0.35, 0) * 10) * amp;
+      const py = (Motion.noise(d.seed + 40, t * 0.35, 1) * 8) * amp;
+      d.el.style.transform = `translate(${px}px, ${py}px)`;
+    }
+  });
+  Motion.from('#capHook .ln > span', { y: '130%' }, { start: -0.45, duration: 0.8, stagger: 0.08, ease: 'strong' });
+  Motion.to('#capHook .ln > span', { start: B(4) - 0.36, duration: 0.26, stagger: 0.03, ease: 'inCubic', to: { y: '-130%' } });
+
+  // ------------------------------------------------------------------ 2 · ⌘ ⇧ V
+  [['#k1', B(4)], ['#k2', B(4.5)], ['#k3', B(5)]].forEach(([k, tp]) => {
+    Motion.from(k, { opacity: 0, y: -46 }, { start: tp - 0.17, duration: 0.24, ease: 'strong' });
+    Motion.to(k, { start: tp, duration: 0.06, ease: 'outCubic', from: { '--press': 0, '--lit': 0 }, to: { '--press': 1, '--lit': 1 } });
+  });
+  Motion.to('#keys', { start: B(5) + 0.05, duration: 0.24, ease: 'outCubic', from: { scale: 1, blur: 0 }, to: { scale: 2.2, blur: 12 } });
+  Motion.to('#keys', { start: B(5) + 0.05, duration: 0.16, ease: 'linear', from: { opacity: 1 }, to: { opacity: 0 } });
+
+  // ------------------------------------------------------------------ 3 · the real panel opens (0.965 → 1, the app's own spec)
+  Motion.from('#panelBody', { opacity: 0, scale: 0.965 }, { start: B(5) + 0.06, duration: 0.5, ease: 'strong' });
+  Motion.from('#capKey .ln > span', { y: '130%' }, { start: B(6.25), duration: 0.75, stagger: 0.09, ease: 'strong' });
+  Motion.to('#capKey .ln > span', { start: B(11) - 0.3, duration: 0.28, stagger: 0.03, ease: 'inCubic', to: { y: '-130%' } });
+
+  // ------------------------------------------------------------------ 4 · search, from the real search snapshot
+  const LETTERS = [5.75, 5.875, 6.0, 6.125, 6.25, 6.375, 6.5];
+  const WIDTHS = [14, 35, 54, 75, 84, 103, 135];       // reveal width after each letter of "invoice"
+  Motion.to('#phCover', { start: LETTERS[0], duration: 0.01, from: { opacity: 0 }, to: { opacity: 1 } });
+  const typed = $('#typed'), caret = $('#caret');
+  Motion.on((t) => {
+    let n = 0; while (n < LETTERS.length && t >= LETTERS[n]) n++;
+    const w = n ? WIDTHS[n - 1] : 0;
+    typed.style.clipPath = `inset(0 ${135 - w}px 0 0)`;
+    typed.style.opacity = n ? 1 : 0;
+    caret.style.left = (n ? 92 + w + 2 : 96) + 'px';
+    const typing = t >= LETTERS[0] - 0.1 && t < LETTERS[6] + 0.3;
+    const on = t >= B(6) && t < B(16) && (typing || ((t - B(6)) % 1.0) < 0.55);
+    caret.style.opacity = on ? 1 : 0;
+  });
+  const SL = [[112, 158], [158, 292], [292, 378], [378, 500], [500, 622], [622, 744], [744, 858]];
+  const slices = $('#slices');
+  SL.forEach(([y0, y1]) => {
+    const d = document.createElement('div');
+    d.className = 'slice';
+    Object.assign(d.style, { position: 'absolute', top: y0 + 'px', height: y1 - y0 + 'px', backgroundPosition: `-4px -${y0}px` });
+    slices.appendChild(d);
+  });
+  Motion.to('#listCover', { start: 6.56, duration: 0.06, ease: 'outCubic', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#slices .slice', { start: 6.6, duration: 0.38, stagger: 0.04, ease: 'strong', from: { opacity: 0, y: 16 }, to: { opacity: 1, y: 0 } });
+  Motion.to('#searchFull', { start: 7.6, duration: 0.01, from: { opacity: 0 }, to: { opacity: 1 } });   // pixel-identical hand-off
+  Motion.from('#capFind .ln > span', { y: '130%' }, { start: B(11) + 0.04, duration: 0.75, stagger: 0.09, ease: 'strong' });
+  Motion.to('#capFind .ln > span', { start: B(16) - 0.3, duration: 0.28, stagger: 0.03, ease: 'inCubic', to: { y: '-130%' } });
+
+  // ------------------------------------------------------------------ 5 · ⌘K → the real actions menu, ↩ pastes
+  Motion.to('#actBack', { start: B(16), duration: 0.16, ease: 'outCubic', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#actMenu', { start: B(16), duration: 0.34, ease: 'strong', from: { opacity: 0, scale: 0.94 }, to: { opacity: 1, scale: 1 } });
+  Motion.to('#scrim', { start: B(16), duration: 0.9, ease: 'smooth', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#scrim', { start: B(19.5), duration: 0.02, to: { opacity: 0 } });
+  Motion.from('#capPaste .ln > span', { y: '130%' }, { start: B(16) + 0.04, duration: 0.7, stagger: 0.08, ease: 'strong' });
+  Motion.to(['#kK1', '#kK2'], { start: B(16), duration: 0.08, from: { '--lit': 0, y: 0 }, to: { '--lit': 1, y: 3 } });
+  Motion.to(['#kK1', '#kK2'], { start: B(16) + 0.2, duration: 0.25, ease: 'outCubic', to: { '--lit': 0, y: 0 } });
+  Motion.to('#kRet', { start: B(19), duration: 0.06, from: { '--lit': 0, y: 0 }, to: { '--lit': 1, y: 3 } });
+  Motion.to('#pasteFlash', { start: B(19), duration: 0.06, from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to('#pasteFlash', { start: B(19) + 0.08, duration: 0.16, ease: 'outCubic', to: { opacity: 0.35 } });
+  Motion.to('#capPaste', { start: B(19.5), duration: 0.02, from: { opacity: 1 }, to: { opacity: 0 } });
+
+  // ------------------------------------------------------------------ 6 · the grove: Fast. Private. Native.
+  Motion.to('#grove', { start: B(19.5), duration: 0.02, from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.draw(['#hillLine', '#hillLine2'], { start: B(19.5), duration: 0.7, ease: 'strong' });
+  [['#tree0', '#trunk0', '#w0', B(20)], ['#tree1', '#trunk1', '#w1', B(21)], ['#tree2', '#trunk2', '#w2', B(22)]].forEach(([tr, tk, w, at]) => {
+    Motion.from([tr, tk], { y: 470 }, { start: at, duration: 0.75, ease: 'strong' });
+    Motion.from(w, { y: '130%' }, { start: at + 0.06, duration: 0.6, ease: 'strong' });
+  });
+  Motion.to(['#w0', '#w1', '#w2'], { start: B(24) - 0.26, duration: 0.24, stagger: 0.03, ease: 'inCubic', to: { y: '-130%' } });
+
+  // ------------------------------------------------------------------ 7 · pull back: the trees were the icon
+  Motion.to('#iconImg', { start: B(24), duration: 0.2, ease: 'outCubic', from: { opacity: 0 }, to: { opacity: 1 } });
+  Motion.to(['#hill', '#hillFront'], { start: B(24), duration: 0.2, ease: 'outCubic', from: { opacity: 1 }, to: { opacity: 0 } });
+  const SQ = 824;                                   // squircle size inside the 1024 icon
+  const P0 = { s: 1.4, cx: 960, cy: 525 }, P1 = { s: 1.46, cx: 960, cy: 525 };
+  let L = { s: 168 / SQ, cx: 640, cy: 430 };
+  Motion.ready(() => {
+    const wm = $('#wordmark');
+    const ww = wm.getBoundingClientRect().width, icon = 168, gap = 40;
+    const left = (W - (icon + gap + ww)) / 2;
+    L = { s: icon / SQ, cx: left + icon / 2, cy: 430 };
+    wm.style.left = left + icon + gap + 'px';
+  });
+  const grove = $('#grove');
+  Motion.on((t) => {
+    const drift = Motion.interpolate(t, [B(19.5), B(24)], [0, 1], { ease: 'smooth' });
+    const a = { s: P0.s + (P1.s - P0.s) * drift, cx: P0.cx, cy: P0.cy };
+    const p = Motion.interpolate(t, [B(24), B(25)], [0, 1], { ease: 'strongInOut' });
+    const s = Math.exp(Math.log(a.s) + (Math.log(L.s) - Math.log(a.s)) * p);
+    const cx = a.cx + (L.cx - a.cx) * p, cy = a.cy + (L.cy - a.cy) * p;
+    grove.style.transform = `translate(${cx - 512 * s}px, ${cy - 512 * s}px) scale(${s})`;
+  });
+  Motion.from('#wordmark > span', { y: '130%' }, { start: B(24.6), duration: 0.7, ease: 'strong' });
+  Motion.from('#tagline > span', { y: '130%' }, { start: B(25), duration: 0.7, ease: 'strong' });
+  Motion.from('#meta > span', { y: '130%' }, { start: B(25.35), duration: 0.7, ease: 'strong' });
+
+  // ------------------------------------------------------------------ sound
+  Motion.score({ bpm: 120, key: 'D', scale: 'dorian', mood: 'driving', sections: [
+    { at: 0, drums: false, bass: false, arp: false, filter: 900 },
+    { at: B(5), drums: true, bass: true, arp: false, filter: 20000 },
+    { at: B(11), arp: true },
+    { at: B(19.5), drums: false, bass: false, arp: false, filter: 1300 },
+    { at: B(25), drums: false, bass: true, arp: false, filter: 20000 },
+  ] });
+  [0.25, 0.5, 0.75, 1.0].forEach((t) => Motion.cue(t, 'tick', { gain: 0.8 }));
+  Motion.cue(B(5), 'riser', { length: 1.6, gain: 0.8 });
+  Motion.cue(B(4), 'hit', { gain: 0.7 });
+  Motion.cue(B(4.5), 'hit', { gain: 0.75 });
+  Motion.cue(B(5), 'impact');
+  Motion.cue(B(5) + 0.1, 'whoosh', { gain: 0.6 });
+  Motion.cue(B(11), 'whoosh', { gain: 0.45 });
+  LETTERS.forEach((t) => Motion.cue(t, 'tick', { gain: 0.6 }));
+  Motion.cue(6.6, 'pop', { gain: 0.55 });
+  Motion.cue(B(16), 'pop', { gain: 0.7 });
+  Motion.cue(B(16) + 0.05, 'whoosh', { gain: 0.4 });
+  Motion.cue(B(19), 'hit', { gain: 0.8 });
+  Motion.cue(B(19.5), 'hit', { gain: 0.55 });
+  [B(20), B(21), B(22)].forEach((t) => Motion.cue(t, 'pop', { gain: 1 }));
+  Motion.cue(B(24.5), 'whoosh', { gain: 0.6 });
+  Motion.cue(B(25), 'riser', { length: 1.4, gain: 0.7 });
+  Motion.cue(B(25), 'impact', { gain: 0.9 });
+</script>
+</body>
+</html>

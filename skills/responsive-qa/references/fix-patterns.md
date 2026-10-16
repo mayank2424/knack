@@ -76,7 +76,7 @@ Tailwind: `w-[min(460px,100%-2rem)] max-h-[calc(100dvh-2rem)] overflow-y-auto`.
 
 ## anchor-hidden (error / warn)
 
-The sweep follows up to 8 in-page links (`href="#pricing"`) with `scrollIntoView` and checks whether the target's first line ends up under a fixed/sticky header (error when completely hidden; WCAG 2.2 SC 2.4.11 Focus Not Obscured fails the same way for keyboard users). Fix once for the whole page:
+The sweep follows up to 8 in-page links (`href="#pricing"`) with `scrollIntoView` and checks whether the target's first line ends up under a fixed/sticky header (error when completely hidden; WCAG 2.2 SC 2.4.11 Focus Not Obscured fails the same way for keyboard users). Evidence: the full-page shot hatches the strip the header covers after the jump, and `shots/<page>/<w>x<h>-jump-<id>.png` is the screen right after it. Fix once for the whole page:
 ```css
 html { scroll-padding-top: 80px; }          /* header height + a little air */
 /* or per target: */ :target, h2[id] { scroll-margin-top: 80px; }

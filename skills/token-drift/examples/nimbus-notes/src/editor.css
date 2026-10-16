@@ -1,0 +1,26 @@
+/* Hand-written styles for the note editor (outside the component library). */
+.editor {
+  padding: 12px 20px;
+  border: 1px solid oklch(0.922 0 0);
+  border-radius: 8px;
+  background: #ffffff;
+  transition: border-color 150ms ease;
+}
+
+.editor:focus-within {
+  border-color: oklch(0.708 0 0);
+  box-shadow: 0 0 0 3px rgb(161 161 161 / 0.5);
+}
+
+.editor-toolbar {
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  color: #737373;
+}
+
+.editor-footer {
+  padding-top: 14px;
+  font-size: 0.875rem;
+  color: oklch(0.556 0 0);
+}

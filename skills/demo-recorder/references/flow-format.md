@@ -51,6 +51,7 @@ overlays, and captures every frame.
 | `idleSkip` | `true` | Reuse the previous frame when nothing changed (no DOM mutation, scroll, load, running animation, visible canvas/video/iframe, input, or overlay change). Every 15th reuse is checked against a real screenshot; a mismatch turns reuse off for the rest of the take. `false` / `--no-idle-skip` screenshots every frame. |
 | `seed` | `7` | Seed for typing jitter, so re-recordings are identical. |
 | `sheet` | `12` | Frames in the contact sheet. |
+| `sheetWidth` | `1600` | Width in px of the contact sheet and the dry-run steps sheet (256-colour PNG). Same as `--sheet-width`. |
 
 Strings anywhere may contain `${env:NAME}`; the value comes from the environment and the run
 fails if it is unset. Use it for local test credentials, never for real secrets.
@@ -123,7 +124,8 @@ Playwright key names. Aliases: `Cmd`/`Command` → Meta, `Ctrl` → Control, `Op
 Shift is part of it (`Meta+K` arrives as `key: "k"`, like a real keyboard; palettes such as
 DocSearch ignore an uppercase `K`). Combos (anything with `+`), Escape and Tab show
 a keystroke HUD (`⌘ K`) at the bottom; force with `"hud": true` / `false`, length with
-`hudDuration` (default 1000 ms).
+`hudDuration` (default 1000 ms). Like captions, the HUD is drawn in screen space: a zoom
+does not enlarge or crop it.
 
 ### hover
 ```json
@@ -183,7 +185,9 @@ when one view contains the other, around their shared fixed point, so the target
 straight in instead of sliding sideways; the easing commits quickly and settles softly.
 `follow: true` keeps the cursor in frame, panning gently when it nears the edge (it can
 crop the far side of a wide row; prefer a plain zoom on a container). Stays zoomed until
-`"zoom": "out"`. Scale 1 to 4. `duration` defaults to 800 ms.
+`"zoom": "out"`. Scale 1 to 4. `duration` defaults to 800 ms. The cursor, ripples and
+highlight ring zoom with the page; captions and the keystroke HUD stay in screen space at
+their normal size and position, so a zoom can start while they show.
 
 ### highlight
 ```json
@@ -193,7 +197,8 @@ crop the far side of a wide row; prefer a plain zoom on a container). Stays zoom
 { "highlight": false }
 ```
 Ring around an element (tracks it if it moves); `dim` darkens everything else. Blocks for
-`duration` by default; `"block": false` lets the next steps run while it shows.
+`duration` by default; `"block": false` lets the next steps run while it shows. In a dry
+run a blocking highlight's screenshot is taken while it shows (mid-step).
 
 ### caption
 ```json
@@ -203,6 +208,7 @@ Ring around an element (tracks it if it moves); `dim` darkens everything else. B
 ```
 Pill-shaped text overlay. Non-blocking by default (shows while the following steps run);
 `"block": true` holds for its duration. `duration: 0` keeps it until `"caption": false`.
+Drawn in screen space: it keeps its size and position while the camera zooms.
 
 ### cursor
 ```json

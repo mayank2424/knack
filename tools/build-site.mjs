@@ -20,28 +20,71 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const site = path.join(root, 'site');
 const REPO = 'mayank2424/knack';
 const GH = `https://github.com/${REPO}`;
+const SITE_URL = 'https://knack.mayankbuilds.com/';
 const offline = process.argv.includes('--offline');
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const copyIcon = (label) => `<button class="copy icon" type="button" aria-label="${label}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5" y="5" width="9" height="9" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2h-6A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg></button>`;
+const modelLabel = (m) => (!m ? '' : /opus-5-5|^opus$/.test(m) ? 'Claude Opus 5.5' : m);
 const KIND = { media: 'Media', design: 'Design', dev: 'Dev', docs: 'Docs', productivity: 'Productivity' };
 
+
+// ── SEO: canonical, Open Graph, Twitter card and JSON-LD for one page. OG images come from tools/og.mjs.
+const seo = ({ path: p = '', title, description, image, type = 'website', jsonld }) => {
+  const url = SITE_URL + p;
+  const img = SITE_URL + image;
+  return `<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}" />
+<link rel="canonical" href="${url}" />
+<meta name="robots" content="index, follow, max-image-preview:large" />
+<meta name="author" content="Mayank Gupta" />
+<meta property="og:site_name" content="Knack" />
+<meta property="og:type" content="${type}" />
+<meta property="og:url" content="${url}" />
+<meta property="og:title" content="${esc(title)}" />
+<meta property="og:description" content="${esc(description)}" />
+<meta property="og:image" content="${img}" />
+<meta property="og:image:type" content="image/png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="${esc(title)}" />
+<meta property="og:locale" content="en_US" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="${esc(title)}" />
+<meta name="twitter:description" content="${esc(description)}" />
+<meta name="twitter:image" content="${img}" />
+<meta name="twitter:image:alt" content="${esc(title)}" />
+<script type="application/ld+json">${JSON.stringify(jsonld).replace(/</g, '\\u003c')}</script>`;
+};
+
 const siteData = JSON.parse(fs.readFileSync(path.join(root, 'catalog', 'site.json'), 'utf8')).skills;
+// Accent hue per skill (OKLCH hue angle). Every accent shares one lightness and chroma, defined in
+// styles.css, so the set reads as one palette next to the brand green (hue 150, same lightness).
+// catalog/site.json can set "hue"; otherwise skills take hues from this list in order.
+const HUES = [30, 255, 190, 340, 75, 285];
 const order = JSON.parse(fs.readFileSync(path.join(root, '.claude-plugin', 'marketplace.json'), 'utf8'))
   .plugins.flatMap((p) => p.skills).map((s) => path.basename(s));
 
 // ── Shared chrome
-const logo = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="5" fill="#111214"/><path d="M8.2 6v12M16.4 6.4 10 12l6.4 5.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const logo = `<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="15" fill="#111214"/><g fill="none" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 13v38" stroke="#fff"/><path d="M44 13 23 31.5" stroke="#fff"/><path d="M28 27 42 51" stroke="#fff"/><path class="tick" d="M37 41.5l5 9.5 9-15" stroke="#3ee07a" pathLength="1"/></g></svg>`;
 const ghIcon = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>`;
 const header = (base, current = '') => `<a class="skip" href="#main">Skip to content</a>
-<header class="site-head"><div class="wrap">
-  <a class="brand" href="${base}">${logo}Knack</a>
-  <nav class="nav" aria-label="Primary">
-    <a href="${base}#skills"${current === 'skills' ? ' aria-current="page"' : ''}>Skills</a>
-    <a href="${base}#catalog">Catalog</a>
-    <a href="${GH}/blob/main/CONTRIBUTING.md">Contribute</a>
-    <a class="gh" data-gh href="${GH}">${ghIcon}GitHub</a>
-  </nav>
-</div></header>`;
+<header class="site-head" id="siteHead">
+  <div class="nav-shell">
+    <a class="brand" href="${base}" aria-label="Knack home">${logo}<span>Knack</span></a>
+    <nav class="nav" id="siteNav" aria-label="Primary">
+      <span class="nav-pill" aria-hidden="true"></span>
+      <a href="${base}#skills" data-spy="skills"${current === 'skills' ? ' aria-current="page"' : ''}>Skills</a>
+      <a href="${base}#how" data-spy="how">How it works</a>
+      <a href="${base}#catalog" data-spy="catalog">Catalog</a>
+      <a href="${base}#contribute" data-spy="contribute">Contribute</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="nav-gh" data-gh href="${GH}" aria-label="Knack on GitHub">${ghIcon}<span class="lbl">GitHub</span></a>
+      <a class="nav-install" href="${current === 'skills' ? '#install' : `${base}#install`}">Install</a>
+      <button class="nav-menu" type="button" aria-expanded="false" aria-controls="siteNav" aria-label="Menu"><span></span><span></span></button>
+    </div>
+  </div>
+</header>`;
 const footer = (base) => `<footer class="site-foot"><div class="wrap">
   <span>Knack is MIT licensed. Made by <a href="https://github.com/mayank2424">Mayank Gupta</a>.</span>
   <nav aria-label="Footer"><a href="${base}#skills">Skills</a><a href="${base}#catalog">Catalog</a><a href="https://agentskills.io">Agent Skills spec</a><a href="${GH}">Source</a></nav>
@@ -60,6 +103,15 @@ for (const name of order) {
   fs.rmSync(assetsOut, { recursive: true, force: true });
   if (fs.existsSync(path.join(dir, 'assets'))) fs.cpSync(path.join(dir, 'assets'), assetsOut, { recursive: true });
 
+  // Worked examples (examples/examples.json + examples/output/**), shown on the skill page.
+  let examples = [];
+  const exFile = path.join(dir, 'examples', 'examples.json');
+  if (fs.existsSync(exFile)) {
+    examples = JSON.parse(fs.readFileSync(exFile, 'utf8')).examples || [];
+    const outDir = path.join(dir, 'examples', 'output');
+    if (fs.existsSync(outDir)) fs.cpSync(outDir, path.join(assetsOut, 'examples', 'output'), { recursive: true });
+  }
+
   let readme = fs.existsSync(path.join(dir, 'README.md')) ? fs.readFileSync(path.join(dir, 'README.md'), 'utf8') : '';
   const tagline = (readme.match(/^>\s*(.+)$/m) || [, ''])[1].trim();
   readme = readme.replace(/^# .*\n+/, '').replace(/^>\s*.+\n+/m, '');
@@ -75,7 +127,7 @@ for (const name of order) {
   // When the site shows real evidence, drop the README's lead preview image so it isn't shown twice.
   html = html.replace(/<pre>/g, '<pre tabindex="0">'); // scrollable code must be keyboard-reachable
   const body = extra.evidence ? html.replace(/^\s*<p><img [^>]*preview\.png[^>]*><\/p>\s*/, '') : html;
-  skills.push({ name, title: md.title || name, tagline, kind: md.category, version: md.version, model: data.model, scripts, html: body, ...extra });
+  skills.push({ hue: (siteData[name] || {}).hue ?? HUES[skills.length % HUES.length], name, title: md.title || name, tagline, kind: md.category, version: md.version, model: data.model, scripts, html: body, examples, ...extra });
 }
 
 const evidence = (s, base) => {
@@ -85,20 +137,48 @@ const evidence = (s, base) => {
     return `<figure class="evidence"><pre class="terminal" tabindex="0" aria-label="Terminal output"><span class="prompt">$ ${esc(e.command)}</span>\n${e.lines.map(esc).join('\n')}</pre><figcaption>${esc(e.caption)}</figcaption></figure>`;
   }
   if (e.type === 'video') {
-    return `<figure class="evidence"><video src="${base}${e.src}" poster="${base}${e.poster}" muted loop playsinline preload="none" data-autoplay aria-label="${esc(e.caption)}"></video><figcaption>${esc(e.caption)}</figcaption></figure>`;
+    const sound = e.audio ? `<button class="sound" type="button" aria-pressed="false">Sound</button>` : '';
+    return `<figure class="evidence"><div class="video-wrap"><video src="${base}${e.src}" poster="${base}${e.poster}" muted loop playsinline preload="none" data-autoplay aria-label="${esc(e.caption)}"></video>${sound}</div><figcaption>${esc(e.caption)}</figcaption></figure>`;
   }
   return `<figure class="evidence"><img src="${base}${e.src}" alt="${esc(e.caption)}" loading="lazy" /><figcaption>${esc(e.caption)}</figcaption></figure>`;
 };
 
+const exampleMedia = (s, m, base) => {
+  const src = `${base}assets/skills/${s.name}/examples/${m.src}`;
+  const cap = m.caption ? `<figcaption>${esc(m.caption)}</figcaption>` : '';
+  if (m.type === 'video') return `<figure class="ex-media"><video src="${src}" controls muted loop playsinline preload="metadata" aria-label="${esc(m.alt || m.caption || '')}"></video>${cap}</figure>`;
+  return `<figure class="ex-media"><img src="${src}" alt="${esc(m.alt || '')}" loading="lazy" />${cap}</figure>`;
+};
+const examplesHtml = (s, base) => !s.examples.length ? '' : `
+    <section class="examples" id="examples" aria-labelledby="examples-h">
+      <h2 id="examples-h">Examples</h2>
+      <p class="ex-intro">Each example is a real run of the skill on a fixture in <a href="${GH}/tree/main/skills/${s.name}/examples"><code>examples/</code></a>. Nothing here is mocked up.</p>
+      ${s.examples.map((e, i) => `
+      <article class="example" id="ex-${esc(e.id)}">
+        <p class="ex-num">Example ${i + 1}</p>
+        <h3>${esc(e.title)}</h3>
+        ${e.prompt ? `<blockquote class="ex-prompt"><span class="mono">You</span>${esc(e.prompt)}</blockquote>` : ''}
+        ${e.summary ? `<p>${esc(e.summary)}</p>` : ''}
+        ${(e.media || []).map((m) => exampleMedia(s, m, base)).join('')}
+        <dl class="ex-meta">
+          ${e.result ? `<dt>Result</dt><dd>${esc(e.result)}</dd>` : ''}
+          ${e.command ? `<dt>Command</dt><dd><code>${esc(e.command)}</code></dd>` : ''}
+          ${(e.input || []).length ? `<dt>Input</dt><dd>${e.input.map((f) => `<a href="${GH}/tree/main/skills/${s.name}/examples/${esc(f)}"><code>${esc(f)}</code></a>`).join(' ')}</dd>` : ''}
+        </dl>
+        ${e.excerpt ? `<pre class="terminal" tabindex="0" aria-label="Terminal output">${esc(e.excerpt)}</pre>` : ''}
+      </article>`).join('')}
+    </section>`;
+
 const skillRows = skills.map((s) => `
-    <article class="skill" id="${s.name}">
+    <article class="skill" id="${s.name}" style="--h:${s.hue}">
       <div>
-        <span class="skill-kind">${KIND[s.kind] || s.kind}${s.model === 'opus' ? ' · runs on Claude Opus' : ''}</span>
+        <span class="skill-kind">${KIND[s.kind] || s.kind}${s.model ? ` · tuned for ${modelLabel(s.model)}` : ''}</span>
         <h3><a href="skills/${s.name}/">${esc(s.title)}</a></h3>
         <p class="skill-summary">${esc(s.summary || s.tagline)}</p>
         <ul class="checks">${(s.checks || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
+        ${s.trail ? `<ol class="trail" aria-label="What the agent runs">${s.trail.map(([t, a], i) => `<li style="--i:${i}"><span class="tool" data-t="${esc(t)}">${esc(t)}</span><span class="arg">${esc(a)}</span></li>`).join('')}</ol>` : ''}
         <div class="cmd"><code>npx skills add ${REPO} --skill ${s.name}</code>${copyIcon('Copy install command')}</div>
-        <p class="skill-links"><a href="skills/${s.name}/">Read the docs</a><a href="${GH}/tree/main/skills/${s.name}">Source</a></p>
+        <p class="skill-links">${s.examples.length ? `<a href="skills/${s.name}/#examples">${s.examples.length} worked examples</a>` : ''}<a href="skills/${s.name}/">Read the docs</a><a href="${GH}/tree/main/skills/${s.name}">Source</a></p>
       </div>
       ${evidence(s, '')}
     </article>`).join('');
@@ -125,7 +205,7 @@ const catalogRows = community.skills.map((s) => `
           <tr data-cat="${esc(s.category)}" data-search="${esc([s.name, s.author, s.description, s.category].join(' ').toLowerCase())}">
             <td class="name"><a href="${esc(s.url)}">${esc(s.name)}</a>${s.official ? '<span class="tag-official">Official</span>' : ''}<p>${esc(s.description)}</p></td>
             <td class="who">${esc(s.author)}</td>
-            <td class="cat">${KIND[s.category] || esc(s.category)}</td>
+            <td class="cat"><span class="tag tag-${esc(s.category)}">${KIND[s.category] || esc(s.category)}</span></td>
             <td class="num" title="${(s.stars || 0).toLocaleString('en-US')} stars on ${esc(s.repo)}">${fmtStars(s.stars)}</td>
             <td><button class="copy" type="button" data-copy="${esc(s.install)}" aria-label="Copy install command for ${esc(s.name)}">Copy install</button></td>
           </tr>`).join('');
@@ -134,7 +214,30 @@ const lists = (community.lists || []).map((l) => `<a href="${esc(l.url)}">${esc(
 // ── Write index
 const tpl = fs.readFileSync(path.join(site, 'index.template.html'), 'utf8');
 const fill = (t, vars) => t.replace(/\{\{(\w+)\}\}/g, (_, k) => vars[k] ?? '');
-fs.writeFileSync(path.join(site, 'index.html'), fill(tpl, { base: '', header: header(''), footer: footer(''), skills: skillRows, catalog: catalogRows, lists }));
+// Orbit data for the hero: each skill's first tool call, its result, and a real output thumbnail.
+const orbit = JSON.stringify(skills.map((s) => {
+  const trail = s.trail || [];
+  const call = (trail.find(([t]) => t === 'Bash') || trail[0] || ['Bash', s.name])[1];
+  const result = (trail.find(([t]) => t === 'Done') || trail[trail.length - 1] || ['', 'done'])[1];
+  const ev = s.evidence || {};
+  const thumb = ev.type === 'image' ? ev.src : ev.type === 'video' ? ev.poster : null;
+  const lines = ev.type === 'terminal' ? [ev.command ? `$ ${ev.command}` : '', ...ev.lines] : null;
+  return { name: s.name, title: s.title, call, result, thumb, lines, trail: trail.slice(0, 5) };
+})).replace(/</g, '\\u003c');
+const homeSeo = seo({
+  title: 'Knack · Agent skills that show their work',
+  description: 'Open-source agent skills for developers and designers. Each runs real tools (Playwright, axe-core, ffmpeg, pixel diffs) and checks the result before it reports done.',
+  image: 'assets/og/home.png',
+  jsonld: {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'WebSite', '@id': SITE_URL + '#website', url: SITE_URL, name: 'Knack', description: 'Agent skills that show their work.', inLanguage: 'en' },
+      { '@type': 'SoftwareSourceCode', name: 'Knack', url: SITE_URL, codeRepository: GH, programmingLanguage: 'JavaScript', license: 'https://opensource.org/licenses/MIT', author: { '@type': 'Person', name: 'Mayank Gupta', url: 'https://github.com/mayank2424' } },
+      { '@type': 'ItemList', name: 'Knack skills', itemListElement: skills.map((sk, i) => ({ '@type': 'ListItem', position: i + 1, name: sk.title, url: `${SITE_URL}skills/${sk.name}/` })) },
+    ],
+  },
+});
+fs.writeFileSync(path.join(site, 'index.html'), fill(tpl, { base: '', seo: homeSeo, header: header(''), footer: footer(''), skills: skillRows, catalog: catalogRows, lists, orbit }));
 
 // ── Write skill pages
 fs.rmSync(path.join(site, 'skills'), { recursive: true, force: true });
@@ -148,13 +251,28 @@ for (const s of skills) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${esc(s.title)} · Knack</title>
-<meta name="description" content="${esc(s.summary || s.tagline)}" />
-<meta property="og:title" content="${esc(s.title)} · Knack" />
-<meta property="og:description" content="${esc(s.summary || s.tagline)}" />
-<meta property="og:image" content="https://mayank2424.github.io/knack/assets/og.png" />
+${seo({
+  path: `skills/${s.name}/`,
+  title: `${s.title} skill for Claude Code and AI agents · Knack`,
+  description: s.summary || s.tagline,
+  image: fs.existsSync(path.join(site, 'assets/og', `${s.name}.png`)) ? `assets/og/${s.name}.png` : 'assets/og/home.png',
+  type: 'article',
+  jsonld: {
+    '@context': 'https://schema.org',
+    '@graph': [
+      { '@type': 'SoftwareSourceCode', name: s.title, alternateName: s.name, description: s.summary || s.tagline, url: `${SITE_URL}skills/${s.name}/`,
+        codeRepository: `${GH}/tree/main/skills/${s.name}`, programmingLanguage: 'JavaScript', license: 'https://opensource.org/licenses/MIT', version: String(s.version),
+        image: `${SITE_URL}assets/og/${s.name}.png`, isPartOf: { '@id': SITE_URL + '#website' }, author: { '@type': 'Person', name: 'Mayank Gupta', url: 'https://github.com/mayank2424' } },
+      { '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Knack', item: SITE_URL },
+        { '@type': 'ListItem', position: 2, name: 'Skills', item: SITE_URL + '#skills' },
+        { '@type': 'ListItem', position: 3, name: s.title, item: `${SITE_URL}skills/${s.name}/` } ] },
+    ],
+  },
+})}
 <meta name="theme-color" content="#fafafa" />
 <link rel="icon" href="${base}assets/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="${base}assets/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -162,7 +280,7 @@ for (const s of skills) {
 </head>
 <body>
 ${header(base, 'skills')}
-<main id="main">
+<main id="main" class="skill-page" style="--h:${s.hue}">
   <header class="doc-head"><div class="wrap">
     <p class="crumbs"><a href="${base}#skills">Skills</a> / ${esc(s.title)}</p>
     <h1>${esc(s.title)}</h1>
@@ -171,11 +289,13 @@ ${header(base, 'skills')}
   <div class="wrap doc-grid">
     <article class="prose">
       ${s.evidence ? evidence(s, base) : ''}
+      ${examplesHtml(s, base)}
+      ${s.examples.length ? '<h2 class="readme-h">About this skill</h2>' : ''}
       ${s.html}
     </article>
     <aside class="doc-aside" aria-label="Install and details">
       <section>
-        <h2>Install</h2>
+        <h2 id="install">Install</h2>
         <div class="cmd"><code>npx skills add ${REPO} --skill ${s.name}</code>${copyIcon('Copy install command')}</div>
         <div class="cmd"><code>/plugin install knack@knack</code>${copyIcon('Copy install command')}</div>
       </section>
@@ -184,14 +304,14 @@ ${header(base, 'skills')}
         <dl>
           <dt>Category</dt><dd>${KIND[s.kind] || s.kind}</dd>
           <dt>Version</dt><dd>${esc(s.version)}</dd>
-          ${s.model ? `<dt>Model</dt><dd>${s.model === 'opus' ? 'Claude Opus' : esc(s.model)}</dd>` : ''}
+          ${s.model ? `<dt>Model</dt><dd>${esc(modelLabel(s.model))}</dd>` : ''}
           <dt>Scripts</dt><dd>${s.scripts.map((f) => `<code>${esc(f)}</code>`).join(' ')}</dd>
           <dt>License</dt><dd>MIT</dd>
         </dl>
       </section>
       <section>
         <h2>Links</h2>
-        <ul><li><a href="${GH}/tree/main/skills/${s.name}">Source on GitHub</a></li><li><a href="${GH}/blob/main/skills/${s.name}/SKILL.md">SKILL.md</a></li></ul>
+        <ul>${s.examples.length ? `<li><a href="#examples">Examples (${s.examples.length})</a></li>` : ''}<li><a href="${GH}/tree/main/skills/${s.name}">Source on GitHub</a></li><li><a href="${GH}/blob/main/skills/${s.name}/SKILL.md">SKILL.md</a></li></ul>
       </section>
       <section>
         <h2>Other skills</h2>
@@ -206,6 +326,16 @@ ${footer(base)}
 </html>
 `);
 }
+
+// ── sitemap.xml + robots.txt
+const today = new Date().toISOString().slice(0, 10);
+const urls = ['', ...skills.map((sk) => `skills/${sk.name}/`)];
+fs.writeFileSync(path.join(site, 'sitemap.xml'), `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${urls.map((u) => `  <url><loc>${SITE_URL}${u}</loc><lastmod>${today}</lastmod><priority>${u ? '0.8' : '1.0'}</priority></url>`).join('\n')}
+</urlset>
+`);
+fs.writeFileSync(path.join(site, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${SITE_URL}sitemap.xml\n`);
 
 // Old client-rendered data file is no longer used.
 fs.rmSync(path.join(site, 'data'), { recursive: true, force: true });

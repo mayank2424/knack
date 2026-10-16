@@ -1,0 +1,10 @@
+{
+  "name": "crumb-orders",
+  "private": true,
+  "description": "Fixture for the token-drift skill: a 2019-era bakery ordering app with no design tokens, just hard-coded hex and px in CSS modules and styled-components.",
+  "dependencies": {
+    "react": "16.14.0",
+    "react-dom": "16.14.0",
+    "styled-components": "5.3.11"
+  }
+}

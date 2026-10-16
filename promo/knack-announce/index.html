@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Knack announcement: 10 seconds, the green tick that every skill earns becomes the logo (16:9, 60fps, with sound)" />
+<title>Knack · announcement</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  :root { --bg: #fafafa; --ink: #111214; --ink2: #33353a; --muted: #61646b; --rule: #e6e6e8; --rule2: #d3d4d8; --bad: #c42f1f; --good: #16793c; --tick: #3ee07a; }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; }
+  #cam { position: absolute; inset: 0; background: var(--bg);
+    background-image: radial-gradient(circle, #d7d8dc 1.6px, transparent 2px); background-size: 36px 36px; background-position: 18px 18px; }
+  .layer { position: absolute; inset: 0; }
+  .mask { display: block; overflow: hidden; padding-bottom: 0.14em; margin-bottom: -0.14em; }
+  .mask > span { display: inline-block; }
+
+  /* Shot 1 */
+  #s1 { left: 220px; top: 0; }
+  #s1 .kicker { position: absolute; left: 0; top: 300px; font: 500 30px 'IBM Plex Mono', monospace; color: var(--muted); }
+  #s1 h1 { position: absolute; left: 0; top: 360px; margin: 0; font-weight: 600; font-size: 156px; line-height: 1.04; letter-spacing: -0.035em; white-space: nowrap; }
+  #line2 { position: relative; height: 1.18em; }
+  #line2 .mask { position: absolute; left: 0; top: 0; }
+  #strike { position: absolute; left: -6px; top: 0.56em; height: 12px; width: calc(100% + 12px); background: var(--bad); border-radius: 6px; clip-path: inset(0 calc(100% - var(--sk, 0%)) 0 0); }
+  #scribble { position: absolute; left: -4px; top: 1.0em; width: calc(100% + 8px); height: 34px; overflow: visible; }
+  #scribble path { fill: none; stroke: var(--good); stroke-width: 9; stroke-linecap: round; }
+
+  /* Shot 2: evidence wall */
+  #s2 h2 { position: absolute; left: 174px; top: 96px; margin: 0; font-weight: 600; font-size: 54px; letter-spacing: -0.02em; }
+  #grid { position: absolute; left: 174px; top: 200px; display: grid; grid-template-columns: repeat(3, 500px); gap: 36px 36px; }
+  .card { width: 500px; height: 352px; background: #fff; border: 1.5px solid var(--rule2); border-radius: 18px; overflow: hidden; box-shadow: 0 30px 60px -34px rgba(17,18,20,.45); }
+  .card .shot { height: 284px; border-bottom: 1.5px solid var(--rule); overflow: hidden; background: #f6f6f7; }
+  .card .shot img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+  .card .shot.contain img { object-fit: contain; object-position: center; }
+  .card .shot pre { margin: 0; height: 100%; background: #111214; color: #c8c9ce; font: 500 15px/1.75 'IBM Plex Mono', monospace; padding: 22px 24px; white-space: pre; overflow: hidden; }
+  .card .shot pre b { color: #fff; font-weight: 500; } .card .shot pre i { color: #8fd6a8; font-style: normal; }
+  .card .foot { height: 66px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; }
+  .card .name { font: 500 24px 'IBM Plex Mono', monospace; color: var(--ink); }
+  .chip { position: relative; display: inline-flex; align-items: center; gap: 10px; height: 40px; padding: 0 16px 0 14px; border-radius: 999px; border: 1.5px solid var(--rule2); font: 500 22px 'IBM Plex Mono', monospace; color: var(--muted); background: #fff; }
+  .chip .dot { width: 12px; height: 12px; border-radius: 50%; background: var(--rule2); flex: none; }
+  .chip .ok { display: none; }
+  .chip.done { border-color: var(--good); color: var(--good); }
+  .chip.done .dot { background: var(--good); }
+  .chip.done .run { display: none; } .chip.done .ok { display: inline; }
+  .fly { position: absolute; left: 0; top: 0; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--good); opacity: 0; }
+
+  /* Shot 3: lockup (outside the camera) */
+  #s3 { position: absolute; inset: 0; }
+  #row { position: absolute; left: 0; right: 0; top: 330px; display: flex; justify-content: center; align-items: center; gap: 44px; }
+  #logo { width: 176px; height: 176px; overflow: visible; transform-origin: 50% 50%; }
+  #wordmark { font-weight: 600; font-size: 172px; letter-spacing: -0.035em; line-height: 1; }
+  #tagline { position: absolute; left: 0; right: 0; top: 580px; text-align: center; font-size: 54px; color: var(--ink2); letter-spacing: -0.01em; }
+  #install { position: absolute; left: 0; right: 0; top: 708px; display: flex; justify-content: center; gap: 22px; align-items: center; }
+  #install .cmd { font: 500 34px 'IBM Plex Mono', monospace; color: var(--ink); background: #fff; border: 1.5px solid var(--rule2); border-radius: 14px; padding: 18px 28px; box-shadow: 0 18px 40px -28px rgba(17,18,20,.5); }
+  #install .url { font: 500 32px 'IBM Plex Mono', monospace; color: var(--muted); }
+  .knack-out-gif #cam { background-image: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="cam">
+    <div class="layer" id="s1">
+      <div class="kicker" id="kicker">for Claude Code and any agent</div>
+      <h1>
+        <span class="mask"><span class="w">Agent</span> <span class="w">skills</span> <span class="w">that</span></span>
+        <div id="line2">
+          <span class="mask" id="sayMask"><span id="say">say they're done.<span id="strike"></span></span></span>
+          <span class="mask" id="showMask"><span id="show">show their work.<svg id="scribble" viewBox="0 0 400 24" preserveAspectRatio="none"><path d="M3 15 C 70 7, 150 5, 225 9 S 345 17, 397 7" /></svg></span></span>
+        </div>
+      </h1>
+    </div>
+
+    <div class="layer" id="s2">
+      <h2 id="s2h">Every skill checks its own work.</h2>
+      <div id="grid">
+        <div class="card"><div class="shot"><img src="assets/responsive-desktop.png" alt="" data-knack-ignore /></div><div class="foot"><span class="name">responsive-qa</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">0 errors</span></span></div></div>
+        <div class="card"><div class="shot"><img src="assets/a11y.png" alt="" data-knack-ignore /></div><div class="foot"><span class="name">a11y-audit</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">0 serious</span></span></div></div>
+        <div class="card"><div class="shot"><img src="assets/motion-frame.png" alt="" data-knack-ignore /></div><div class="foot"><span class="name">motion-video</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">−14 LUFS</span></span></div></div>
+        <div class="card"><div class="shot" data-knack-ignore><pre><i>$ node scan.mjs acme-dashboard</i>
+  Drift score   <b>13%</b>  11 of 83 values
+  EXACT     48  swap in the token
+  NEAR      10  within threshold
+<i>$ node scan.mjs --fix</i>
+  Fixed 41 values · score <b>63%</b></pre></div><div class="foot"><span class="name">token-drift</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">13% → 63%</span></span></div></div>
+        <div class="card"><div class="shot contain"><img src="assets/prdiff.png" alt="" data-knack-ignore /></div><div class="foot"><span class="name">pr-visual-diff</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">0px flake</span></span></div></div>
+        <div class="card"><div class="shot"><img src="assets/demo-poster.png" alt="" data-knack-ignore /></div><div class="foot"><span class="name">demo-recorder</span><span class="chip"><span class="dot"></span><span class="run">checking</span><span class="ok">890 KB mp4</span></span></div></div>
+      </div>
+      <div id="flies"></div>
+    </div>
+  </div>
+
+  <div id="s3">
+    <div id="row">
+      <svg id="logo" viewBox="0 0 64 64" data-knack-ignore>
+        <rect id="lrect" width="64" height="64" rx="15" fill="#111214" />
+        <g fill="none" stroke-width="6.2" stroke-linecap="round" stroke-linejoin="round">
+          <path class="kstroke" d="M19.5 13v38" stroke="#fff" />
+          <path class="kstroke" d="M44 13 23 31.5" stroke="#fff" />
+          <path class="kstroke" d="M28 27 42 51" stroke="#fff" />
+          <path id="tick" d="M37 41.5l5 9.5 9-15" stroke="#16793c" />
+        </g>
+      </svg>
+      <span class="mask"><span id="wordmark">Knack</span></span>
+    </div>
+    <div id="tagline"><span class="mask"><span id="tag">Agent skills that show their work.</span></span></div>
+    <div id="install"><span class="cmd" id="cmd">npx skills add mayank2424/knack</span><span class="url" id="url">knack.mayankbuilds.com</span></div>
+  </div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 10 });
+  const B = Motion.beats({ bpm: 120 });               // one beat = 0.5s
+  const W = 1920, H = 1080;
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const E = { strong: Motion.resolveEase('strong'), io: Motion.resolveEase('strongInOut'), inC: Motion.resolveEase('inCubic'), smooth: Motion.resolveEase('smooth') };
+  const seg = (t, a, b, e = E.strong) => e(clamp((t - a) / (b - a)));
+
+  Motion.score({
+    bpm: 120, key: 'A', scale: 'major', mood: 'driving',
+    sections: [
+      { at: 0, drums: false, arp: false, filter: 900 },
+      { at: B(3.5), drums: true, arp: false, filter: 4000 },
+      { at: B(7), drums: true, arp: true, filter: 20000 },
+      { at: B(12.5), drums: false, arp: false, filter: 1400 },
+      { at: B(14), drums: true, arp: true, filter: 20000 },
+      { at: B(18), drums: false, filter: 20000 },
+    ],
+  });
+
+  // ── Shot 1 · the claim, struck and corrected
+  Motion.to('#s1 .w, #say', { start: 0, duration: 0.55, ease: 'strong', stagger: 0.06, from: { y: '115%' }, to: { y: '0%' } });
+  Motion.to('#kicker', { start: 0.15, duration: 0.5, ease: 'strong', from: { opacity: 0, y: 14 }, to: { opacity: 1, y: 0 } });
+  Motion.to('#strike', { start: B(2.5), duration: 0.3, ease: 'strongInOut', from: { '--sk': '0%' }, to: { '--sk': '100%' } });
+  Motion.cue(B(2.5) + 0.12, 'hit', { gain: 0.9 });
+  Motion.to('#say', { start: B(3.5), duration: 0.24, ease: 'inCubic', from: { y: '0%' }, to: { y: '140%' } });
+  Motion.cue(B(3.5), 'whoosh', { gain: 0.7 });
+  Motion.to('#show', { start: B(3.5) + 0.22, duration: 0.55, ease: 'strong', from: { y: '125%' }, to: { y: '0%' } });
+  Motion.draw('#scribble path', { start: B(4.75), duration: 0.5, ease: 'strongInOut' });
+  Motion.cue(B(4.75), 'tick', { gain: 0.8 });
+  Motion.to('#s1', { start: B(7) - 0.01, duration: 0, from: { opacity: 1 }, to: { opacity: 0 } });
+
+  // ── Shot 2 · the evidence wall
+  Motion.to('#s2', { start: 0, duration: 0, from: { opacity: 0 }, to: { opacity: 0 } });
+  Motion.to('#s2', { start: B(7), duration: 0, from: { opacity: 1 }, to: { opacity: 1 } });
+  Motion.cue(B(7), 'whoosh', { gain: 0.8 });
+  Motion.to('#s2h', { start: B(7), duration: 0.55, ease: 'strong', from: { opacity: 0, y: 30 }, to: { opacity: 1, y: 0 } });
+  Motion.to('.card', { start: B(7) + 0.06, duration: 0.55, ease: 'strong', stagger: 0.25, from: { opacity: 0, y: 60, scale: 0.96 }, to: { opacity: 1, y: 0, scale: 1 } });
+  const CHIP_AT = (i) => B(7) + 0.06 + i * 0.25 + 0.75;
+  for (let i = 0; i < 6; i++) Motion.cue(CHIP_AT(i), 'tick', { gain: 0.55 });
+  Motion.to('#cam', { start: B(7), duration: B(13) - B(7), ease: 'smooth', from: { scale: 1 }, to: { scale: 1.045 } });
+  // collapse: cards fall away edge-first, heading leaves upward
+  Motion.to('#s2h', { start: B(13), duration: 0.3, ease: 'inCubic', from: { opacity: 1, y: 0 }, to: { opacity: 0, y: -40 } });
+  Motion.to('.card', { start: B(13), duration: 0.36, ease: 'inCubic', stagger: { each: 0.03, from: 'edges' }, from: { opacity: 1, scale: 1 }, to: { opacity: 0, scale: 0.86 } });
+  Motion.cue(B(13), 'whoosh', { gain: 0.7 });
+  Motion.cue(B(14), 'riser', { length: B(1.5), gain: 0.7 });
+
+  // ── Shot 3 · the tick becomes the logo
+  Motion.cue(B(14), 'impact', { gain: 0.9 });
+  Motion.draw('.kstroke', { start: B(14) + 0.18, duration: 0.42, ease: 'strongInOut' });
+  Motion.to('#wordmark', { start: B(14) + 0.35, duration: 0.6, ease: 'strong', from: { y: '115%' }, to: { y: '0%' } });
+  Motion.cue(B(14) + 0.35, 'pop', { gain: 0.6 });
+  Motion.to('#tag', { start: B(14) + 0.45, duration: 0.6, ease: 'strong', from: { y: '115%' }, to: { y: '0%' } });
+  Motion.to('#cmd, #url', { start: B(14) + 0.55, duration: 0.5, ease: 'strong', stagger: 0.08, from: { opacity: 0, y: 24 }, to: { opacity: 1, y: 0 } });
+  Motion.cue(B(14) + 0.6, 'tick', { gain: 0.6 });
+
+  // Measured layout (stage coordinates, unaffected by the preview's scaling)
+  const rel = (el) => { let x = 0, y = 0, e = el; while (e && e.id !== 'stage') { x += e.offsetLeft; y += e.offsetTop; e = e.offsetParent; } return { x, y, w: el.offsetWidth, h: el.offsetHeight }; };
+  let chipDots = [], logoBox = null, flies = [];
+  const chips = [...document.querySelectorAll('.chip')];
+  const scribble = document.querySelector('#scribble path'), kstrokes = [...document.querySelectorAll('.kstroke')];
+  const tick = document.getElementById('tick'), lrect = document.getElementById('lrect'), logo = document.getElementById('logo');
+  let tickLen = 30;
+  Motion.ready(() => {
+    chipDots = chips.map((c) => { const r = rel(c.querySelector('.dot')); return { x: r.x + r.w / 2, y: r.y + r.h / 2 }; });
+    const host = document.getElementById('flies');
+    flies = chipDots.map(() => { const d = document.createElement('span'); d.className = 'fly'; host.appendChild(d); return d; });
+    logoBox = rel(logo);
+    tickLen = tick.getTotalLength();
+    tick.style.strokeDasharray = tickLen;
+  });
+
+  const S = 3.4;                                       // the big tick's scale before it shrinks into the logo
+  const mix = (a, b, p) => `rgb(${a.map((v, i) => Math.round(v + (b[i] - v) * p)).join(',')})`;
+  Motion.on((t) => {
+    // chips flip from "checking" to their result
+    chips.forEach((c, i) => c.classList.toggle('done', t >= CHIP_AT(i)));
+    // round caps paint a dot even at zero dash length: keep strokes hidden until they start drawing
+    scribble.style.opacity = t >= B(4.75) ? '1' : '0';
+    kstrokes.forEach((k) => (k.style.opacity = t >= B(14) + 0.18 ? '1' : '0'));
+    if (!logoBox) return;
+
+    // green dots fly from every chip to the centre of the frame (camera space: the camera scales about the centre)
+    const f0 = B(13), f1 = B(13) + 0.4;
+    flies.forEach((d, i) => {
+      const p = seg(t, f0 + i * 0.02, f1, E.inC), from = chipDots[i];
+      d.style.opacity = t >= f0 && t < f1 + 0.04 ? '1' : '0';
+      d.style.transform = `translate(${from.x + (W / 2 - from.x) * p}px, ${from.y + (H / 2 - from.y) * p}px) scale(${1 + p * 0.6})`;
+    });
+
+    // logo: big tick centred → shrinks into place
+    const lcx = logoBox.x + logoBox.w / 2, lcy = logoBox.y + logoBox.h / 2, u = logoBox.w / 64;
+    const tcx = (44 - 32) * u, tcy = (43.25 - 32) * u;        // tick centre relative to the logo centre
+    const k = seg(t, B(14), B(14) + 0.5, E.io);
+    const sc = S + (1 - S) * k;
+    const dx = (W / 2 - lcx - S * tcx) * (1 - k), dy = (H / 2 - lcy - S * tcy) * (1 - k);
+    logo.style.transform = `translate(${dx}px, ${dy}px) scale(${sc})`;
+    const drawn = seg(t, B(13) + 0.38, B(14) - 0.02, E.io);
+    logo.style.opacity = t >= B(13) + 0.38 ? '1' : '0';
+    tick.style.strokeDashoffset = String(tickLen * (1 - drawn));
+    lrect.style.opacity = String(seg(t, B(14) + 0.12, B(14) + 0.42, E.strong));
+    tick.style.stroke = mix([22, 121, 60], [62, 224, 122], seg(t, B(14) + 0.12, B(14) + 0.42, E.smooth));
+  });
+</script>
+</body>
+</html>

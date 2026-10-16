@@ -1,0 +1,53 @@
+/* Left out: 19 values used once (listed in report.md; --min-uses 1 includes them). */
+:root {
+  /* 9 uses: 16px×8, 15px×1 */
+  --space-16: 16px;
+  /* 7 uses: 24px×7 */
+  --space-24: 24px;
+  /* 7 uses: #e8590c×7 */
+  --color-orange-600: #e8590c;
+  /* 7 uses: #333333×5, #323232×1, #343434×1 */
+  --color-gray-700: #333333;
+  /* 7 uses: 14px×4, 15px×2, 13px×1 */
+  --font-size-14: 14px;
+  /* 6 uses: 12px×6 */
+  --space-12: 12px;
+  /* 6 uses: #ffffff×6 */
+  --color-white: #ffffff;
+  /* 5 uses: #e5e5e5×2, #e6e6e6×2, #e7e7e7×1 */
+  --color-gray-200: #e5e5e5;
+  /* 4 uses: 6px×3, 7px×1 */
+  --radius-6: 6px;
+  /* 4 uses: 600×4 */
+  --font-weight-600: 600;
+  /* 3 uses: 4px×3 */
+  --space-4: 4px;
+  /* 3 uses: #666666×3 */
+  --color-gray-500: #666666;
+  /* 3 uses: #c92a2a×3 */
+  --color-red-600: #c92a2a;
+  /* 3 uses: #d9480f×2, #d9480e×1 */
+  --color-orange-700: #d9480f;
+  /* 3 uses: #f5f5f5×2, #fafafa×1 */
+  --color-gray-100: #f5f5f5;
+  /* 3 uses: 16px×3 */
+  --font-size-16: 16px;
+  /* 3 uses: 700×3 */
+  --font-weight-700: 700;
+  /* 3 uses: 200ms×2, 180ms×1 */
+  --duration-200: 200ms;
+  /* 2 uses: 8px×2 */
+  --space-8: 8px;
+  /* 2 uses: 4px×2 */
+  --radius-4: 4px;
+  /* 2 uses: 8px×2 */
+  --radius-8: 8px;
+  /* 2 uses: #fdecea×2 */
+  --color-red-50: #fdecea;
+  /* 2 uses: 12px×2 */
+  --font-size-12: 12px;
+  /* 2 uses: 18px×2 */
+  --font-size-18: 18px;
+  /* 2 uses: 0 2px 4px rgba(0, 0, 0, 0.08)×2 */
+  --shadow-1: 0 2px 4px rgba(0, 0, 0, 0.08);
+}

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Invoices · Tallyhouse</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="side">
+      <a class="logo" href="index.html"><i>T</i>Tallyhouse</a>
+      <nav>
+        <a href="index.html">Overview</a>
+        <a href="invoices.html" aria-current="page">Invoices</a>
+        <a href="settings.html">Settings</a>
+      </nav>
+      <p class="foot">Juniper &amp; Vale Studio<br>Pro plan</p>
+    </aside>
+    <main>
+      <div class="head">
+        <div>
+          <h1>Invoices</h1>
+          <p>24 invoices · $60,600 billed this quarter</p>
+        </div>
+        <a class="btn" href="#">+ New invoice</a>
+      </div>
+
+      <div class="filters">
+        <span class="chip" aria-pressed="true">All</span>
+        <span class="chip">Due</span>
+        <span class="chip">Overdue</span>
+        <span class="chip">Paid</span>
+        <span class="chip">Drafts</span>
+      </div>
+
+      <section class="panel">
+        <table>
+          <thead><tr><th>Client</th><th class="hide-sm">Issued</th><th class="hide-sm">Due</th><th>Status</th><th class="num">Amount</th></tr></thead>
+          <tbody>
+            <tr><td>Northwind Bakery<span class="sub">INV-1042</span></td><td class="hide-sm">Oct 14</td><td class="hide-sm">Oct 28</td><td><span class="pill due">Due</span></td><td class="num">$4,800</td></tr>
+            <tr><td>Harbor &amp; Pine<span class="sub">INV-1041</span></td><td class="hide-sm">Oct 07</td><td class="hide-sm">Oct 21</td><td><span class="pill paid">Paid</span></td><td class="num">$12,500</td></tr>
+            <tr><td>Sable Street Books<span class="sub">INV-1040</span></td><td class="hide-sm">Oct 05</td><td class="hide-sm">Nov 04</td><td><span class="pill due">Due</span></td><td class="num">$780</td></tr>
+            <tr><td>Kestrel Outfitters<span class="sub">INV-1039</span></td><td class="hide-sm">Sep 18</td><td class="hide-sm">Oct 02</td><td><span class="pill late">Overdue</span></td><td class="num">$2,150</td></tr>
+            <tr><td>Marigold Dental<span class="sub">INV-1038</span></td><td class="hide-sm">Sep 16</td><td class="hide-sm">Sep 30</td><td><span class="pill paid">Paid</span></td><td class="num">$1,960</td></tr>
+            <tr><td>Fernhill Yoga<span class="sub">INV-1037</span></td><td class="hide-sm">Sep 09</td><td class="hide-sm">Sep 23</td><td><span class="pill late">Overdue</span></td><td class="num">$1,000</td></tr>
+            <tr><td>Copperline Coffee<span class="sub">INV-1036</span></td><td class="hide-sm">Sep 02</td><td class="hide-sm">Sep 16</td><td><span class="pill paid">Paid</span></td><td class="num">$6,240</td></tr>
+          </tbody>
+        </table>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

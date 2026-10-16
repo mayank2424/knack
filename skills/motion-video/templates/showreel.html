@@ -1,0 +1,277 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="description" content="Showreel reference: 15s, one object through seven techniques, cut on a 124 BPM grid with a synthesized, cue-synced score (16:9, 60fps)" />
+<title>Showreel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans+Condensed:wght@500;700&family=IBM+Plex+Sans:wght@400;600;700&display=block" rel="stylesheet" />
+<script src="motion.js"></script>
+<style>
+  /*
+   * Concept: one vermilion square is the thread. Every beat recasts it as a different
+   * technique, so the transitions are match cuts on the square instead of fades.
+   * Art direction: paper, ink, one accent. No glows, no gradients.
+   */
+  :root { --paper: #efece4; --ink: #141414; --accent: #ff3d00; --mid: #8a867c; }
+  #stage { background: var(--paper); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; }
+  .layer { position: absolute; inset: 0; }
+  #cam { background: var(--paper); }
+  .center { position: absolute; left: 50%; top: 50%; }
+  .sq { position: absolute; width: 220px; height: 220px; margin: -110px 0 0 -110px; background: var(--accent); }
+  .sq.skin { background: none; border: 3px solid var(--ink); opacity: .18; }
+  .floor { position: absolute; left: -420px; width: 840px; top: 110px; height: 3px; background: var(--ink); transform-origin: center; }
+  #flood { position: absolute; inset: 0; background: var(--ink); clip-path: circle(var(--fr, 0%) at 50% 50%); }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+  .cond { font-family: 'IBM Plex Sans Condensed', sans-serif; }
+
+
+  /* 2 · type grid */
+  .grid { position: absolute; left: 160px; top: 150px; width: 1600px; height: 780px; display: grid; grid-template-columns: repeat(8, 1fr); grid-template-rows: repeat(4, 1fr); gap: 0; }
+  .cell { display: grid; place-items: center; font: 700 132px/1 'IBM Plex Sans Condensed', sans-serif; letter-spacing: -0.02em; }
+  .cell.a { color: var(--accent); }
+
+  /* 3 · cube */
+  .scene3d { position: absolute; left: 50%; top: 50%; width: 0; height: 0; perspective: 1600px; }
+  .cube { position: absolute; width: 440px; height: 440px; margin: -220px 0 0 -220px; transform-style: preserve-3d; }
+  .face { position: absolute; inset: 0; display: grid; place-items: center; font: 700 76px 'IBM Plex Sans Condensed', sans-serif; letter-spacing: 0.02em; backface-visibility: hidden; }
+  .f1 { background: var(--accent); color: var(--paper); transform: translateZ(220px); }
+  .f2 { background: var(--paper); color: var(--ink); transform: rotateY(90deg) translateZ(220px); }
+  .f3 { background: #d9d4c7; color: var(--ink); transform: rotateY(180deg) translateZ(220px); }
+  .f4 { background: var(--paper); color: var(--accent); transform: rotateY(-90deg) translateZ(220px); }
+  .f5 { background: #d9d4c7; transform: rotateX(90deg) translateZ(220px); }
+  .f6 { background: var(--accent); transform: rotateX(-90deg) translateZ(220px); }
+
+  /* 6 · graph editor */
+  .graph { position: absolute; left: 280px; top: 170px; width: 760px; height: 640px; }
+  .graph svg { overflow: visible; }
+  .graph path { fill: none; }
+  .graph .axis { stroke: var(--ink); stroke-width: 3; }
+  .graph .gridl { stroke: #d6d1c4; stroke-width: 2; }
+  .graph .curve { fill: none; stroke: var(--accent); stroke-width: 8; stroke-linecap: round; }
+  .graph .handle { stroke: var(--ink); stroke-width: 3; stroke-dasharray: 8 10; }
+  .ease-label { position: absolute; left: 280px; top: 112px; font: 500 28px 'IBM Plex Mono', monospace; color: var(--ink); }
+  .track { position: absolute; left: 1160px; top: 230px; width: 4px; height: 520px; background: #d6d1c4; }
+  .ball { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; background: var(--accent); }
+  .ghost { position: absolute; width: 96px; height: 96px; margin: -48px 0 0 -48px; border-radius: 50%; border: 3px solid var(--ink); opacity: .25; }
+
+  /* 8 · title */
+  .title { position: absolute; left: 160px; top: 330px; font: 700 220px/0.92 'IBM Plex Sans Condensed', sans-serif; letter-spacing: -0.03em; }
+  .title .mask { display: block; overflow: hidden; padding-bottom: 0.06em; }
+  .title .mask > span { display: inline-block; }
+  .title em { font-style: normal; color: var(--accent); }
+  .role { position: absolute; left: 168px; top: 790px; display: flex; gap: 40px; font: 500 30px 'IBM Plex Mono', monospace; }
+  .role span:first-child { color: var(--accent); }
+</style>
+</head>
+<body>
+<div id="stage">
+ <div class="layer" id="cam">
+  <!-- 1 · squash & stretch (the square is born) -->
+  <div id="flood"></div>
+  <div class="layer" id="s1"><div class="center" style="top:56%"><div class="floor" id="floor"></div><div class="sq skin" id="sk1"></div><div class="sq skin" id="sk2"></div><div class="sq skin" id="sk3"></div><div class="sq" id="sq1"></div></div></div>
+
+  <!-- 2 · typographic grid: the square becomes one cell of a word grid -->
+  <div class="layer" id="s2"><div class="grid" id="grid"></div></div>
+
+  <!-- 3 · 3D: the cell extrudes into a cube that tumbles through four words -->
+  <div class="layer" id="s3"><div class="scene3d"><div class="cube" id="cube" data-knack-ignore>
+    <div class="face f1">EXTRUDE</div><div class="face f2">TURN</div><div class="face f3">ROLL</div><div class="face f4">LAND</div><div class="face f5"></div><div class="face f6"></div>
+  </div></div></div>
+
+  <!-- 4 · liquid morph (SVG), 5 · particles (canvas) share a full-stage svg + canvas -->
+  <svg class="layer" id="s4" viewBox="0 0 1920 1080"><path id="blob" fill="#ff3d00" d="M880 460h160v160H880z" /></svg>
+
+  <!-- 6 · graph editor: the curve that drives the next move is drawn, then obeyed -->
+  <div class="layer" id="s6">
+    <div class="ease-label" id="easeLabel">cubic-bezier(0.16, 1, 0.3, 1)</div>
+    <div class="graph"><svg width="760" height="640" viewBox="0 0 760 640">
+      <path class="gridl" d="M0 160H760M0 320H760M0 480H760M190 0V640M380 0V640M570 0V640" />
+      <path class="axis" d="M0 0V640H760" />
+      <path class="handle" id="h1" d="M0 640L122 0" /><path class="handle" id="h2" d="M760 0L228 0" />
+      <path class="curve" id="curve" d="M0 640C122 0 228 0 760 0" />
+    </svg></div>
+    <div class="track"></div>
+    <div id="ghosts"></div>
+  </div>
+  <div class="ball" id="ball"></div>
+
+  <!-- 8 · title card -->
+  <div class="layer" id="s8">
+    <div class="title"><span class="mask"><span id="t1">Claude</span></span><span class="mask"><span id="t2">moves<em>.</em></span></span></div>
+    <div class="role" id="role"><span>motion designer</span><span>timing · type · systems · physics</span></div>
+  </div>
+
+ </div>
+</div>
+<script>
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 15, background: '#efece4' });
+  const B = Motion.beats({ bpm: 124 });          // one beat ≈ 0.484s; every cut lands on a beat
+  Motion.score({ bpm: 124, key: 'E', scale: 'minor', mood: 'driving' });
+  const W = 1920, H = 1080, ACC = '#ff3d00', INK = '#141414';
+  const show = (sel, a, b) => Motion.on((t) => { document.querySelector(sel).style.visibility = t >= a && t < b ? 'visible' : 'hidden'; });
+
+  // Shot list (in beats): each shot is one technique, and the square carries over every cut.
+  const SHOTS = [
+    [0, 'squash & stretch'], [4, 'type grid'], [8, '3d · four faces'], [12.5, 'liquid morph'],
+    [16.5, 'particles → the square'], [20.5, 'the curve, then the move'], [25, 'title'],
+  ];
+  SHOTS.slice(1).forEach(([b]) => Motion.cue(B(b), 'whoosh', { gain: 0.8 }));
+
+  // ── 1 · Squash & stretch (beats 0–4): drop, squash on impact, rebound, settle.
+  show('#s1', 0, B(4));
+  Motion.on((t) => {
+    const el = document.getElementById('sq1');
+    const drop = Motion.interpolate(t, [0, B(1)], [-700, 0], { ease: 'inQuad' });
+    const reb = t > B(1) ? -Math.abs(Math.sin((t - B(1)) * 6.5)) * 260 * Math.exp(-(t - B(1)) * 2.4) : 0;
+    const y = t < B(1) ? drop : reb;
+    const vel = t < B(1) ? 1 : 0;
+    // Squash when touching the floor, stretch while falling fast.
+    const impact = t > B(1) ? Math.exp(-(((t - B(1)) * 7) ** 2)) : 0;
+    const sx = 1 + impact * 0.55 - vel * 0.18 * Math.min(1, t / B(1));
+    const sy = 1 - impact * 0.45 + vel * 0.35 * Math.min(1, t / B(1));
+    el.style.transform = `translateY(${y + 110 * (1 - sy)}px) scale(${sx}, ${sy})`;
+    // Onion skins: where the square was 3, 6 and 9 frames ago, while it falls.
+    ['sk1', 'sk2', 'sk3'].forEach((id, i) => {
+      const tt = t - (i + 1) * 3 / 60, sk = document.getElementById(id);
+      sk.style.visibility = t < B(1) + 0.05 && tt > 0 ? 'visible' : 'hidden';
+      sk.style.transform = `translateY(${Motion.interpolate(tt, [0, B(1)], [-700, 0], { ease: 'inQuad' })}px)`;
+    });
+  });
+  Motion.from('#floor', { scaleX: 0 }, { start: 0, duration: 0.5, ease: 'strong' });
+  Motion.to('#s1 .center', { start: B(3.4), duration: 0.3, ease: 'inCubic', to: { scale: 0.2, opacity: 0 } });
+  Motion.cue(B(1), 'hit'); Motion.cue(B(2.3), 'pop', { gain: 0.6 });
+
+  // ── 2 · Type grid (beats 4–8): letters ripple in from the square's cell outward.
+  show('#s2', B(4), B(8));
+  // 8×4 grid that spells the concept, row by row: ONE / SQUARE / MANY / LIVES.
+  const words = ('··ONE···' + '·SQUARE·' + '··MANY··' + '·LIVES··').split('');
+  const grid = document.getElementById('grid');
+  words.forEach((ch, i) => grid.insertAdjacentHTML('beforeend', `<div class="cell${'AEIOU'.includes(ch) ? ' a' : ''}">${ch === '·' ? '' : ch}</div>`));
+  Motion.to('#grid .cell', { start: B(4), duration: 0.5, ease: 'strong', stagger: { each: 0.035, from: 11, grid: [8, 4] }, from: { opacity: 0, scale: 0.4, rotate: -30 }, to: { opacity: 1, scale: 1, rotate: 0 } });
+  Motion.to('#grid .cell', { start: B(7.3), duration: 0.32, ease: 'inCubic', stagger: { each: 0.02, from: 'edges', grid: [8, 4] }, to: { opacity: 0, scale: 0.6 } });
+  // While it holds, a wave travels through the grid so the shot never goes still ("systems").
+  const cells = () => Array.from(document.querySelectorAll('#grid .cell'));
+  Motion.on((t) => {
+    const env = Motion.clamp((t - B(5.3)) / 0.3) * (1 - Motion.clamp((t - B(7.1)) / 0.25));
+    cells().forEach((c, i) => {
+      const d = Math.hypot(i % 8 - 3, Math.floor(i / 8) - 1.5);
+      c.style.translate = env ? `0 ${(Math.sin(t * 9 - d * 1.1) * 22 * env).toFixed(1)}px` : '';
+    });
+  });
+  Motion.cue(B(4.2), 'tick', { gain: 0.8 });
+
+  // ── 3 · Cube (beats 8–12.5): rises out of the floor and tumbles through four faces on the beat.
+  show('#s3', B(8), B(12.5));
+  Motion.to('#cube', { start: B(8), duration: 0.7, ease: 'strong', from: { scale: 0.45, rotateX: -70, rotateY: 0, y: 260 }, to: { scale: 1, rotateX: -14, rotateY: 0, y: 0 } });
+  [1, 2, 3].forEach((n) => {
+    Motion.to('#cube', { start: B(8 + n), duration: 0.42, ease: 'strongInOut', to: { rotateY: -90 * n, rotateX: -14 } });
+    Motion.cue(B(8 + n), 'hit', { gain: 0.7 });
+  });
+  Motion.to('#cube', { start: B(11.6), duration: 0.5, ease: 'inCubic', to: { scale: 0.42, rotateY: -270, rotateX: 0 } });
+
+  // ── 4 · Liquid morph (beats 12.5–16.5): square → blob → star → circle, gooey and continuous.
+  show('#s4', B(12.5), B(20.5));
+  const circle = (cx, cy, r) => `M${cx - r} ${cy}a${r} ${r} 0 1 0 ${2 * r} 0a${r} ${r} 0 1 0 ${-2 * r} 0Z`;
+  const star = (cx, cy, R, r, n = 6) => 'M' + Array.from({ length: n * 2 }, (_, i) => { const a = (Math.PI * i) / n - Math.PI / 2, rr = i % 2 ? r : R; return `${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`; }).join('L') + 'Z';
+  const blob = (cx, cy, r) => { const nz = Motion.makeNoise(4); return 'M' + Array.from({ length: 48 }, (_, i) => { const a = (i / 48) * Math.PI * 2, rr = r * (1 + 0.28 * nz(Math.cos(a) * 1.3, Math.sin(a) * 1.3)); return `${(cx + Math.cos(a) * rr).toFixed(1)} ${(cy + Math.sin(a) * rr).toFixed(1)}`; }).join('L') + 'Z'; };
+  Motion.morph('#blob', { start: B(12.5), duration: B(1) * 0.9, hold: B(1) * 0.1, ease: 'strongInOut',
+    shapes: ['M880 460h160v160H880z', blob(960, 540, 230), star(960, 540, 330, 150), circle(960, 540, 120)] });
+  Motion.cue(B(12.5), 'swell', { length: 0.4, gain: 0.7 }); Motion.cue(B(13.5), 'pop'); Motion.cue(B(14.5), 'pop'); Motion.cue(B(15.5), 'pop');
+  Motion.on((t) => { document.getElementById('blob').style.opacity = t < B(16.6) ? 1 : 0; });
+
+  // ── 5 · Particles (beats 16.5–20.5): the circle bursts into 2,000+ dots that swirl and re-form the square.
+  let pts = [], seeds = [];
+  Motion.ready(() => {
+    // The thread comes back: points on a filled 380px square (use Motion.textPoints for type instead).
+    pts = []; for (let y = -190; y <= 190; y += 8) for (let x = -190; x <= 190; x += 8) pts.push({ x: 960 + x, y: 540 + y });
+    const r = Motion.random(9);
+    seeds = pts.map(() => ({ a: r() * Math.PI * 2, d: 200 + r() * 700, w: 0.6 + r() * 0.8, ph: r() * 6.28 }));
+  });
+  Motion.canvas({ zIndex: 1 }, (ctx, t) => {
+    if (t < B(16.5) || t > B(20.6)) return;
+    const burst = Motion.clamp((t - B(16.5)) / B(1.2));
+    const gather = Motion.ease.strongInOut(Motion.clamp((t - B(17.6)) / B(1.6)));
+    const leave = Motion.ease.inCubic(Motion.clamp((t - B(19.7)) / B(0.8)));
+    ctx.fillStyle = ACC;
+    for (let i = 0; i < pts.length; i++) {
+      const s = seeds[i], p = pts[i];
+      const ex = 960 + Math.cos(s.a) * s.d * Motion.ease.outExpo(burst), ey = 540 + Math.sin(s.a) * s.d * Motion.ease.outExpo(burst);
+      const nx = Motion.noise(i * 0.05, t * 0.8) * 40 * (1 - gather);
+      let x = Motion.lerp(ex, p.x, gather) + nx, y = Motion.lerp(ey, p.y, gather) + Motion.noise(i * 0.05 + 9, t * 0.8) * 40 * (1 - gather);
+      x += leave * (900 + s.d) * Math.cos(s.a + 1.2); y += leave * (500 * s.w) * Math.sin(s.a + 1.2);
+      const r = 2.6 + 1.4 * (1 - gather);
+      ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+  });
+  Motion.cue(B(16.5), 'impact', { gain: 0.8 }); Motion.cue(B(19.3), 'riser', { length: B(1.6) });
+
+  // ── 6 · Graph editor (beats 20.5–25): the ease curve draws, then the ball obeys it (with onion skins).
+  show('#s6', B(20.5), B(25));
+  Motion.from('#s6 .graph, #easeLabel, #s6 .track', { opacity: 0, y: 30 }, { start: B(20.5), duration: 0.45, ease: 'strong', stagger: 0.06 });
+  Motion.draw('#curve', { start: B(20.8), duration: B(1.4), ease: 'strongInOut' });
+  Motion.draw('#h1, #h2', { start: B(20.8), duration: B(1), ease: 'outCubic' });
+  const strong = Motion.ease.strong, moveStart = B(22.5), moveDur = B(1.6);
+  const ghosts = document.getElementById('ghosts');
+  for (let g = 0; g < 7; g++) ghosts.insertAdjacentHTML('beforeend', `<div class="ghost" style="left:1162px"></div>`);
+  Motion.on((t) => {
+    const p = strong(Motion.clamp((t - moveStart) / moveDur));
+    Array.from(ghosts.children).forEach((gEl, g) => {
+      const tp = (g + 1) / 8, gp = strong(tp);
+      gEl.style.top = `${750 - 500 * gp}px`;
+      gEl.style.visibility = t > moveStart + tp * moveDur ? 'visible' : 'hidden';
+    });
+  });
+  Motion.cue(moveStart, 'whoosh', { length: 0.35, gain: 0.9 }); Motion.cue(moveStart + moveDur * 0.3, 'tick');
+  Motion.to('#s6', { start: B(24.2), duration: 0.4, ease: 'inCubic', to: { opacity: 0 } });
+
+  // ── 7/8 · Title (beats 25–end): the ball lands as the full stop, words rise from masks, then hold.
+  show('#s8', B(25), 99);
+  Motion.to('#t1', { start: B(25), duration: 0.7, ease: 'strong', from: { y: '110%' }, to: { y: '0%' } });
+  Motion.to('#t2', { start: B(25.25), duration: 0.7, ease: 'strong', from: { y: '110%' }, to: { y: '0%' } });
+  Motion.from('#role', { opacity: 0, y: 20 }, { start: B(26), duration: 0.5, ease: 'outCubic' });
+  Motion.cue(B(25), 'drop'); Motion.cue(B(26), 'swell', { length: 0.5, gain: 0.5 });
+
+  // Ink floods in on the big beats (3D, particles) and drains back to paper, from the centre out.
+  const floodAt = (t) => {
+    const seg = (a, b, inDur, outDur) => Math.min(Motion.ease.strongInOut(Motion.clamp((t - a) / inDur)), 1 - Motion.ease.inCubic(Motion.clamp((t - b) / outDur)));
+    return Math.max(seg(B(8), B(12.4), 0.45, 0.35), seg(B(16.5), B(19.9), 0.4, 0.3));
+  };
+  Motion.on((t) => {
+    const f = floodAt(t);
+    document.getElementById('flood').style.setProperty('--fr', (f * 120).toFixed(2) + '%');
+  });
+
+  // The ball from the graph editor flies into the title and becomes its full stop.
+  let stop = { x: 0, y: 0, s: 40 };
+  Motion.ready(() => {
+    const em = document.querySelector('.title em'), r = em.getBoundingClientRect(), st = document.getElementById('stage').getBoundingClientRect();
+    const k = st.width / 1920;
+    stop = { x: (r.left - st.left + r.width / 2) / k, y: (r.top - st.top + r.height * 0.78) / k, s: (r.width * 0.62) / k };
+  });
+  Motion.on((t) => {
+    const ball = document.getElementById('ball');
+    ball.style.visibility = t >= B(20.5) && t < B(26.3) ? 'visible' : 'hidden';
+    const p = Motion.ease.strongInOut(Motion.clamp((t - B(24.4)) / B(1.9)));
+    const climb = Motion.ease.strong(Motion.clamp((t - moveStart) / moveDur));
+    const x0 = 1162, y0 = 750 - 500 * climb;
+    const arc = Math.sin(Math.PI * p) * -160;
+    ball.style.left = Motion.lerp(x0, stop.x, p) + 'px';
+    ball.style.top = Motion.lerp(y0, stop.y, p) + arc + 'px';
+    const size = Motion.lerp(96, stop.s, p);
+    ball.style.width = ball.style.height = size + 'px';
+    ball.style.margin = `${-size / 2}px 0 0 ${-size / 2}px`;
+    document.querySelector('.title em').style.color = t >= B(26.3) ? '' : 'transparent';
+  });
+  Motion.cue(B(26.3), 'pop', { gain: 0.9 });
+
+  // Camera kick on the two biggest beats only (the ink floods), never on every cut.
+  Motion.on((t) => {
+    let kick = 0; [8, 16.5].forEach((b) => { const d = t - B(b); if (d >= 0 && d < 0.12) kick = Math.max(kick, 1 - d / 0.12); });
+    const cam = document.getElementById('cam');
+    cam.style.translate = kick ? `${(Motion.noise(t * 40) * 6 * kick).toFixed(1)}px ${(Motion.noise(t * 40, 5) * 6 * kick).toFixed(1)}px` : '';
+    cam.style.scale = kick ? String(1 + 0.012 * kick) : '';
+  });
+</script>
+</body>
+</html>

@@ -10,7 +10,7 @@
 |---|------|-----------|--------|-----|
 | 1 | 0.0–2.9 | A request in an input: "Check the landing page on mobile and fix what breaks." | Types at 34 characters per second, then docks at the top | Starts from the user's words |
 | 2 | 3.0–8.9 | The broken page at 375px with numbered boxes; the error count rises to 12 and failing checks list beside it | The page rises, the count counts up, and lines stagger in. At 6.0 the fixed page wipes across while the count falls to 0 and turns green | One run of the loop, shown with real data |
-| 3 | 9.0–12.7 | "Six skills, each with its own evidence" and six tiles, each showing a real output and its script name | Tiles rise in reading order, 90ms apart | Shows the whole set at once |
+| 3 | 9.0–12.7 | "Every skill brings its own evidence" and a grid of tiles, each showing a real output and its script name | Tiles rise in reading order, 90ms apart | Shows the whole set at once |
 | 4 | 12.9–16.0 | Knack mark and wordmark, the line, and the install command | Rises in, then holds still for 2.2s | Tells the viewer where to get it |
 
 **Flow:** content rises in and leaves through the top. The camera never moves.

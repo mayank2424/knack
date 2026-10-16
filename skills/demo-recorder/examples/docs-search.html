@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quickstart · Wayfern Docs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0d12; --panel: #11141b; --raised: #161a23; --ink: #e8eaf0; --muted: #8b91a1; --faint: #5d6374;
+    --line: #1f2430; --line-2: #2a3040; --accent: #5eead4; --accent-ink: #0b0d12; --accent-soft: rgba(94,234,212,.10);
+    --violet: #a78bfa; --amber: #fbbf24; --rose: #fb7185; --sky: #7dd3fc;
+    --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 15px/1.6 Inter, ui-sans-serif, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; text-decoration: none; }
+  kbd { font: 500 11px var(--mono); color: var(--muted); background: var(--raised); border: 1px solid var(--line-2); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; }
+
+  /* Top bar */
+  header { height: 60px; display: flex; align-items: center; gap: 18px; padding: 0 24px; border-bottom: 1px solid var(--line); background: rgba(11,13,18,.85); position: sticky; top: 0; z-index: 2; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: -.01em; font-size: 16px; width: 220px; }
+  .mark { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, #5eead4, #3b82f6 60%, #a78bfa); display: grid; place-items: center; }
+  .mark svg { width: 15px; height: 15px; stroke: #0b0d12; stroke-width: 2.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+  .brand small { font-weight: 500; color: var(--muted); font-size: 12px; padding: 2px 7px; border: 1px solid var(--line-2); border-radius: 999px; }
+  .search { display: flex; align-items: center; gap: 10px; width: 340px; height: 36px; padding: 0 10px 0 12px; border-radius: 9px; background: var(--panel); border: 1px solid var(--line-2); color: var(--faint); font-size: 14px; cursor: pointer; }
+  .search:hover { border-color: #3a4256; color: var(--muted); }
+  .search svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; }
+  .search .k { margin-left: auto; display: flex; gap: 3px; }
+  .toplinks { margin-left: auto; display: flex; gap: 22px; font-size: 14px; color: var(--muted); align-items: center; }
+  .toplinks .ver { font: 500 12px var(--mono); padding: 4px 8px; border-radius: 6px; background: var(--raised); border: 1px solid var(--line-2); color: var(--ink); }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 244px 1fr 210px; height: calc(100% - 60px); }
+  nav.side { border-right: 1px solid var(--line); padding: 22px 14px; overflow: hidden; font-size: 14px; }
+  .group { margin-bottom: 20px; }
+  .group h4 { margin: 0 0 6px; padding: 0 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+  .side a { display: block; padding: 5px 10px; border-radius: 7px; color: var(--muted); position: relative; transition: background-color .25s, color .25s; }
+  .side a:hover { color: var(--ink); }
+  .side a.on { color: var(--accent); background: var(--accent-soft); font-weight: 500; }
+  main { overflow: hidden; padding: 34px 56px 40px; position: relative; }
+  .crumbs { font-size: 13px; color: var(--faint); display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  .crumbs b { color: var(--accent); font-weight: 500; }
+  h1 { font-size: 34px; line-height: 1.15; letter-spacing: -.025em; margin: 0 0 10px; }
+  .lede { color: var(--muted); font-size: 17px; margin: 0 0 26px; max-width: 640px; }
+  h2 { font-size: 20px; letter-spacing: -.01em; margin: 30px 0 8px; scroll-margin-top: 20px; }
+  p { margin: 0 0 14px; color: #c3c7d2; max-width: 660px; }
+  code { font: 500 13px var(--mono); background: var(--raised); border: 1px solid var(--line-2); padding: 1px 6px; border-radius: 5px; color: var(--ink); }
+  pre { margin: 12px 0 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; max-width: 680px; }
+  pre .bar { display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-bottom: 1px solid var(--line); font: 500 12px var(--mono); color: var(--faint); }
+  pre .bar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  pre code { display: block; border: 0; background: none; padding: 14px 16px; font-size: 13px; line-height: 1.7; color: #d6dae4; white-space: pre; }
+  .t-k { color: var(--violet); } .t-s { color: #86efac; } .t-f { color: var(--sky); } .t-n { color: var(--amber); } .t-c { color: var(--faint); font-style: italic; }
+  .callout { display: flex; gap: 12px; padding: 14px 16px; border-radius: 12px; border: 1px solid rgba(251,191,36,.25); background: rgba(251,191,36,.06); max-width: 680px; font-size: 14px; color: #e7dcc0; }
+  .callout b { color: var(--amber); }
+  .page { animation: pagein .45s cubic-bezier(.2,.8,.2,1); }
+  @keyframes pagein { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  .flash { animation: flash 1.6s ease-out; border-radius: 6px; }
+  @keyframes flash { 0%, 30% { background: rgba(94,234,212,.18); box-shadow: 0 0 0 6px rgba(94,234,212,.18); } 100% { background: transparent; box-shadow: 0 0 0 6px transparent; } }
+  aside.toc { border-left: 1px solid var(--line); padding: 34px 20px; font-size: 13px; }
+  aside.toc h5 { margin: 0 0 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); }
+  aside.toc a { display: block; color: var(--muted); padding: 4px 0 4px 12px; border-left: 1px solid var(--line-2); }
+  aside.toc a.on { color: var(--accent); border-color: var(--accent); }
+  .meta { margin-top: 26px; padding-top: 16px; border-top: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+
+  /* Search palette */
+  .scrim { position: fixed; inset: 0; background: rgba(4,6,10,.62); backdrop-filter: blur(3px); opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 5; }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .palette { position: fixed; left: 50%; top: 92px; width: 640px; z-index: 6; transform: translate(-50%, -10px) scale(.98); opacity: 0; pointer-events: none;
+    background: #121620; border: 1px solid var(--line-2); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 40px 100px -20px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.02) inset; transition: opacity .18s, transform .24s cubic-bezier(.2,.9,.3,1.15); }
+  .palette.open { opacity: 1; transform: translate(-50%, 0) scale(1); pointer-events: auto; }
+  .p-in { display: flex; align-items: center; gap: 12px; padding: 0 16px; border-bottom: 1px solid var(--line-2); }
+  .p-in svg { width: 18px; height: 18px; stroke: var(--accent); fill: none; stroke-width: 2; flex: none; }
+  .p-in input { flex: 1; height: 56px; border: 0; outline: 0; background: transparent; color: var(--ink); font: 500 17px Inter, sans-serif; caret-color: var(--accent); }
+  .p-in input::placeholder { color: var(--faint); font-weight: 400; }
+  .p-in .count { font-size: 12px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .results { padding: 8px; max-height: 380px; overflow: hidden; }
+  .sec { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); font-weight: 600; padding: 10px 10px 6px; }
+  .hit { display: flex; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 9px; cursor: pointer; transition: background-color .12s; }
+  .hit .ic { width: 32px; height: 32px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--raised); border: 1px solid var(--line-2); color: var(--muted); }
+  .hit .ic svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .hit .tx { min-width: 0; flex: 1; }
+  .hit .ti { font-weight: 600; font-size: 14px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hit .sn { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .hit .path { font-size: 12px; color: var(--faint); flex: none; }
+  .hit mark { background: none; color: var(--accent); }
+  .hit.sel { background: var(--accent-soft); }
+  .hit.sel .ic { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .hit.sel .path { color: var(--accent); }
+  .p-foot { display: flex; gap: 18px; padding: 10px 16px; border-top: 1px solid var(--line-2); font-size: 12px; color: var(--faint); }
+  .p-foot span { display: flex; gap: 6px; align-items: center; }
+  .p-empty { padding: 28px 16px; text-align: center; color: var(--faint); font-size: 14px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="#"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 16c3-6 6-6 8 0s5 6 8 0"/><path d="M4 9c3-5 6-5 8 0s5 5 8 0" opacity=".55"/></svg></span>Wayfern <small>Docs</small></a>
+  <div class="search" id="search-button" role="button" aria-label="Search docs">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    Search documentation…
+    <span class="k"><kbd>⌘</kbd><kbd>K</kbd></span>
+  </div>
+  <div class="toplinks"><a href="#">Guides</a><a href="#">API</a><a href="#">Changelog</a><span class="ver">v3.2</span></div>
+</header>
+<div class="layout">
+  <nav class="side" id="side"></nav>
+  <main id="main"></main>
+  <aside class="toc" id="toc"></aside>
+</div>
+
+<div class="scrim" id="scrim"></div>
+<div class="palette" id="palette" role="dialog" aria-label="Search documentation">
+  <div class="p-in">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" placeholder="Search guides, API and recipes" autocomplete="off" spellcheck="false">
+    <span class="count" id="count"></span>
+  </div>
+  <div class="results" id="results"></div>
+  <div class="p-foot"><span><kbd>↑</kbd><kbd>↓</kbd> navigate</span><span><kbd>↵</kbd> open</span><span><kbd>esc</kbd> close</span></div>
+</div>
+
+<script>
+  const ICON = {
+    guide: '<svg viewBox="0 0 24 24"><path d="M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2z"/><path d="M8 7h6"/></svg>',
+    api: '<svg viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5"/><path d="M16 7l5 5-5 5"/></svg>',
+    recipe: '<svg viewBox="0 0 24 24"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/></svg>',
+  };
+  const NAV = [
+    ['Getting started', ['Introduction', 'Quickstart', 'Core concepts', 'Deploying workers']],
+    ['Guides', ['Defining jobs', 'Retries and backoff', 'Scheduling and cron', 'Concurrency limits', 'Dead-letter queues', 'Observability']],
+    ['API reference', ['queue.add()', 'queue.retry()', 'RetryPolicy', 'Worker']],
+  ];
+  // Search index: title, section, snippet, page id
+  const INDEX = [
+    { t: 'Retries and backoff', s: 'Guides', sn: 'Retry failed jobs with exponential backoff and jitter', ty: 'guide', page: 'Retries and backoff' },
+    { t: 'RetryPolicy', s: 'API reference', sn: 'attempts, backoff, maxDelay, retryOn', ty: 'api', page: 'RetryPolicy' },
+    { t: 'queue.retry()', s: 'API reference', sn: 'Manually re-enqueue a failed job by id', ty: 'api', page: 'queue.retry()' },
+    { t: 'Dead-letter queues', s: 'Guides', sn: 'Where jobs go after their last retry', ty: 'guide', page: 'Dead-letter queues' },
+    { t: 'Retry only on network errors', s: 'Recipes', sn: 'Use retryOn to skip validation failures', ty: 'recipe', page: 'Retries and backoff' },
+    { t: 'Quickstart', s: 'Getting started', sn: 'Install Wayfern and run your first job', ty: 'guide', page: 'Quickstart' },
+    { t: 'Scheduling and cron', s: 'Guides', sn: 'Run jobs on a schedule with cron syntax', ty: 'guide', page: 'Scheduling and cron' },
+    { t: 'Concurrency limits', s: 'Guides', sn: 'Cap how many jobs run per worker or key', ty: 'guide', page: 'Concurrency limits' },
+    { t: 'Deploying workers', s: 'Getting started', sn: 'Run workers on containers or serverless', ty: 'guide', page: 'Deploying workers' },
+    { t: 'Observability', s: 'Guides', sn: 'Traces, metrics and job timelines', ty: 'guide', page: 'Observability' },
+  ];
+  const PAGES = {
+    'Quickstart': {
+      crumb: 'Getting started',
+      lede: 'Install Wayfern, define a job and run a worker. You will have durable background jobs running in about five minutes.',
+      toc: ['Install', 'Define a job', 'Run a worker', 'Next steps'],
+      body: `
+        <h2 id="install">Install</h2>
+        <p>Wayfern runs on Node 20+ and stores jobs in Postgres. Add the package to your project:</p>
+        <pre><div class="bar"><span class="dot"></span>terminal</div><code>npm install @wayfern/core</code></pre>
+        <h2 id="define-a-job">Define a job</h2>
+        <p>A job is a plain async function with a name. Payloads are validated and stored, so a crash never loses work.</p>
+        <pre><div class="bar"><span class="dot"></span>jobs/send-receipt.ts</div><code><span class="t-k">import</span> { defineJob } <span class="t-k">from</span> <span class="t-s">"@wayfern/core"</span>;
+
+<span class="t-k">export const</span> sendReceipt = <span class="t-f">defineJob</span>(<span class="t-s">"send-receipt"</span>, <span class="t-k">async</span> ({ orderId }) =&gt; {
+  <span class="t-k">const</span> order = <span class="t-k">await</span> db.orders.<span class="t-f">find</span>(orderId);
+  <span class="t-k">await</span> mailer.<span class="t-f">send</span>(order.email, <span class="t-s">"receipt"</span>, { order });
+});</code></pre>`,
+    },
+    'Retries and backoff': {
+      crumb: 'Guides',
+      lede: 'Jobs fail. Networks blip, APIs rate-limit, databases restart. Wayfern retries failed jobs automatically, waiting a little longer each time.',
+      toc: ['Default behaviour', 'Exponential backoff', 'Retry only some errors', 'After the last attempt'],
+      body: `
+        <h2 id="default">Default behaviour</h2>
+        <p>Every job gets <code>3</code> attempts. A job that throws is re-enqueued with a delay; one that returns is marked complete.</p>
+        <h2 id="backoff">Exponential backoff</h2>
+        <p>Pass a <code>retry</code> policy to control attempts and spacing. Jitter spreads retries out so a recovering service is not hit all at once.</p>
+        <pre><div class="bar"><span class="dot"></span>jobs/sync-invoices.ts</div><code><span class="t-k">export const</span> syncInvoices = <span class="t-f">defineJob</span>(<span class="t-s">"sync-invoices"</span>, handler, {
+  retry: {
+    attempts: <span class="t-n">6</span>,
+    backoff: { type: <span class="t-s">"exponential"</span>, base: <span class="t-s">"2s"</span>, jitter: <span class="t-n">0.2</span> },
+    maxDelay: <span class="t-s">"10m"</span>, <span class="t-c">// 2s, 4s, 8s, 16s, 32s</span>
+  },
+});</code></pre>
+        <div class="callout"><b>Tip</b><span>Keep handlers idempotent. A retried job may run again after a partial success.</span></div>`,
+    },
+  };
+  const $ = (s) => document.querySelector(s);
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+  let current = 'Quickstart';
+
+  function renderNav() {
+    $('#side').innerHTML = NAV.map(([g, items]) => `<div class="group"><h4>${g}</h4>${items.map((i) => `<a href="#${slug(i)}" class="${i === current ? 'on' : ''}">${i}</a>`).join('')}</div>`).join('');
+  }
+  function renderPage(name, anchor) {
+    current = name;
+    const p = PAGES[name] || { crumb: (NAV.find(([, it]) => it.includes(name)) || ['Guides'])[0], lede: 'This page is part of the Wayfern guides.', toc: ['Overview'], body: '<h2 id="overview">Overview</h2><p>Content coming soon.</p>' };
+    document.title = `${name} · Wayfern Docs`;
+    $('#main').innerHTML = `<div class="page"><div class="crumbs">Docs <span>/</span> ${p.crumb} <span>/</span> <b>${name}</b></div>
+      <h1 id="page-title">${name}</h1><p class="lede">${p.lede}</p>${p.body}
+      <div class="meta">Last updated October 2, 2026 · Edit this page</div></div>`;
+    $('#toc').innerHTML = `<h5>On this page</h5>${p.toc.map((t, i) => `<a href="#" class="${i === Math.max(0, (anchor || 1) - 1) ? 'on' : ''}">${t}</a>`).join('')}`;
+    renderNav();
+    if (anchor) { const el = $('#main h2:nth-of-type(' + anchor + ')'); if (el) el.classList.add('flash'); }
+  }
+
+  // Palette
+  let sel = 0, shown = [];
+  function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function hl(text, q) { return q ? text.replace(new RegExp(`(${esc(q)})`, 'ig'), '<mark>$1</mark>') : text; }
+  function draw() {
+    const q = $('#q').value.trim();
+    const ql = q.toLowerCase();
+    shown = q ? INDEX.filter((r) => (r.t + ' ' + r.sn).toLowerCase().includes(ql)) : INDEX.filter((r) => ['Quickstart', 'Retries and backoff', 'Scheduling and cron', 'Deploying workers'].includes(r.t));
+    sel = Math.min(sel, Math.max(0, shown.length - 1));
+    $('#count').textContent = q ? `${shown.length} result${shown.length === 1 ? '' : 's'}` : '';
+    if (!shown.length) { $('#results').innerHTML = `<div class="p-empty">No results for “${q}”</div>`; return; }
+    let html = '', lastSec = null;
+    if (!q) html += '<div class="sec">Popular</div>';
+    shown.forEach((r, i) => {
+      if (q && r.s !== lastSec) { html += `<div class="sec">${r.s}</div>`; lastSec = r.s; }
+      html += `<div class="hit ${i === sel ? 'sel' : ''}" data-i="${i}" data-title="${r.t}"><span class="ic">${ICON[r.ty]}</span>
+        <span class="tx"><div class="ti">${hl(r.t, q)}</div><div class="sn">${hl(r.sn, q)}</div></span><span class="path">${r.s}</span></div>`;
+    });
+    $('#results').innerHTML = html;
+    $('#results').querySelectorAll('.hit').forEach((el) => {
+      el.onclick = () => open(shown[+el.dataset.i]);
+      el.onmousemove = () => { if (sel !== +el.dataset.i) { sel = +el.dataset.i; draw(); } };
+    });
+  }
+  function show() { $('#palette').classList.add('open'); $('#scrim').classList.add('open'); $('#q').value = ''; sel = 0; draw(); $('#q').focus(); }
+  function hide() { $('#palette').classList.remove('open'); $('#scrim').classList.remove('open'); $('#q').blur(); }
+  function open(r) { hide(); if (r) setTimeout(() => renderPage(r.page, r.t.startsWith('Retry only') ? 3 : r.t === 'Retries and backoff' ? 2 : 0), 140); }
+  // Results are sorted with guides first, then API, then recipes, matching the index order by section.
+  INDEX.sort((a, b) => ['Guides', 'API reference', 'Recipes', 'Getting started'].indexOf(a.s) - ['Guides', 'API reference', 'Recipes', 'Getting started'].indexOf(b.s));
+  $('#q').addEventListener('input', () => { sel = 0; draw(); });
+  $('#q').addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { sel = (sel + 1) % shown.length; draw(); e.preventDefault(); }
+    if (e.key === 'ArrowUp') { sel = (sel - 1 + shown.length) % shown.length; draw(); e.preventDefault(); }
+    if (e.key === 'Enter') open(shown[sel]);
+    if (e.key === 'Escape') hide();
+  });
+  $('#scrim').onclick = hide;
+  $('#search-button').onclick = show;
+  document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); show(); } });
+  renderPage('Quickstart');
+</script>
+</body>
+</html>

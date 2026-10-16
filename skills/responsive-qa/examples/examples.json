@@ -1,0 +1,104 @@
+{
+  "examples": [
+    {
+      "id": "landing-page",
+      "title": "A landing page that scrolls sideways on phones",
+      "prompt": "Our landing page looks off on my iPhone and scrolls sideways. Check it on mobile and fix whatever breaks.",
+      "summary": "The SaaS landing page has 11 typical AI-built bugs: a 640px hero image, a 760px pricing table, an unbreakable API URL, a CTA on top of the logo, a cookie banner covering 57% of a small phone, tiny social icons and a squashed avatar. The sweep names the element behind each one with a cause hint. After fluid CSS fixes the same sweep comes back clean at all 8 widths, and --compare reports 66 issues fixed.",
+      "input": [
+        "broken-page.html",
+        "fixed-page.html"
+      ],
+      "command": "node scripts/sweep.mjs examples/broken-page.html --full-page && node scripts/sweep.mjs examples/fixed-page.html --full-page --compare",
+      "result": "42 errors, 24 warnings → 0 / 0 (66 fixed, 0 new)",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/landing-page/before-after-375.png",
+          "alt": "Two 375px screenshots side by side. Left: the header CTA overlaps the logo, the hero image runs 289px off-screen and a cookie banner covers most of the screen, all outlined in red and numbered. Right: the fixed page with the full logo row, a fitted hero image and a compact cookie bar.",
+          "caption": "375px before and after. Red boxes are errors and amber dashed boxes are warnings. The +289px marker shows how far the hero image runs off-screen."
+        },
+        {
+          "type": "image",
+          "src": "output/landing-page/below-fold-375.png",
+          "alt": "Two 375px screenshots further down the page. Left: an API URL and the pricing table run off the right edge (+53px, +409px) and the avatar is squashed. Right: the URL wraps, the table scrolls inside its own box and the avatar is round.",
+          "caption": "Below the fold: the unbreakable URL gets overflow-wrap: anywhere, the pricing table moves into an overflow-x: auto wrapper and the avatar gets object-fit: cover."
+        },
+        {
+          "type": "image",
+          "src": "output/landing-page/contact-sheet.jpg",
+          "alt": "Top of the contact sheet: a list of findings grouped across widths, then annotated screenshots at 320, 375, 414, 768, 1024 and 1280px with error and warning counts and sideways-scroll amounts.",
+          "caption": "The contact sheet the agent reads first: each finding listed once with the widths where it happens, then every viewport with its counts."
+        }
+      ],
+      "excerpt": "◆ responsive-qa · examples/broken-page.html · 8 widths (320, 375, 414, 768, 1024, 1280, 1440, 1920) · full page\n   320×568   ✖ 11  ⚠ 3  scrolls sideways +464px\n✖ 42 errors  ⚠ 24 warnings  18 info · 8 viewports · 13.1s\n  ✖ horizontal-overflow p.endpoint                               @320–414,1024    Text “POST https://api.nimbus.app/v2” runs 108px past the 320px viewport; the page scrolls sideways.\n      ↳ long unbroken word “https://api.nimbus.app/v2/invoic…”: add overflow-wrap: anywhere · same 379px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ horizontal-overflow table.compare                            @320–768         Runs 464px past the 320px viewport; the page scrolls sideways.\n      ↳ table wider than the screen: wrap it in an overflow-x: auto container · same 760px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ image-overflow      img.hero-shot                            @320–414         Image is 640px wide, wider than the 320px viewport; cropped by overflow on section.hero, 54% of it is cut off.\n      ↳ no max-width: 100% · CSS width: 640px · same 640px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ overlap             a.header-cta.btn-primary                 @320–375         Control “Start free trial” overlaps control “Nimbus Invoicing” (72×32px).\n  ✖ fixed-cover         div.cookie                               @320             Fixed element “Cookie preferences” covers 57% of the 320×568 screen.\n◆ vs previous run: ✓ 66 fixed · 0 new · 0 remaining"
+    },
+    {
+      "id": "dashboard",
+      "title": "An orders dashboard blown open by 1fr",
+      "prompt": "The orders dashboard scrolls sideways on my laptop and it's worse on mobile. Find out why and fix it properly, no overflow-x: hidden.",
+      "summary": "An app shell built as grid-template-columns: 232px 1fr lets a 10-column table stretch the main column, so the page scrolls sideways even at 1280px. Run 1 names main as the culprit, suggests minmax(0, 1fr), and lets main shrink for a moment to list what inside it would still overflow: the table, a filter row that doesn't wrap, and a KPI grid stretched by a long campaign tag. Run 2 (shell fixed) confirms those three, and run 3, with all four fixes, is clean at every width.",
+      "input": [
+        "dashboard/broken.html",
+        "dashboard/shell-fixed.html",
+        "dashboard/fixed.html"
+      ],
+      "command": "node scripts/sweep.mjs examples/dashboard/broken.html --full-page && node scripts/sweep.mjs examples/dashboard/shell-fixed.html --full-page --compare && node scripts/sweep.mjs examples/dashboard/fixed.html --full-page --compare",
+      "result": "6 errors (3 inner culprits named up front) → 12 → 0",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/dashboard/run1-1280.png",
+          "alt": "Dashboard at 1280px with a dark sidebar. The whole main column is outlined in red with a +135px marker, and the orders table's Status column is cut off at the right edge.",
+          "caption": "Run 1, 1280px: the grid item main is wider than its 1fr track. Hint: use minmax(0, 1fr), plus the table, div.chips and section.kpis that would still overflow inside it."
+        },
+        {
+          "type": "image",
+          "src": "output/dashboard/run2-run3-375.png",
+          "alt": "Two 375px screenshots. Left: three numbered red boxes for the KPI grid (+210px), the filter chips (+245px) and the orders table (+752px). Right: the KPI cards stacked in one column, the chips wrapped onto three rows and the table scrolling inside its card.",
+          "caption": "Run 2 (shell fixed) names the table, section.kpis and div.chips. Run 3 adds a table scroll wrapper, auto-fit minmax(min(100%, 13rem), 1fr) KPI tracks and flex-wrap."
+        },
+        {
+          "type": "image",
+          "src": "output/dashboard/run2-contact-sheet.jpg",
+          "alt": "Contact sheet for run 2: three grouped findings (table @320–1280, section.kpis @320–414, div.chips @320–414) above annotated screenshots at six widths.",
+          "caption": "Run 2 contact sheet: the table overflows up to 1280px, while the KPI grid and the chips only break on phones."
+        }
+      ],
+      "excerpt": "◆ responsive-qa · examples/dashboard/broken.html · 8 widths (320, 375, 414, 768, 1024, 1280, 1440, 1920) · full page\n  ✖ horizontal-overflow main                                     @320–1280        Runs 848px past the 320px viewport; the page scrolls sideways.\n      ↳ grid item wider than its track; use minmax(0, 1fr) / min-width: 0 · what makes it wide (still overflows once it can shrink): table +807px, div.chips +301px, section.kpis +265px · same 1168px width at every failing viewport → hard-coded width or unbreakable content\n        · table +807px: table wider than the screen: wrap it in an overflow-x: auto container\n        · div.chips +301px: 3 flex items overflow the row: add flex-wrap: wrap, or min-width: 0 on the items\n        · section.kpis +265px: 2 grid items are wider than their tracks (153.125px 394.062px): 1fr/auto tracks can't shrink below their widest content; use minmax(0, 1fr) and min-width: 0 · widest unbreakable content: “utm_campaign=autumn_wholesale_partner_re…” (add overflow-wrap: anywhere)\n◆ responsive-qa · examples/dashboard/shell-fixed.html · 8 widths (320, 375, 414, 768, 1024, 1280, 1440, 1920) · full page\n  ✖ horizontal-overflow table                                    @320–1280        Runs 807px past the 320px viewport; the page scrolls sideways.\n      ↳ table wider than the screen: wrap it in an overflow-x: auto container · same 1086px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ horizontal-overflow section.kpis                             @320–414         Its 2 items run 265px past the 320px viewport; the page scrolls sideways.\n      ↳ 2 grid items are wider than their tracks (153.125px 394.062px): 1fr/auto tracks can't shrink below their widest content; use minmax(0, 1fr) and min-width: 0 · widest unbreakable content: “utm_campaign=autumn_wholesale_partner_re…” (add overflow-wrap: anywhere) · same 394px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ horizontal-overflow div.chips                                @320–414         Its 3 items run 301px past the 320px viewport; the page scrolls sideways.\n      ↳ 3 flex items overflow the row: add flex-wrap: wrap, or min-width: 0 on the items\n◆ vs previous run: ✓ 6 fixed · ✖ 12 new · 0 remaining\n◆ vs previous run: ✓ 12 fixed · 0 new · 0 remaining"
+    },
+    {
+      "id": "blog-post",
+      "title": "A blog post with a runaway code block and hidden anchors",
+      "prompt": "Run a responsive QA pass on the edge-caching blog post before I publish it.",
+      "summary": "A long article with a fixed 72px header. A one-line <pre> widens the page at every width, the diagram has a CSS width of 720px, every table-of-contents link lands its heading under the header, and a width: 100vw band ends up wider than the page wherever a classic (Windows) scrollbar takes up room. Four small CSS fixes, including html { scroll-padding-top: 80px }, clear all 24 errors.",
+      "input": [
+        "fixtures/blog.html",
+        "blog/fixed.html"
+      ],
+      "command": "node scripts/sweep.mjs examples/fixtures/blog.html --full-page && node scripts/sweep.mjs examples/blog/fixed.html --full-page --compare",
+      "result": "24 errors at all 8 widths → 0 (24 fixed, 0 new)",
+      "media": [
+        {
+          "type": "image",
+          "src": "output/blog-post/before-after-375.png",
+          "alt": "Two 375px screenshots of the article. Left: the heading is outlined inside a hatched strip marking where the fixed header lands after the #why jump, the code line runs 1056px off-screen and the diagram runs 365px off-screen. Right: the code block scrolls inside its dark box and the diagram fits the column.",
+          "caption": "375px before and after: the code block gets overflow-x: auto and the diagram becomes width: 100%; max-width: 720px."
+        },
+        {
+          "type": "image",
+          "src": "output/blog-post/anchor-jump-375.png",
+          "alt": "Two 375px screens right after jumping to #why. Left: the sweep's post-jump screenshot, where the fixed Devlog header (hatched) sits on top of the outlined heading and only the paragraph below is visible. Right: the fixed page after the same jump, with the heading in full view below the header.",
+          "caption": "anchor-hidden also saves the screen right after the jump (shots/<page>/<w>x<h>-jump-<id>.png). Right: the fixed page after the same TOC click, with html { scroll-padding-top: 80px }."
+        },
+        {
+          "type": "image",
+          "src": "output/blog-post/desktop-1280.png",
+          "alt": "The article at 1280px. Top: the Why cache at the edge heading (1) sits inside a hatched strip showing what the fixed header covers after the jump, and the code line runs 444px off-screen (2). Bottom: the full-width blue newsletter band is outlined with a +8px marker (3).",
+          "caption": "Desktop shows the bugs a Mac trackpad hides. The 15px classic scrollbar makes the 100vw band too wide, and every TOC jump lands under the fixed header."
+        }
+      ],
+      "excerpt": "◆ responsive-qa · examples/fixtures/blog.html · 8 widths (320, 375, 414, 768, 1024, 1280, 1440, 1920) · full page\n✖ 24 errors  ⚠ 0 warnings  0 info · 8 viewports · 13.4s\n  ✖ anchor-hidden       #why                                     @all             4 of 4 in-page links (#why, #caching, #results, #subscribe) jump to a heading that lands completely under the fixed header “DevlogSubscribe” (72px tall).\n      ↳ add html { scroll-padding-top: 80px } (or scroll-margin-top: 80px on the targets)\n  ✖ horizontal-overflow pre.snippet                              @all             Text “const key = new URL(request.ur” runs 1111px past the 320px viewport; the page scrolls sideways.\n      ↳ code/pre block keeps lines unwrapped: give the <pre> overflow-x: auto (and max-width: 100%) · same 1395px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ image-overflow      img.diagram                              @320–768         Image is 720px wide and runs 420px past the 320px viewport; the page scrolls sideways.\n      ↳ <img> has no max-width: 100% · CSS width: 720px · same 720px width at every failing viewport → hard-coded width or unbreakable content\n  ✖ horizontal-overflow div.band                                 @1024–1920       Runs 8px past the 1009px-wide page (1024px window minus its scrollbar); the page scrolls sideways.\n      ↳ width: 100vw includes the 15px classic scrollbar (Windows/Linux): use width: 100%, or move the full-bleed band out of the centred container · negative margin (-177.234px / 0px)\n✓ No errors  no warnings  8 viewports · 12.6s\n◆ vs previous run: ✓ 24 fixed · 0 new · 0 remaining"
+    }
+  ]
+}

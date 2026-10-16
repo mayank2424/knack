@@ -1,0 +1,39 @@
+.card {
+  padding: 16px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 200ms ease;
+}
+
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.title {
+  margin: 12px 0 4px;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+}
+
+.price {
+  font-size: 16px;
+  font-weight: 700;
+  color: #e8590c;
+}
+
+.description {
+  font-size: 14px;
+  color: #666666;
+  margin-bottom: 15px;
+}
+
+.soldOut {
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #fdecea;
+  color: #c92a2a;
+  font-size: 12px;
+}
