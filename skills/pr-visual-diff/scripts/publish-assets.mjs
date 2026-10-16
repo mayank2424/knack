@@ -15,21 +15,26 @@
  *   --prefix <name>      Folder on the assets branch, e.g. pr-123 or the branch name (required)
  *   --branch <name>      Assets branch (default: pr-visual-diff-assets)
  *   --remote <name>      Remote to push to (default: origin)
- *   --include <what>     changed (default: compare.png of changed + minor pairs) | all (every png)
+ *   --include <what>     changed (default: compare.png + focus.png of changed and minor pairs) | all (every png)
  *   --markdown <file>    Markdown whose relative image links get rewritten
  *                        (default: <dir>/summary.md → writes <dir>/summary.pr.md)
  *   --push               Actually push. Without it, only prints the plan.
+ *   --gh-attach <pr>     Instead of a branch: print the `gh pr comment|edit --attach` command that
+ *                        uploads the images as regular GitHub attachments (gh >= 2.99, push access).
+ *                        Prints only; never runs it. Add --edit to target the PR body instead.
  *
  * Image URLs use https://github.com/<owner>/<repo>/raw/<commit-sha>/<path>, pinned to the
  * commit so later pushes never change what an old PR shows.
  */
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseArgs, printHelp, log, ok, warn, die, git, repoRoot } from './lib.mjs';
 
-const opts = parseArgs(process.argv.slice(2), { values: ['dir', 'prefix', 'branch', 'remote', 'include', 'markdown', 'repo'] });
+const opts = parseArgs(process.argv.slice(2), { values: ['dir', 'prefix', 'branch', 'remote', 'include', 'markdown', 'repo', 'gh-attach'] });
 if (opts.help) { printHelp(import.meta.url); process.exit(0); }
+if (opts['gh-attach']) { ghAttach(); process.exit(0); }
 if (!opts.prefix) { printHelp(import.meta.url); die('--prefix is required (e.g. pr-123 or your branch name).'); }
 
 const repo = repoRoot(opts.repo ? path.resolve(opts.repo) : process.cwd());
@@ -46,7 +51,7 @@ const files = [];
 for (const r of summary.results) {
   if (!r.files?.compare) continue;
   if (opts.include === 'all') files.push(...Object.values(r.files));
-  else if (r.status === 'changed' || r.status === 'minor') files.push(r.files.compare);
+  else if (r.status === 'changed' || r.status === 'minor') files.push(r.files.compare, ...(r.files.focus ? [r.files.focus] : []));
 }
 if (!files.length) die('Nothing to publish: no changed or minor pairs (use --include all to publish everything).');
 const missing = files.filter((f) => !fs.existsSync(path.join(dir, f)));
@@ -117,4 +122,32 @@ function spawnHash(text) {
   const tmp = path.join(os.tmpdir(), `knack-pvd-readme-${process.pid}.md`);
   fs.writeFileSync(tmp, text);
   try { return git(['hash-object', '-w', tmp], repo); } finally { fs.rmSync(tmp, { force: true }); }
+}
+
+/** Print (never run) the gh command that uploads images as PR attachments and rewrites the links. */
+function ghAttach() {
+  const dir = path.resolve(opts.dir || '.knack/pr-visual-diff');
+  const summaryFile = path.join(dir, 'summary.json');
+  if (!fs.existsSync(summaryFile)) die(`No summary.json in ${dir}. Run capture.mjs first (or pass --dir).`);
+  const summary = JSON.parse(fs.readFileSync(summaryFile, 'utf8'));
+  const body = path.resolve(opts.markdown || path.join(dir, fs.existsSync(path.join(dir, 'pr-section.md')) ? 'pr-section.md' : 'summary.md'));
+  const md = fs.readFileSync(body, 'utf8');
+  // Attach exactly the images the markdown references, by the same relative path (gh rewrites
+  // a body reference in place when the attached path matches it).
+  const refs = [...new Set([...md.matchAll(/!\[[^\]]*\]\(([^)\s]+\.png)\)/g)].map((m) => m[1]).filter((f) => !/^https?:/.test(f)))];
+  const missing = refs.filter((f) => !fs.existsSync(path.join(dir, f)));
+  if (missing.length) die(`Referenced images not found under ${dir}: ${missing.join(', ')}`);
+  if (!refs.length) die(`${path.basename(body)} references no local images.`);
+  const v = spawnSync('gh', ['--version'], { encoding: 'utf8' });
+  const ver = (v.stdout || '').match(/gh version (\d+)\.(\d+)/);
+  if (!ver) warn('gh CLI not found. Install it from https://cli.github.com (needs 2.99+ for --attach).');
+  else if (+ver[1] < 2 || (+ver[1] === 2 && +ver[2] < 99)) warn(`gh ${ver[1]}.${ver[2]} is too old for --attach (needs 2.99+). Upgrade gh, or use drag and drop / --push.`);
+  const big = refs.filter((f) => fs.statSync(path.join(dir, f)).size > 10e6);
+  if (big.length) warn(`Over GitHub's 10 MB image limit: ${big.join(', ')}. Re-capture without --full-page or with fewer widths.`);
+  const q = (x) => (/^[\w./-]+$/.test(x) ? x : JSON.stringify(x));
+  const cmd = opts.edit ? 'edit' : 'comment';
+  console.log(`# Uploads ${refs.length} image(s) (${summary.results.length} pairs captured). Ask the user before running.`);
+  console.log(`# ${cmd === 'edit' ? 'Replaces the PR description with' : 'Posts as a new PR comment:'} ${path.relative(process.cwd(), body) || body}`);
+  console.log(`(cd ${q(dir)} && gh pr ${cmd} ${q(String(opts['gh-attach']))} --body-file ${q(path.relative(dir, body))} \\`);
+  console.log(refs.map((f) => `  --attach ${q(f)}`).join(' \\\n') + ')');
 }

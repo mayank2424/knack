@@ -26,7 +26,8 @@ function uniqueName(base, taken) {
 }
 
 export function propose(findings, tokens, th, { all = false } = {}) {
-  const pool = findings.filter((f) => all || f.status === 'OFF-SCALE');
+  // emails / OG images and JS data colors aren't part of the UI's system; categories with no tokens yet are exactly what to bootstrap
+  const pool = findings.filter((f) => (all || f.status === 'OFF-SCALE') && (!f.excluded || f.excluded === 'no-tokens'));
   const taken = new Set(tokens.map((t) => t.name));
   const proposals = [];
   const oneOffs = [];

@@ -4,8 +4,9 @@ description: >-
   Records a polished GIF, MP4 or WebM of a feature flow in a running web app, for READMEs,
   pull requests, docs, changelogs and X/LinkedIn posts. Drives headless Chromium from a small
   JSON flow (click, type, press, hover, scroll, drag, wait, zoom, highlight, caption) with
-  virtual time, so every frame is captured at retina sharpness with a smooth synthetic
-  cursor, click ripples, keystroke HUD and optional macOS window frame. Verifies itself:
+  virtual time, so every frame is captured at retina sharpness with a human-feel,
+  motion-blurred cursor, click ripples, smooth zoom, keystroke HUD and optional macOS window
+  frame, encoded colour-accurate. Verifies itself:
   dry-run screenshots per step, selector suggestions on failure, and a contact sheet of the
   final clip to review. Use when the user says "record a demo", "make a GIF of this feature",
   "screen recording of the signup flow", "demo video for the README", "add a GIF to the PR",
@@ -119,12 +120,17 @@ Choreography rules that make demos good:
 - **Realistic data.** Names, amounts and copy that look like real use, never lorem ipsum,
   never real customer data or secrets.
 - **Captions carry meaning** for muted autoplay. Keep them under ~6 words.
-- **Zoom for detail, briefly.** Zoom on small UI (scale 1.4 to 2), act, zoom out.
+- **Zoom for detail, briefly.** Zoom on small UI, act, zoom out. Omit `scale` and the zoom
+  fits the target (80% of the width / 70% of the height, 1.25x to 2.2x). Viewers complain
+  about constant zooming: one or two zooms per clip, held 2 to 4 s. Zoom a container that
+  includes the heading so nothing is cut mid-word.
 - **Park the cursor** (`{ "cursor": [x, y] }`) before opening menus or palettes so it does
   not hover-select an item.
 - **Hide noise**: cookie banners, dev toolbars, framework badges, chat widgets via `hide`.
   Scrollbars are hidden by default.
-- Prefer a smaller viewport (1024x680) for GIFs: UI text stays legible at 960 px wide.
+- Prefer a smaller viewport (1024x680 or 960x600) for GIFs. GitHub shows media at most
+  ~880 px wide, so a 1024 px page in a window frame displays body text at ~0.77x. The
+  recorder prints this as a `Legibility:` line after each take.
 
 ## 5. Dry run: verify every step before recording
 
@@ -132,9 +138,10 @@ Choreography rules that make demos good:
 node "${CLAUDE_SKILL_DIR}/scripts/record.mjs" path/to/flow.json --dry-run
 ```
 
-Runs the whole flow without encoding, saves a screenshot after each step, and builds
-`<name>-steps.png` (one image, every step labelled). **Read it.** Check each step landed on
-the right element and the UI reached the expected state.
+Runs the whole flow without encoding, saves a screenshot after each step (the camera view,
+so zooms show, with captions and the keystroke HUD drawn), and builds `<name>-steps.png`
+(one image, every step labelled). **Read it.** Check each step landed on the right element
+and the UI reached the expected state.
 
 On failure it exits non-zero and prints the failing step, similar visible elements with
 ready-to-paste selectors, and an `-error.png` screenshot. Fix the flow and dry-run again.
@@ -149,17 +156,21 @@ node "${CLAUDE_SKILL_DIR}/scripts/record.mjs" path/to/flow.json -o docs/media/in
 
 Useful flags: `--viewport WxH`, `--frame` / `--background sunset`, `--trim-idle [ms]` (cut
 long still stretches), `--speed 1.2`, `--max-seconds 15`, `--gif-width 720 --gif-fps 12`
-(smaller GIF), `--crf 24` (smaller MP4), `--scale 1` (faster capture). `--help` lists all.
+(smaller GIF), `--crf 24` (smaller MP4), `--scale 1` (faster capture), `--no-zoom`
+(reduced-motion take), `--cursor-size 1.6`, `--cursor-blur 0`. `--help` lists all.
 
-It prints each output with size and duration, warns over 10 MB (GitHub's upload limit) or
-over 15 s, and writes `<name>-sheet.png`.
+It prints each output with size and duration, a `Legibility:` estimate (typical text size
+at README and phone width), warns over 10 MB (GitHub's upload limit) or over 15 s, and
+writes `<name>-sheet.png`. MP4/WebM are BT.709-converted and tagged so colours match the
+page in Chrome and Safari; GIFs use one full-clip palette with Floyd-Steinberg dithering.
 
 ## 7. Review the result (do not skip)
 
 **Read `<name>-sheet.png`**: 12 frames from the encoded file, each labelled with time and the
 step that was running. Check:
 
-- Cursor is visible, lands on targets, and click ripples appear where expected.
+- Cursor is visible, lands on targets, and click ripples appear where expected (a smeared
+  cursor mid-move is the motion blur, not a glitch).
 - Text is legible at the delivered size; nothing important is hidden behind captions or the
   keystroke HUD; zoomed shots keep the action in frame.
 - No cookie banners, dev overlays, error toasts, real personal data or secrets.
@@ -172,7 +183,9 @@ ffmpeg -loglevel error -ss 4.2 -i .knack/demo-recorder/invoice.mp4 -frames:v 1 /
 ```
 
 Fix the flow (timing, selectors, zoom, captions) and re-record until the sheet looks right.
-Timing is virtual and typing jitter is seeded, so unchanged steps come out the same on re-record.
+Timing is virtual, typing jitter is seeded and the text caret blinks on the virtual clock,
+so unchanged steps come out the same on re-record (measured: 98% of frames bit-identical,
+the rest differ by at most 7/255 on a few dozen anti-aliased pixels).
 
 ## 8. Deliver
 
@@ -197,6 +210,8 @@ Report: output paths, duration, sizes, and anything you could not show.
 - Virtual time freezes JS timers, `requestAnimationFrame` and CSS/Web Animations so frames
   are exact. `<video>`, canvas/WebGL driven by real time and some web workers may misbehave;
   re-run with `--realtime` (frames are timestamped instead, slightly less smooth).
-- Network requests run in real time, so slow APIs look faster in the clip (usually good).
+- Network requests run in real time. While any are in flight the virtual clock is not
+  allowed to run ahead of real time, so request timeouts do not fire early; slow APIs can
+  still look faster in the clip (usually good).
 - Native `<select>` menus, browser dialogs, file pickers and OS windows are not rendered.
 - Chromium only. Single tab: links that open new tabs are not followed.

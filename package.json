@@ -2,7 +2,7 @@
   "name": "knack",
   "private": true,
   "type": "module",
-  "description": "Agent skills that verify, not just advise. Tooling for validating skills and building the website.",
+  "description": "Agent skills that show their work. Tooling for validating skills and building the website.",
   "license": "MIT",
   "scripts": {
     "validate": "node tools/validate.mjs",

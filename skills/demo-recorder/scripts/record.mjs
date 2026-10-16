@@ -27,6 +27,9 @@
  *   --sheet N             Frames in the contact sheet (default 12); --no-sheet to skip
  *   --realtime            Do not virtualise time (use for pages with <video>/WebGL that break under it)
  *   --no-cursor           Hide the synthetic cursor
+ *   --cursor-size N       Cursor scale (default 1.35)    --cursor-blur N   Motion-blur shutter, 0 = off (default 0.5)
+ *   --no-zoom             Reduced motion: skip every zoom step
+ *   --no-idle-skip        Screenshot every frame (by default unchanged frames are reused, verified)
  *   --headed              Show the browser window while running
  *   --keep-frames         Keep the raw PNG frames (printed path)
  *   -h, --help            Show this help
@@ -40,12 +43,12 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   parseArgs, printHelp, loadPlaywright, launch, hasFfmpeg, ffmpeg, ffprobeDuration, resolveUrl,
-  parseLooseJson, fmtBytes, clamp, log, ok, warn, die, SCRIPTS_DIR, tty,
+  parseLooseJson, fmtBytes, clamp, sleep, log, ok, warn, die, SCRIPTS_DIR, tty,
 } from './lib.mjs';
 import { candidatesInPage } from './candidates.mjs';
 
 const opts = parseArgs(process.argv.slice(2), {
-  value: ['out', 'format', 'viewport', 'scale', 'fps', 'background', 'title', 'max-seconds', 'speed', 'max-width', 'gif-width', 'gif-fps', 'crf', 'name', 'timeout'],
+  value: ['out', 'format', 'viewport', 'scale', 'fps', 'background', 'title', 'max-seconds', 'speed', 'max-width', 'gif-width', 'gif-fps', 'crf', 'name', 'timeout', 'cursor-size', 'cursor-blur'],
   optional: ['trim-idle', 'sheet'],
   alias: { '-o': '--out', '-h': '--help' },
 });
@@ -77,6 +80,7 @@ const vp = typeof vpRaw === 'string' ? vpRaw.split(/[x×,]/).map(Number) : [vpRa
 const [W, H] = vp;
 if (!(W > 0 && H > 0)) die(`Bad viewport "${vpRaw}". Use e.g. 1280x800.`);
 const SCALE = +pick('scale', 'scale', 2);
+const FW = Math.round(W * SCALE), FH = Math.round(H * SCALE); // captured frame size in device px
 const FPS = +pick('fps', 'fps', 30);
 const DT = 1000 / FPS;
 const REALTIME = !!pick('realtime', 'realtime', false);
@@ -104,7 +108,13 @@ const frameCfg = frameRaw ? { padding: 56, radius: 12, bar: 38, ...(typeof frame
 if (frameCfg && opts.background) frameCfg.background = opts.background;
 if (frameCfg && opts.title) frameCfg.title = opts.title;
 
-const cursorCfg = { visible: true, size: 1, color: '#6366f1', speed: 1, start: [Math.round(W * 0.6), Math.round(H * 0.72)], ...(flow.cursor || {}) };
+// size 1.35: a macOS-size arrow (~20 px) is too small to follow once the clip is
+// scaled down for a README or a phone; blur = motion-blur shutter as a fraction of
+// the frame interval (0.5 = 180 degrees, 0 = off).
+const cursorCfg = { visible: true, size: 1.35, color: '#6366f1', speed: 1, blur: 0.5, start: [Math.round(W * 0.6), Math.round(H * 0.72)], ...(flow.cursor || {}) };
+if (opts['cursor-size']) cursorCfg.size = +opts['cursor-size'];
+if (opts['cursor-blur'] !== undefined) cursorCfg.blur = +opts['cursor-blur'];
+const NO_ZOOM = opts.zoom === false || flow.zoom === false; // --no-zoom: reduced motion, zoom steps become no-ops
 if (opts.cursor === false || flow.cursor === false) cursorCfg.visible = false;
 const typeDelay = +(flow.typeDelay ?? 55);
 const PAUSE = { goto: 700, click: 650, type: 450, press: 650, hover: 500, scroll: 450, drag: 600, select: 600, zoom: 200, highlight: 0, caption: 0, wait: 0, js: 0, cursor: 0, ...(flow.pauses || {}) };
@@ -114,7 +124,7 @@ const ACTIONS = Object.keys(PAUSE);
 const describe = (s) => {
   const a = actionOf(s);
   const v = s[a];
-  const vs = typeof v === 'string' ? `"${v}"` : JSON.stringify(v);
+  const vs = typeof v === 'string' ? `"${v.replace(/\n/g, '\\n')}"` : JSON.stringify(v);
   return `${a} ${vs && vs.length > 60 ? vs.slice(0, 57) + '…' : vs ?? ''}`.trim();
 };
 function actionOf(s) { return Object.keys(s).find((k) => ACTIONS.includes(k)); }
@@ -155,6 +165,10 @@ if (flow.userAgent) ctxOpts.userAgent = flow.userAgent;
 const ctx = await browser.newContext(ctxOpts);
 const css = [
   flow.hideScrollbars === false ? '' : 'html,body,*{scrollbar-width:none!important}::-webkit-scrollbar{display:none!important;width:0!important;height:0!important}',
+  // The text caret blinks on a real-time compositor timer, so it flickered at random
+  // in recordings and made re-takes differ. Stop the native blink; FRAME_FN blinks
+  // it on the virtual clock instead (solid while typing, 530 ms phases when idle).
+  '*{caret-animation:manual!important}',
   (flow.hide || []).length ? `${flow.hide.join(',')}{visibility:hidden!important}` : '',
   flow.css || '',
 ].join('\n');
@@ -166,6 +180,15 @@ if (css.trim()) {
 }
 const page = await ctx.newPage();
 const cdp = await ctx.newCDPSession(page);
+// Requests in flight. While any are pending, virtual time may not run ahead of
+// real time: otherwise XHR/fetch timeouts (on the virtual clock) fire before the
+// real network answers. Seen on tailwindcss.com: DocSearch's Algolia requests
+// were aborted in --dry-run (no screenshots, so ~10x faster than real time) and
+// the results list never appeared.
+let inflight = 0, paceAnchor = null;
+page.on('request', () => { inflight++; });
+for (const ev of ['requestfinished', 'requestfailed']) page.on(ev, () => { inflight = Math.max(0, inflight - 1); });
+page.on('framenavigated', (f) => { if (f === page.mainFrame()) inflight = 0; });
 const pageErrors = [];
 page.on('pageerror', (e) => pageErrors.push(e.message));
 const OVERLAY_SRC = fs.readFileSync(path.join(SCRIPTS_DIR, 'overlay.js'), 'utf8');
@@ -194,17 +217,48 @@ const rand = mulberry32(+(flow.seed ?? 7));
 
 const S = {
   cursor: { x: cursorCfg.start[0], y: cursorCfg.start[1], visible: cursorCfg.visible },
-  mouse: { x: -1, y: -1 },
+  mouse: { x: -1, y: -1 }, move: null, pokes: 0, lastInput: 0,
   press: null, ripples: [], highlight: null, caption: null, keys: null, scroll: null,
   cam: { z: 1, cx: W / 2, cy: H / 2, follow: false, anim: null },
 };
 
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+// Minimum-jerk profile (Flash & Hogan): the bell-shaped velocity curve of a human
+// reaching movement. Warping time by t^g moves the speed peak earlier, so motion
+// starts briskly and settles gently on the target. Peak speed is ~1.8x average
+// (a cubic ease-in-out peaks at 3x, which reads as a robotic lunge and makes the
+// cursor jump ~60% further between frames at the fastest point).
+const minJerk = (t) => t * t * t * (10 + t * (-15 + 6 * t));
+const easeCursor = (t) => minJerk(Math.pow(t, 0.8)); // peak speed at ~39% of the move
+const easeCamera = (t) => minJerk(Math.pow(t, 0.7)); // peak at ~31%: quick to commit, long soft settle, like a damped spring
 const fade = (t, a, b, fi, fo) => (t < a ? 0 : t < a + fi ? easeOut((t - a) / fi) : t < b ? 1 : t < b + fo ? 1 - easeOut((t - b) / fo) : 0);
+
+/** Cursor position at time t on the current move (quadratic arc, eased), or its resting point. */
+function cursorAt(t) {
+  const m = S.move;
+  if (!m) return { x: S.cursor.x, y: S.cursor.y };
+  const p = m.dur > 0 ? clamp((t - m.t0) / m.dur, 0, 1) : 1, e = easeCursor(p), u = 1 - e;
+  return { x: u * u * m.fx + 2 * u * e * m.cx + e * e * m.x, y: u * u * m.fy + 2 * u * e * m.cy + e * e * m.y };
+}
 
 function overlayState(t) {
   const st = { cursor: { ...S.cursor, size: cursorCfg.size, down: 0, kind: undefined }, ripples: [], scroll: S.scroll };
+  const sinceKey = t - S.lastInput;
+  st.caretOn = sinceKey < 600 || Math.floor((sinceKey - 600) / 530) % 2 === 1;
+  // Cursor motion blur: extra samples spread over the shutter interval behind the
+  // current position (shutter = cursorCfg.blur x frame interval). Only drawn while
+  // the cursor travels more than ~1.5 px within the shutter, so a resting cursor stays crisp.
+  if (S.cursor.visible && cursorCfg.blur > 0 && S.move) {
+    const span = cursorCfg.blur * DT, tail = cursorAt(t - span);
+    const dist = Math.hypot(tail.x - S.cursor.x, tail.y - S.cursor.y);
+    if (dist > 1.5) {
+      // Samples ~1.5 device px apart so the smear is continuous, not a row of echoes.
+      const n = clamp(Math.ceil((dist * SCALE) / 1.5) + 1, 3, 24), trail = [];
+      for (let k = 1; k < n; k++) { const q = cursorAt(t - (span * k) / (n - 1)); trail.push([+q.x.toFixed(2), +q.y.toFixed(2)]); }
+      st.cursor.trail = trail;
+    }
+  }
   if (S.press) st.cursor.down = S.press.up == null ? clamp((t - S.press.t0) / 60, 0, 1) : clamp(1 - (t - S.press.up) / 140, 0, 1);
   S.ripples = S.ripples.filter((r) => t - r.t0 < 560);
   st.ripples = S.ripples.map((r) => ({ x: r.x, y: r.y, p: clamp((t - r.t0) / 560, 0, 1), color: cursorCfg.color, size: 46 }));
@@ -217,11 +271,20 @@ function overlayState(t) {
 function updateCamera(t) {
   const c = S.cam;
   if (c.anim) {
-    const p = clamp((t - c.anim.t0) / c.anim.dur, 0, 1), e = easeInOut(p);
-    c.z = c.anim.from.z + (c.anim.to.z - c.anim.from.z) * e;
-    c.cx = c.anim.from.cx + (c.anim.to.cx - c.anim.from.cx) * e;
-    c.cy = c.anim.from.cy + (c.anim.to.cy - c.anim.from.cy) * e;
-    if (p >= 1) c.anim = null;
+    const { from: a, to: b, fixed } = c.anim;
+    const p = clamp((t - c.anim.t0) / c.anim.dur, 0, 1), e = easeCamera(p);
+    // Interpolate zoom in log space so it feels constant-rate (1x->2x takes as long
+    // as 2x->4x), and when one view contains the other, zoom about their shared
+    // fixed point: the target scales straight in/out instead of sliding sideways.
+    c.z = a.z * Math.pow(b.z / a.z, e);
+    if (fixed) {
+      c.cx = fixed.x - ((fixed.x - a.cx) * a.z) / c.z;
+      c.cy = fixed.y - ((fixed.y - a.cy) * a.z) / c.z;
+    } else {
+      c.cx = a.cx + (b.cx - a.cx) * e;
+      c.cy = a.cy + (b.cy - a.cy) * e;
+    }
+    if (p >= 1) { c.anim = null; c.z = b.z; c.cx = b.cx; c.cy = b.cy; }
   } else if (c.follow && c.z > 1.001) {
     // Dead-zone follow: the camera only drifts when the cursor leaves the
     // middle ~60% of the zoomed view, then eases toward it (no sudden lurch).
@@ -236,38 +299,79 @@ function updateCamera(t) {
     c.cy = cy + (ty - cy) * k;
   }
 }
-function camClip(sx, sy) {
+function camClip(sx, sy, padPx = 6) {
   const { z } = S.cam, vw = W / z, vh = H / z;
   const s = SCALE * z;
-  // Snap the clip to the output pixel grid so every frame is exactly W*SCALE x H*SCALE
-  // (Chrome rounds sub-pixel clips, which would make zoom frames wobble by a pixel).
+  // Snap the clip origin to the output pixel grid so content never shifts by a
+  // fraction of a pixel between frames. Chrome places the origin exactly but
+  // truncates the clip size by 1-3 px at fractional scales; scaling those frames
+  // back up to W*SCALE x H*SCALE stretched them non-uniformly (visible wobble
+  // during zooms). So capture a few pixels extra and crop exactly at encode time.
   const snap = (v) => Math.round(v * s) / s;
   const x = snap(clamp(S.cam.cx - vw / 2, 0, W - vw) + sx), y = snap(clamp(S.cam.cy - vh / 2, 0, H - vh) + sy);
-  return { x, y, width: (W * SCALE) / s, height: (H * SCALE) / s, scale: s };
+  return { x, y, width: (W * SCALE + padPx) / s, height: (H * SCALE + padPx) / s, scale: s };
 }
+const pngSize = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20) });
 
 // Runs inside the page every frame: advance frozen animations by dt, apply
 // pending scroll, draw the overlay. Returns null if the overlay is missing.
 const FRAME_FN = ([dt, st]) => {
-  if (dt) {
-    for (const a of document.getAnimations()) {
-      if (a.playState !== 'running' || a.timeline !== document.timeline) continue;
-      const cur = a.currentTime;
-      a.currentTime = (cur == null || cur < 0 ? 0 : cur) + dt * (a.playbackRate || 1);
+  // Change detection for idle-frame reuse: anything that could alter pixels without
+  // the recorder knowing marks the page dirty (DOM mutations, scrolls, image/font
+  // loads, running animations, visible canvas/video/iframe content).
+  if (!window.__knackObs) {
+    const mark = () => { window.__knackDirty = true; };
+    window.__knackObs = new MutationObserver(mark);
+    window.__knackObs.observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
+    for (const ev of ['scroll', 'load', 'error', 'input', 'focusin', 'focusout', 'transitionrun', 'animationstart']) document.addEventListener(ev, mark, true);
+    document.fonts?.addEventListener?.('loadingdone', mark);
+    window.__knackDirty = true;
+  }
+  let dirty = window.__knackDirty;
+  window.__knackDirty = false;
+  for (const a of document.getAnimations()) {
+    if (a.playState !== 'running') continue;
+    dirty = true;
+    if (!dt || a.timeline !== document.timeline) continue;
+    const cur = a.currentTime;
+    a.currentTime = (cur == null || cur < 0 ? 0 : cur) + dt * (a.playbackRate || 1);
+  }
+  if (!dirty) {
+    for (const el of document.querySelectorAll('canvas,video,iframe,embed,object')) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth) { dirty = true; break; }
     }
   }
+  let cs = window.__knackCaret;
+  if (!cs || !cs.isConnected) { cs = window.__knackCaret = document.createElement('style'); cs.setAttribute('data-knack-caret', ''); (document.head || document.documentElement).appendChild(cs); }
+  const caretCss = st.caretOn === false ? '*{caret-color:transparent!important}' : '';
+  if (cs.textContent !== caretCss) cs.textContent = caretCss;
   if (st.scroll && window.__knackScroll) window.__knackScroll.scrollTo({ top: st.scroll.top, left: st.scroll.left, behavior: 'instant' });
-  return window.__knack ? window.__knack.render(st) : null;
+  const out = window.__knack ? window.__knack.render(st) : null;
+  if (out) out.dirty = dirty || !!st.scroll;
+  return out;
 };
 
 let lastRender = { sx: 0, sy: 0 };
+let idleSkip = opts['idle-skip'] !== false && flow.idleSkip !== false && !REALTIME;
+let lastKey = '', reuseRun = 0, reused = 0;
+const poke = () => { S.pokes = 3; S.lastInput = now(); }; // input was sent: capture the next few frames for real (focus rings, carets)
+const PROF = process.env.KNACK_PROFILE ? { clock: 0, mouse: 0, eval: 0, shot: 0, write: 0 } : null;
+const lap = (k, t0) => { if (PROF) PROF[k] += performance.now() - t0; return performance.now(); };
 async function tick(update) {
+  let p0 = performance.now();
+  if (!REALTIME && inflight > 0) {
+    if (!paceAnchor) paceAnchor = { real: Date.now(), virt: vt };
+    const ahead = vt + DT - paceAnchor.virt - (Date.now() - paceAnchor.real);
+    if (ahead > 1) await sleep(ahead);
+  } else paceAnchor = null;
   if (!REALTIME) {
     const next = vt + DT;
     const ms = Math.round(next) - Math.round(vt);
     vt = next;
     if (ms > 0) await page.clock.runFor(ms).catch(navTolerant);
   }
+  p0 = lap('clock', p0);
   const t = now();
   update?.(t);
   updateCamera(t);
@@ -277,23 +381,56 @@ async function tick(update) {
     S.mouse = { x: S.cursor.x, y: S.cursor.y };
     await page.mouse.move(S.cursor.x, S.cursor.y).catch(navTolerant);
   }
+  p0 = lap('mouse', p0);
   let r = await page.evaluate(FRAME_FN, [REALTIME ? 0 : DT, st]).catch(navTolerant);
   if (r === null) {
     await page.evaluate(OVERLAY_SRC).catch(navTolerant);
     r = await page.evaluate(FRAME_FN, [0, st]).catch(navTolerant);
   }
   if (r) lastRender = r;
+  p0 = lap('eval', p0);
   if (capturing) {
-    const clip = camClip(lastRender.sx, lastRender.sy);
-    if (process.env.KNACK_DEBUG) console.log(`\n#${frames.length} t=${t.toFixed(0)} z=${S.cam.z.toFixed(3)} clip=${JSON.stringify(clip)} sx=${lastRender.sx} sy=${lastRender.sy}`);
-    const shot = await cdp.send('Page.captureScreenshot', { format: 'png', optimizeForSpeed: true, captureBeyondViewport: false, clip }).catch(navTolerant);
-    if (shot) {
-      const buf = Buffer.from(shot.data, 'base64');
+    // Idle-frame reuse: when nothing the page or the recorder controls has changed
+    // since the last capture, repeat the previous frame instead of taking a ~90 ms
+    // 2x screenshot. Every 15th repeat is verified with a real capture; a mismatch
+    // means the detector missed something, so reuse is switched off for the run.
+    const key = JSON.stringify([st, camClip(lastRender.sx, lastRender.sy)]);
+    const prev = frames[frames.length - 1];
+    const still = idleSkip && prev && r && !r.dirty && S.pokes <= 0 && key === lastKey;
+    S.pokes--;
+    lastKey = key;
+    if (still && reuseRun < 14) {
+      reuseRun++; reused++;
+      frames.push({ file: prev.file, t, hash: prev.hash, step: curStep });
+      lap('shot', p0);
+      return;
+    }
+    const verifying = still;
+    reuseRun = 0;
+    let buf = null;
+    for (const padPx of [6, 16]) {
+      const clip = camClip(lastRender.sx, lastRender.sy, padPx);
+      if (process.env.KNACK_DEBUG) console.log(`\n#${frames.length} t=${t.toFixed(0)} z=${S.cam.z.toFixed(3)} clip=${JSON.stringify(clip)} sx=${lastRender.sx} sy=${lastRender.sy} cursor=${S.cursor.x.toFixed(2)},${S.cursor.y.toFixed(2)}`);
+      const shot = await cdp.send('Page.captureScreenshot', { format: 'png', optimizeForSpeed: true, captureBeyondViewport: false, clip }).catch(navTolerant);
+      if (!shot) break;
+      buf = Buffer.from(shot.data, 'base64');
+      const sz = pngSize(buf);
+      if (sz.w >= FW && sz.h >= FH) break;
+      if (padPx === 16) { warn(`Frame came back ${sz.w}x${sz.h}, smaller than ${FW}x${FH}; skipping it.`); buf = null; }
+    }
+    p0 = lap('shot', p0);
+    if (buf) {
+      const hash = crypto.createHash('md5').update(buf).digest('hex');
+      if (verifying && hash !== prev.hash) {
+        idleSkip = false;
+        log('Idle-frame reuse missed a page change; capturing every frame from here on (use --no-idle-skip to always do so).');
+      }
       const file = path.join(frameDir, `f${String(frames.length).padStart(6, '0')}.png`);
       fs.writeFileSync(file, buf);
-      frames.push({ file, t, hash: crypto.createHash('md5').update(buf).digest('hex'), step: curStep });
+      frames.push({ file, t, hash, step: curStep });
       if (tty && frames.length % 10 === 0) process.stdout.write(`\r  ${frames.length} frames · ${(t / 1000).toFixed(1)}s`);
     }
+    lap('write', p0);
   }
 }
 function navTolerant(e) {
@@ -387,15 +524,18 @@ async function targetPoint(sel, step = {}) {
 async function moveTo(x, y, step = {}) {
   const fx = S.cursor.x, fy = S.cursor.y, d = Math.hypot(x - fx, y - fy);
   if (d < 1) return;
+  // Fitts-style duration: grows with log distance, so long moves are not rushed and
+  // short hops are not sluggish.
   const dur = step.moveDuration ?? clamp(260 + 115 * Math.log2(1 + d / 22), 320, 1050) / (cursorCfg.speed || 1);
   // Slight arc (quadratic bezier) reads as a human hand rather than a robot line.
   const nx = -(y - fy) / d, ny = (x - fx) / d, bend = Math.min(d * 0.1, 50) * (x >= fx ? 1 : -1);
   const cx = (fx + x) / 2 + nx * bend, cy = (fy + y) / 2 + ny * bend;
-  await animate(dur, (p) => {
-    const e = easeInOut(p), u = 1 - e;
-    S.cursor.x = u * u * fx + 2 * u * e * cx + e * e * x;
-    S.cursor.y = u * u * fy + 2 * u * e * cy + e * e * y;
+  S.move = { t0: now(), dur, fx, fy, cx, cy, x, y };
+  await animate(dur, () => {
+    const q = cursorAt(now());
+    S.cursor.x = q.x; S.cursor.y = q.y;
   });
+  S.cursor.x = x; S.cursor.y = y;
 }
 async function clickAt(x, y, step = {}) {
   const button = step.button || 'left';
@@ -403,9 +543,9 @@ async function clickAt(x, y, step = {}) {
   await hold(70);
   for (let i = 1; i <= count; i++) {
     S.press = { t0: now(), up: null };
-    await page.mouse.down({ button, clickCount: i });
+    await page.mouse.down({ button, clickCount: i }); poke();
     await hold(80);
-    await page.mouse.up({ button, clickCount: i });
+    await page.mouse.up({ button, clickCount: i }); poke();
     S.press.up = now();
     S.ripples.push({ x, y, t0: now() });
     if (i < count) await hold(60);
@@ -421,7 +561,14 @@ const KEY_LABEL = {
   ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', PageUp: 'PgUp', PageDown: 'PgDn',
 };
 const keyParts = (combo) => combo.split('+').filter(Boolean).map((k) => KEY_LABEL[k] || (k.length === 1 ? k.toUpperCase() : k));
-const normKey = (k) => k.split('+').map((p) => ({ Cmd: 'Meta', Command: 'Meta', Ctrl: 'Control', Option: 'Alt', Esc: 'Escape', Return: 'Enter' }[p] || p)).join('+');
+// A real keyboard sends key "k" for Cmd+K; Playwright's "Meta+K" sends "K", which
+// command palettes that check event.key === 'k' (DocSearch, cmdk, ...) ignore.
+// So letters in a combo are lowercased unless Shift is part of it.
+const normKey = (k) => {
+  const parts = k.split('+').map((p) => ({ Cmd: 'Meta', Command: 'Meta', Ctrl: 'Control', Option: 'Alt', Esc: 'Escape', Return: 'Enter' }[p] || p));
+  if (parts.length > 1 && !parts.includes('Shift')) parts[parts.length - 1] = parts[parts.length - 1].replace(/^[A-Z]$/, (c) => c.toLowerCase());
+  return parts.join('+');
+};
 
 // ------------------------------------------------------------------ steps
 async function runStep(step) {
@@ -431,7 +578,7 @@ async function runStep(step) {
     case 'goto': {
       const url = resolveUrl(v, { base: baseUrl, dir: flowDir });
       await page.goto(url, { waitUntil: step.waitUntil || 'load', timeout: 45000 });
-      await freezeAnimations();
+      await freezeAnimations(); poke();
       break;
     }
     case 'click': {
@@ -452,10 +599,11 @@ async function runStep(step) {
         await clickAt(p.x, p.y, step);
         await hold(180);
       }
-      if (step.clear) { await page.keyboard.press('ControlOrMeta+A'); await page.keyboard.press('Backspace'); }
+      if (step.clear) { await page.keyboard.press('ControlOrMeta+A'); await page.keyboard.press('Backspace'); poke(); }
       const base = +(step.delay ?? typeDelay);
       for (const ch of [...String(v)]) {
         if (ch === '\n') await page.keyboard.press('Enter'); else await page.keyboard.type(ch);
+        poke();
         let d = base * (0.55 + rand() * 0.9);
         if (ch === ' ') d += base * 0.5;
         if (/[.,!?;:]/.test(ch)) d += base * 2;
@@ -469,7 +617,7 @@ async function runStep(step) {
         const show = step.hud !== undefined ? step.hud : k.includes('+') || /^(Escape|Esc|Tab)$/.test(k);
         if (show) S.keys = { parts: keyParts(k), t0: now(), t1: now() + (step.hudDuration ?? 1000) };
         await hold(show ? 120 : 0);
-        await page.keyboard.press(normKey(k));
+        await page.keyboard.press(normKey(k)); poke();
         if (keys.length > 1) await hold(step.gap ?? 350);
       }
       break;
@@ -506,14 +654,14 @@ async function runStep(step) {
       await moveTo(from.x, from.y, step);
       await hold(80);
       S.press = { t0: now(), up: null };
-      await page.mouse.down();
+      await page.mouse.down(); poke();
       await hold(140);
       let to;
       if (Array.isArray(step.to) && typeof step.to[0] === 'number' && step.by !== false && !step.absolute) to = { x: from.x + step.to[0], y: from.y + step.to[1] };
       else to = await targetPoint(step.to, step);
       await moveTo(to.x, to.y, { moveDuration: step.moveDuration ?? 900 });
       await hold(120);
-      await page.mouse.up();
+      await page.mouse.up(); poke();
       S.press.up = now();
       break;
     }
@@ -521,19 +669,35 @@ async function runStep(step) {
       const p = await targetPoint(v, step);
       await moveTo(p.x, p.y, step);
       S.ripples.push({ x: p.x, y: p.y, t0: now() });
-      await p.loc.selectOption(step.value ?? step.option);
+      await p.loc.selectOption(step.value ?? step.option); poke();
       break;
     }
     case 'zoom': {
+      if (NO_ZOOM) break;
       const o = v === 'out' || v === false || v === 1 ? { scale: 1 } : typeof v === 'number' ? { scale: v } : typeof v === 'string' ? { to: v } : v;
-      const z = clamp(+(o.scale ?? 1.6), 1, 4);
+      let z = clamp(+(o.scale ?? 1.6), 1, 4);
       let cx = S.cursor.x, cy = S.cursor.y;
-      if (o.to) { const p = await targetPoint(o.to, step); cx = p.x; cy = p.y; }
+      if (o.to) {
+        const p = await targetPoint(o.to, step); cx = p.x; cy = p.y;
+        // No scale given: fit the target to ~80% of the width / 70% of the height
+        // (the framing Cap uses for click clusters), between 1.25x and 2.2x.
+        const bb = o.scale === undefined && p.loc ? await p.loc.boundingBox() : null;
+        if (bb) z = Math.round(clamp(Math.min((W * 0.8) / bb.width, (H * 0.7) / bb.height), 1.25, 2.2) * 100) / 100;
+      }
       if (z === 1) { cx = W / 2; cy = H / 2; }
       S.cam.follow = !!o.follow && z > 1;
       cx = clamp(cx, W / z / 2, W - W / z / 2); cy = clamp(cy, H / z / 2, H - H / z / 2);
       const fz = S.cam.z, fcx = clamp(S.cam.cx, W / fz / 2, W - W / fz / 2), fcy = clamp(S.cam.cy, H / fz / 2, H - H / fz / 2);
-      S.cam.anim = { from: { z: fz, cx: fcx, cy: fcy }, to: { z, cx, cy }, t0: now(), dur: +(o.duration ?? 800) };
+      // Fixed point of the zoom (the page point that stays put on screen). Use it only
+      // when one view contains the other; otherwise it can lie far outside and the
+      // camera would swing, so fall back to a straight pan.
+      let fixed = null;
+      if (Math.abs(z - fz) > 1e-3) {
+        const f = { x: (cx * z - fcx * fz) / (z - fz), y: (cy * z - fcy * fz) / (z - fz) };
+        const small = z > fz ? { cx, cy, z } : { cx: fcx, cy: fcy, z: fz };
+        if (Math.abs(f.x - small.cx) <= W / small.z / 2 + 0.5 && Math.abs(f.y - small.cy) <= H / small.z / 2 + 0.5) fixed = f;
+      }
+      S.cam.anim = { from: { z: fz, cx: fcx, cy: fcy }, to: { z, cx, cy }, fixed, t0: now(), dur: +(o.duration ?? 800) };
       await hold(+(o.duration ?? 800));
       break;
     }
@@ -560,12 +724,28 @@ async function runStep(step) {
       break;
     }
     case 'js': {
-      await page.evaluate(String(v));
+      await page.evaluate(String(v)); poke();
       break;
     }
   }
   const pause = step.pause ?? PAUSE[action];
   await hold(pause);
+}
+
+// Dry-run screenshot of what the viewer will see after a step: the camera view
+// (zoom) at 1x, with captions, keystroke HUD and highlights drawn at full opacity
+// even if they are still fading in, so the steps sheet shows them.
+async function dryShot(file) {
+  const t = now(), st = overlayState(t);
+  for (const k of ['caption', 'keys', 'highlight']) if (st[k] && S[k] && t < S[k].t1) st[k].o = 1;
+  st.ripples = [];
+  delete st.cursor.trail;
+  const r = await page.evaluate(FRAME_FN, [0, st]).catch(() => null);
+  const { z } = S.cam, vw = W / z, vh = H / z;
+  const sx = r?.sx ?? 0, sy = r?.sy ?? 0;
+  const clip = { x: clamp(S.cam.cx - vw / 2, 0, W - vw) + sx, y: clamp(S.cam.cy - vh / 2, 0, H - vh) + sy, width: vw, height: vh, scale: z };
+  const shot = await cdp.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false, clip }).catch(() => null);
+  if (shot) fs.writeFileSync(file, Buffer.from(shot.data, 'base64')); else await page.screenshot({ path: file });
 }
 
 async function suggest(step) {
@@ -605,7 +785,7 @@ async function run(list, { label, shoot }) {
     }
     if (shoot) {
       const f = path.join(stepsDir, `${String(i + 1).padStart(2, '0')}-${actionOf(step)}.png`);
-      await page.screenshot({ path: f });
+      await dryShot(f);
       stepShots.push({ file: f, label: `${i + 1}. ${describe(step)}`, t: now() });
     }
   }
@@ -647,7 +827,29 @@ curStep = flow.steps.length;
 await hold(+(flow.tail ?? 1200));
 capturing = false;
 if (tty) process.stdout.write('\n');
-log(`Captured ${frames.length} frames (${(now() / 1000).toFixed(1)}s of timeline) in ${((Date.now() - startedAt) / 1000).toFixed(1)}s`);
+// Typical text size on screen (character-weighted median of visible text), used
+// to predict legibility once the clip is shown smaller than it was captured.
+const textPx = await page.evaluate(() => {
+  const sizes = [];
+  const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(), i = 0; n && i < 4000; n = walker.nextNode(), i++) {
+    const txt = n.textContent.trim();
+    const el = n.parentElement;
+    if (!txt || !el || el.closest('knack-overlay,script,style')) continue;
+    const r = el.getBoundingClientRect();
+    if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth || r.width < 1) continue;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || +cs.opacity < 0.1) continue;
+    sizes.push([parseFloat(cs.fontSize), txt.length]);
+  }
+  sizes.sort((a, b) => a[0] - b[0]);
+  const total = sizes.reduce((a, s) => a + s[1], 0);
+  let acc = 0;
+  for (const [px, n] of sizes) { acc += n; if (acc >= total / 2) return px; }
+  return 0;
+}).catch(() => 0);
+if (PROF) log(`Capture profile (ms/frame): ${Object.entries(PROF).map(([k, v]) => `${k} ${(v / Math.max(1, frames.length)).toFixed(1)}`).join(' · ')}`);
+log(`Captured ${frames.length} frames (${(now() / 1000).toFixed(1)}s of timeline) in ${((Date.now() - startedAt) / 1000).toFixed(1)}s${reused ? `, ${reused} unchanged frames reused` : ''}`);
 
 // ------------------------------------------------------------------ edit: durations, trim, cap
 for (let i = 0; i < frames.length; i++) frames[i].dur = i + 1 < frames.length ? Math.max(1, frames[i + 1].t - frames[i].t) : DT;
@@ -716,31 +918,48 @@ if (frameCfg) {
 }
 
 // ------------------------------------------------------------------ encode
-const FW = Math.round(W * SCALE), FH = Math.round(H * SCALE);
 function baseGraph(outFps) {
-  // Normalise size (zoom clips can be off by a pixel), retime, constant fps, then add chrome.
-  let g = `[0:v]scale=${FW}:${FH}:flags=bicubic,setsar=1,setpts=PTS/${speed},fps=${outFps}`;
-  if (FG) g += `,pad=${FG.CW * SCALE}:${FG.CH * SCALE}:${FG.pad * SCALE}:${FG.y0 * SCALE}:color=black[base];[base][1:v]overlay=0:0:shortest=1:format=auto`;
+  // Crop to the exact frame size (frames are captured a few px oversize, see camClip;
+  // crop never resamples), retime, constant fps, then add the window chrome.
+  let g = `[0:v]crop=${FW}:${FH}:0:0,setsar=1,setpts=PTS/${speed},fps=${outFps}`;
+  if (FG) g += `,pad=${Math.round(FG.CW * SCALE)}:${Math.round(FG.CH * SCALE)}:${Math.round(FG.pad * SCALE)}:${Math.round(FG.y0 * SCALE)}:color=black[base];[base][1:v]overlay=0:0:shortest=1:format=auto`;
   return g;
 }
 const inputs = (outFps) => ['-reinit_filter', '0', '-f', 'concat', '-safe', '0', '-i', listFile, ...(FG ? ['-loop', '1', '-framerate', String(outFps), '-i', FG.file] : [])];
-const outputs = [];
-for (const fmt of formats) {
+// Frames are sRGB. Convert with the BT.709 matrix and tag the stream (BT.709
+// primaries + matrix, sRGB transfer, limited range). Before, ffmpeg used its
+// default BT.601 matrix and left the file untagged, so Chrome decoded it as 709
+// and colours shifted (mean dE 5.6, max 12.4 on a swatch chart; now 0.3). The
+// transfer is tagged sRGB, not bt709: Safari/WebKit colour-manages a bt709
+// transfer and washes the clip out (mean dE 3.8) while sRGB stays exact (0.6).
+// setparams carries the tags on the frames; recent ffmpeg ignores the -color_*
+// output flags when frames already carry colour properties, so set both.
+const BT709 = ['-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'iec61966-2-1', '-color_range', 'tv'];
+const toYuv = `scale='trunc(min(${maxWidth},iw)/2)*2':-2:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuv420p,setparams=color_primaries=bt709:color_trc=iec61966-2-1:colorspace=bt709:range=tv`;
+async function encode(fmt) {
   const out = `${outBase}.${fmt}`;
-  log(`Encoding ${fmt.toUpperCase()}…`);
-  let argv;
   if (fmt === 'gif') {
-    const g = `${baseGraph(gifFps)},scale=${gifWidth}:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff:max_colors=256[p];[b][p]paletteuse=dither=sierra2_4a:diff_mode=rectangle`;
-    argv = ['-y', ...inputs(gifFps), '-filter_complex', g, '-loop', '0', out];
+    // One palette from every pixel of every frame (stats_mode=full) + Floyd-Steinberg,
+    // re-encoding only the changed rectangle. stats_mode=diff (the usual advice)
+    // starved static areas such as the window chrome and wallpaper: speckled traffic
+    // lights and banded gradients (PSNR 35.7 dB -> 43.3 dB, 8% smaller). gifski was
+    // measured too: 15% smaller, but its lossy LZW leaves faint ghost trails of
+    // moved text and ripples on white backgrounds, so it is not used.
+    const g = `${baseGraph(gifFps)},scale=${gifWidth}:-1:flags=lanczos,split[a][b];[a]palettegen=stats_mode=full:max_colors=256[p];[b][p]paletteuse=dither=floyd_steinberg:diff_mode=rectangle`;
+    await ffmpeg(['-y', ...inputs(gifFps), '-filter_complex', g, '-loop', '0', out]);
+  } else if (fmt === 'webm') {
+    await ffmpeg(['-y', ...inputs(FPS), '-filter_complex', `${baseGraph(FPS)},${toYuv}`, '-c:v', 'libvpx-vp9', '-crf', String(crf + 12), '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', ...BT709, '-an', out]);
   } else {
-    const g = `${baseGraph(FPS)},scale='min(${maxWidth},iw)':-2:flags=lanczos,format=yuv420p`;
-    argv = fmt === 'webm'
-      ? ['-y', ...inputs(FPS), '-filter_complex', g, '-c:v', 'libvpx-vp9', '-crf', String(crf + 12), '-b:v', '0', '-row-mt', '1', '-deadline', 'good', '-cpu-used', '2', '-an', out]
-      : ['-y', ...inputs(FPS), '-filter_complex', g, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-tune', 'animation', '-movflags', '+faststart', '-an', out];
+    await ffmpeg(['-y', ...inputs(FPS), '-filter_complex', `${baseGraph(FPS)},${toYuv}`, '-c:v', 'libx264', '-preset', 'slow', '-crf', String(crf), '-tune', 'animation', '-profile:v', 'high', ...BT709, '-movflags', '+faststart', '-an', out]);
   }
-  try { await ffmpeg(argv); } catch (e) { await browser.close(); die(`ffmpeg failed for ${fmt}:\n${e.message}`); }
-  outputs.push({ fmt, out, size: fs.statSync(out).size });
+  return { fmt, out, size: fs.statSync(out).size };
 }
+log(`Encoding ${formats.map((f) => f.toUpperCase()).join(', ')}…`);
+const encStart = Date.now();
+let outputs;
+try { outputs = await Promise.all(formats.map(encode)); } // independent ffmpeg processes: run in parallel
+catch (e) { await browser.close(); die(`Encoding failed:\n${e.message}`); }
+log(`Encoded in ${((Date.now() - encStart) / 1000).toFixed(1)}s`);
 
 // ------------------------------------------------------------------ contact sheet
 async function buildSheet(items, out, header) {
@@ -797,6 +1016,13 @@ else fs.rmSync(frameDir, { recursive: true, force: true });
 for (const o of outputs) {
   ok(`${o.fmt.toUpperCase()} → ${o.out} (${fmtBytes(o.size)}, ${(total / 1000).toFixed(1)}s)`);
   if (o.size > 10e6) warn(`${path.basename(o.out)} is over 10 MB: GitHub rejects larger ${o.fmt === 'gif' ? 'images' : 'videos on free plans'}. ${o.fmt === 'gif' ? 'Try --gif-width 720 --gif-fps 12, --trim-idle, a shorter flow, or ship the MP4.' : 'Try --crf 26, --max-width 1280 or a shorter flow.'}`);
+}
+if (textPx > 0) {
+  // GitHub renders README/PR media at most ~880 px wide; phones at ~390 px.
+  const canvasW = FG ? FG.CW : W;
+  const at = (w) => (textPx * Math.min(1, w / canvasW)).toFixed(1);
+  const msg = `Legibility: typical text is ${textPx}px; shown ~${at(880)}px at README width (880px), ~${at(390)}px on a phone.`;
+  if (+at(880) < 11) warn(`${msg} Small: use a smaller viewport (e.g. 960x600), zoom on the detail, or drop --frame.`); else ok(msg);
 }
 if (total / 1000 > 15) warn(`Clip is ${(total / 1000).toFixed(1)}s. Demos under ~15s get watched to the end; consider splitting it or --trim-idle / --speed 1.2.`);
 if (sheetPath) ok(`Contact sheet (open this to review) → ${sheetPath}`);

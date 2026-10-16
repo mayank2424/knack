@@ -10,7 +10,7 @@
     { "caption": "Add a task in one keystroke", "duration": 2600 },
     { "type": "Ship the demo GIF for the README", "into": "#new-task" },
     { "press": "Enter", "pause": 900 },
-    { "zoom": { "to": "#list li:nth-child(2)", "scale": 1.4, "follow": true }, "pause": 100 },
+    { "zoom": { "to": "#list li:nth-child(2)", "scale": 1.4 }, "pause": 100 },
     { "click": "role=button[name=\"Complete: Review PR #482: faster search index\"]", "pause": 900 },
     { "zoom": "out", "pause": 200 },
     { "cursor": [820, 560], "pause": 150 },

@@ -85,6 +85,10 @@
     snappy: bezier(0.2, 0.9, 0.1, 1),      // fast out, long settle: UI entrances
     smooth: bezier(0.65, 0, 0.35, 1),      // symmetric: camera moves, morphs
     anticipate: bezier(0.36, -0.3, 0.3, 1.2),
+    strong: bezier(0.16, 1, 0.3, 1),       // strong ease-out (long, soft landing): premium entrances
+    strongInOut: bezier(0.77, 0, 0.175, 1), // decisive on-screen moves: selection, swaps, camera cuts
+    outQuint: (p) => 1 - Math.pow(1 - p, 5),
+    inQuint: (p) => p ** 5,
     bezier,
     spring,
   };
@@ -147,7 +151,8 @@
     if (!target) return [];
     if (typeof target === 'string') return Array.from(document.querySelectorAll(target));
     if (target instanceof Element) return [target];
-    return Array.from(target);
+    // Arrays may mix elements and selectors: ['#a', '#b', el].
+    return Array.from(target).flatMap((t) => (typeof t === 'string' ? Array.from(document.querySelectorAll(t)) : [t]));
   };
 
   // --------------------------------------------------------- tween engine
@@ -378,7 +383,11 @@
       if (stage) {
         stage.style.width = cfg.width + 'px';
         stage.style.height = cfg.height + 'px';
-        if (cfg.background && !stage.style.background) stage.style.background = cfg.background;
+        // Only paint the config background when CSS didn't style #stage itself
+        // (a CSS gradient on #stage must win over the default color).
+        const cs = getComputedStyle(stage);
+        const cssBg = cs.backgroundImage !== 'none' || !/^(transparent|rgba\(0, 0, 0, 0\))$/.test(cs.backgroundColor);
+        if (cfg.background && !stage.style.background && !cssBg) stage.style.background = cfg.background;
       }
     };
     document.readyState === 'loading' ? document.addEventListener('DOMContentLoaded', apply) : apply();
@@ -468,7 +477,16 @@
 
   const boot = async () => {
     if (RENDER) document.documentElement.classList.add('knack-render');
-    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    if (RENDER && global.__KNACK_OUTPUT__) document.documentElement.classList.add('knack-out-' + global.__KNACK_OUTPUT__);
+    // Load every declared font face (all weights and unicode-range subsets), not just
+    // the ones frame 0 happens to use, so no later frame flashes a fallback font
+    // (e.g. a counter or typewriter that reveals new glyphs mid-video).
+    if (document.fonts) {
+      await Promise.all(Array.from(document.fonts, (f) => (f.status === 'unloaded' ? f.load().catch(() => {}) : null)));
+      await document.fonts.ready;
+    }
+    // Decode images up front so the first frame that shows one never paints it blank.
+    await Promise.all(Array.from(document.images, (img) => (img.decode ? img.decode().catch(() => {}) : null)));
     await seek(0);
     global.__KNACK_READY__ = true;
     if (!RENDER) mountPlayer();

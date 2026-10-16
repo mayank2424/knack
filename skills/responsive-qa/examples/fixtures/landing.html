@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orbit · Plan trips together</title>
+<!--
+  Recall fixture: a typical AI-generated landing page. Planted bugs (EXPECT lines are machine-read):
+  EXPECT text-over-image     h1                @320       BUG I: white headline on a fixed-height photo hero; on phones it wraps below the photo onto the white page
+  EXPECT fixed-offscreen     div.modal         @320-375   BUG J: newsletter modal is a fixed 460px wide, centred with translate; on small phones both sides (and their text) are cut off and can't be scrolled to
+  EXPECT horizontal-overflow nav.links         @320-414   BUG K: header nav is a flex row that never wraps or collapses
+  EXPECT text-overflow       a.btn-wide        @320-1920   BUG L: nowrap button label wider than its fixed-width button
+  OK: testimonial carousel scrolls (overflow-x:auto, scroll-snap); off-canvas menu is visibility:hidden while closed; decorative blobs are clipped by an overflow:clip section.
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 16px/1.6 system-ui, sans-serif; color: #111827; background: #fff; }
+  header { display: flex; align-items: center; gap: 24px; padding: 14px 20px; border-bottom: 1px solid #e5e7eb; }
+  .brand { font-weight: 800; font-size: 20px; color: #111827; text-decoration: none; }
+  /* BUG K: never wraps / collapses */
+  .links { display: flex; gap: 28px; white-space: nowrap; }
+  .links a { color: #374151; text-decoration: none; padding: 10px 0; }
+  .drawer { position: fixed; top: 0; right: 0; width: 280px; height: 100vh; background: #fff; transform: translateX(100%); visibility: hidden; box-shadow: -10px 0 30px rgba(0,0,0,.15); }
+  /* BUG I: fixed height, white text, no fallback background */
+  .hero { position: relative; height: 300px; background: linear-gradient(rgba(10,12,40,.55), rgba(10,12,40,.75)), url(../img/hero.jpg) center / cover; color: #fff; }
+  .hero .inner { position: relative; padding: 40px 20px; max-width: 900px; }
+  .hero .eyebrow { font-size: 14px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 12px; }
+  .hero h1 { font-size: clamp(36px, 7vw, 60px); line-height: 1.05; margin: 0 0 16px; letter-spacing: -0.02em; }
+  .blobs { position: relative; overflow: clip; padding: 56px 20px; }
+  .blob { position: absolute; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(#c7d2fe, transparent 70%); right: -160px; top: -80px; }
+  .features { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 20px; }
+  .features div { border: 1px solid #e5e7eb; border-radius: 14px; padding: 20px; background: #fff; }
+  /* BUG L */
+  .btn-wide { display: inline-block; width: 210px; white-space: nowrap; background: #111827; color: #fff; padding: 14px 18px; border-radius: 10px; text-decoration: none; font-weight: 650; font-size: 17px; }
+  .quotes { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x mandatory; padding: 0 20px 12px; }
+  .quotes blockquote { flex: 0 0 280px; scroll-snap-align: start; margin: 0; padding: 20px; background: #f9fafb; border-radius: 14px; }
+  /* BUG J */
+  .modal { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); width: 460px; background: #fff; border-radius: 16px; padding: 24px; box-shadow: 0 30px 80px rgba(0,0,0,.35); z-index: 10; }
+  .modal h3 { margin: 0 0 8px; font-size: 20px; }
+  .modal p { margin: 0 0 16px; color: #4b5563; }
+  .modal button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 10px; background: #4f46e5; color: #fff; font-weight: 650; }
+  footer { padding: 40px 20px; color: #6b7280; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">Orbit</a>
+  <nav class="links" aria-label="Main"><a href="#">Features</a><a href="#">How it works</a><a href="#">Pricing</a><a href="#">Customers</a><a href="#">Sign in</a></nav>
+</header>
+<aside class="drawer" aria-label="Menu"><a href="#">Features</a><a href="#">Pricing</a></aside>
+<section class="hero">
+  <div class="inner">
+    <p class="eyebrow">Group travel, sorted</p>
+    <h1>Plan unforgettable group trips with friends and family, without the spreadsheet chaos</h1>
+  </div>
+</section>
+<section class="blobs">
+  <div class="blob" aria-hidden="true"></div>
+  <div class="features">
+    <div><h3>Shared itinerary</h3><p>Everyone edits the same plan in real time.</p></div>
+    <div><h3>Split costs</h3><p>Track who paid for what and settle up in one tap.</p></div>
+    <div><h3>Group votes</h3><p>Decide on dates and places without a 200-message chat.</p></div>
+  </div>
+  <p style="position:relative;margin-top:32px"><a class="btn-wide" href="#">Start planning your trip free</a></p>
+</section>
+<div class="quotes">
+  <blockquote>“We planned a 12-person wedding weekend in an afternoon.”</blockquote>
+  <blockquote>“Finally, no more lost receipts after a trip.”</blockquote>
+  <blockquote>“The voting feature ended every argument.”</blockquote>
+  <blockquote>“Our ski trip budget actually balanced.”</blockquote>
+</div>
+<footer>© 2026 Orbit Travel Labs</footer>
+<div class="modal" role="dialog" aria-label="Newsletter">
+  <h3>Get trip ideas weekly</h3>
+  <p>Join 40,000 travellers getting one curated itinerary every Friday morning.</p>
+  <button>Subscribe</button>
+</div>
+</body>
+</html>

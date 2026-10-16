@@ -10,12 +10,15 @@
   const IBEAM = `<svg viewBox="0 0 28 28" width="28" height="28"><path d="M10 4.5h2.2c.9 0 1.5.4 1.8 1 .3-.6.9-1 1.8-1H18M10 23.5h2.2c.9 0 1.5-.4 1.8-1 .3.6.9 1 1.8 1H18M14 5.5v17M11.8 14h4.4" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round"/><path d="M10 4.5h2.2c.9 0 1.5.4 1.8 1 .3-.6.9-1 1.8-1H18M10 23.5h2.2c.9 0 1.5-.4 1.8-1 .3.6.9 1 1.8 1H18M14 5.5v17M11.8 14h4.4" fill="none" stroke="#111" stroke-width="1.5" stroke-linecap="round"/></svg>`;
   // Hotspots (px inside the 28px box) so the tip, not the box corner, sits on the target.
   const HOT = { arrow: [6, 3.5], hand: [12.3, 2.6], ibeam: [14, 14] };
+  const SVG = { arrow: ARROW, hand: HAND, ibeam: IBEAM };
+  const GHOSTS = 23; // extra motion-blur samples (record.mjs sends up to 23 trail points)
   const CSS = `
     :host { all: initial; }
     * { box-sizing: border-box; }
-    .cur { position: fixed; left: 0; top: 0; width: 28px; height: 28px; will-change: transform;
-      filter: drop-shadow(0 1.5px 2.5px rgba(0,0,0,.35)); transform-origin: 6px 4px; }
+    .cg { position: fixed; left: 0; top: 0; overflow: visible; filter: drop-shadow(0 1.5px 2.5px rgba(0,0,0,.35)); }
+    .cur { position: absolute; left: 0; top: 0; width: 28px; height: 28px; will-change: transform; transform-origin: 6px 4px; }
     .cur > div { position: absolute; inset: 0; display: none; }
+    .ghost { position: absolute; left: 0; top: 0; width: 28px; height: 28px; display: none; }
     .rip { position: fixed; left: 0; top: 0; width: 0; height: 0; }
     .rip i { position: absolute; border-radius: 50%; transform: translate(-50%,-50%); }
     .hl { position: fixed; display: none; border-radius: 10px; transition: none; }
@@ -39,9 +42,10 @@
     host.style.cssText = 'position:fixed!important;inset:0!important;width:100vw!important;height:100vh!important;z-index:2147483647!important;pointer-events:none!important;display:block!important;margin:0!important;padding:0!important;border:0!important;background:none!important;transform:none!important;';
     const root = host.attachShadow({ mode: 'closed' });
     root.innerHTML = `<style>${CSS}</style><div class="hl"></div><div class="rip"></div><div class="cap"></div><div class="keys"></div>
-      <div class="cur"><div data-k="arrow">${ARROW}</div><div data-k="hand">${HAND}</div><div data-k="ibeam">${IBEAM}</div></div>`;
+      <div class="cg">${'<div class="ghost"></div>'.repeat(GHOSTS)}
+      <div class="cur"><div data-k="arrow">${ARROW}</div><div data-k="hand">${HAND}</div><div data-k="ibeam">${IBEAM}</div></div></div>`;
     document.documentElement.appendChild(host);
-    els = { cur: root.querySelector('.cur'), rip: root.querySelector('.rip'), hl: root.querySelector('.hl'), cap: root.querySelector('.cap'), keys: root.querySelector('.keys'), kinds: {} };
+    els = { cg: root.querySelector('.cg'), ghosts: [...root.querySelectorAll('.ghost')], cur: root.querySelector('.cur'), rip: root.querySelector('.rip'), hl: root.querySelector('.hl'), cap: root.querySelector('.cap'), keys: root.querySelector('.keys'), kinds: {} };
     root.querySelectorAll('[data-k]').forEach((n) => (els.kinds[n.dataset.k] = n));
     return true;
   }
@@ -75,10 +79,34 @@
       for (const k in els.kinds) els.kinds[k].style.display = k === kind ? 'block' : 'none';
       const [hx, hy] = HOT[kind];
       const sc = (c.size || 1) * (1 - 0.14 * (c.down || 0));
+      // The group (which carries the drop shadow) is sized to the cursor + trail
+      // bounding box: a filter on a full-viewport layer made every 2x screenshot
+      // ~2.5x slower. Children are positioned relative to the box.
+      const trail0 = c.trail || [];
+      let x0 = c.x, y0 = c.y, x1 = c.x, y1 = c.y;
+      for (const p of trail0) { x0 = Math.min(x0, p[0]); y0 = Math.min(y0, p[1]); x1 = Math.max(x1, p[0]); y1 = Math.max(y1, p[1]); }
+      const bx = Math.floor(x0) - 48, by = Math.floor(y0) - 48;
+      Object.assign(els.cg.style, { transform: `translate(${bx}px, ${by}px)`, width: `${Math.ceil(x1 - bx) + 96}px`, height: `${Math.ceil(y1 - by) + 96}px` });
       els.cur.style.transformOrigin = `${hx}px ${hy}px`;
-      els.cur.style.transform = `translate(${c.x - hx}px, ${c.y - hy}px) scale(${sc})`;
+      els.cur.style.transform = `translate(${c.x - hx - bx}px, ${c.y - hy - by}px) scale(${sc})`;
       els.cur.style.display = 'block';
-    } else els.cur.style.display = 'none';
+      // Motion blur: stack the trail samples. Each copy gets the same alpha a with
+      // 1-(1-a)^n = 0.98, so where all samples overlap the cursor stays solid and
+      // the swept area fades out (a cheap, deterministic shutter). One drop shadow
+      // for the whole group (.cg) so shadows do not pile up into a smudge.
+      const trail = c.trail || [];
+      const a = trail.length ? 1 - Math.pow(0.02, 1 / (trail.length + 1)) : 1;
+      els.cur.style.opacity = String(a);
+      els.ghosts.forEach((g, i) => {
+        const p = trail[i];
+        if (!p) { g.style.display = 'none'; return; }
+        if (g.dataset.k !== kind) { g.innerHTML = SVG[kind]; g.dataset.k = kind; }
+        g.style.transformOrigin = `${hx}px ${hy}px`;
+        g.style.transform = `translate(${p[0] - hx - bx}px, ${p[1] - hy - by}px) scale(${sc})`;
+        g.style.opacity = String(a);
+        g.style.display = 'block';
+      });
+    } else { els.cur.style.display = 'none'; els.ghosts.forEach((g) => (g.style.display = 'none')); }
     // Ripples
     els.rip.innerHTML = (s.ripples || []).map((r) => {
       const e = 1 - Math.pow(1 - r.p, 3);

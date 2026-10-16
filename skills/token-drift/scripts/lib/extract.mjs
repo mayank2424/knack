@@ -5,7 +5,6 @@ import { COLOR_RE, describeColor } from './color.mjs';
 import { blankCssComments, walkCss, lexJs, splitSfc, maskedRanges, inRanges } from './parse.mjs';
 import { LENGTH_RE, DURATION_RE, toPx, parseShadow, shadowKey } from './values.mjs';
 import { UTILS, ALL_UTILS } from './tailwind.mjs';
-import { ROOTISH } from '../tokens.mjs';
 
 export const SCAN_EXTS = new Set(['.css', '.scss', '.less', '.pcss', '.postcss', '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.mts', '.cts',
   '.vue', '.svelte', '.astro', '.html', '.htm']);
@@ -53,11 +52,11 @@ export function extractFile(file, text, env) {
   const usage = {};
   const bump = (cat, n = 1) => { if (cat) usage[cat] = (usage[cat] || 0) + n; };
   const add = (f) => {
-    const key = f.category === 'z-index' ? 'z:' + f.value : String(f.value).toLowerCase();
+    const key = f.category === 'z-index' ? 'z:' + (f.n ?? f.value) : String(f.raw ?? f.value).toLowerCase();
     if (env.ignore.has(key) || (f.color && env.ignore.has(f.color.key))) return;
     findings.push(f);
   };
-  const S = { file, text, env, add, bump };
+  const S = { file, text, env, add, bump, count: () => findings.length, at: (k) => findings[k], markSince: (i, why) => { for (let k = i; k < findings.length; k++) findings[k].noFix = why; } };
   const noVar = noVarReason(file, text);
 
   if (ext === '.css' || ext === '.scss' || ext === '.less' || ext === '.pcss' || ext === '.postcss') {
@@ -73,18 +72,42 @@ export function extractFile(file, text, env) {
     scanMarkup(S, markup);
     if (ext === '.astro') { const fm = text.match(/^---\n([\s\S]*?)\n---/); if (fm) scanJs(S, fm[1], 4); }
   }
+  // a JS/TS palette or theme object (colors.ts, themes.ts …) is a token definition, not drift
+  if (JS_EXTS.has(ext)) {
+    const lits = findings.filter((f) => f.context === 'js-literal' && f.category === 'color').length;
+    const where = path.basename(path.dirname(file)) + '/' + path.basename(file);
+    if (lits >= 12 && lits >= findings.length * 0.7 && /(theme|colou?rs?|palette|tokens?|swatch)/i.test(where)) return { findings: [], usage, noVar, themeFile: lits };
+  }
   if (noVar) for (const f of findings) f.noVar = noVar;
+  // honour deliberate exceptions: `token-drift-ignore` and stylelint disable comments on the line (or the line before)
+  if (/token-drift-ignore|stylelint-disable/.test(text)) {
+    const lines = text.split('\n');
+    const starts = [0];
+    for (let i = 0; i < text.length; i++) if (text.charCodeAt(i) === 10) starts.push(i + 1);
+    const lineOf = (off) => { let lo = 0, hi = starts.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (starts[mid] <= off) lo = mid; else hi = mid - 1; } return lo; };
+    const ignoredHere = (l) => /token-drift-ignore(?!-next-line)|stylelint-disable-line/.test(lines[l] || '') || /token-drift-ignore-next-line|stylelint-disable-next-line/.test(lines[l - 1] || '');
+    const kept = findings.filter((f) => !ignoredHere(lineOf(f.start)));
+    return { findings: kept, usage, noVar, ignored: findings.length - kept.length };
+  }
   return { findings, usage, noVar };
 }
 
 /** Files whose renderer cannot resolve CSS variables: emails, OG images, React Native, PDFs. */
 export function noVarReason(file, text) {
-  const head = text.slice(0, 4000);
-  if (/from\s+['"](next\/og|@vercel\/og|satori)['"]|\bImageResponse\b/.test(head)) return 'OG-image renderer (satori) has no CSS variables';
-  if (/from\s+['"]react-native['"]/.test(head)) return 'React Native has no CSS variables';
-  if (/from\s+['"](@react-email\/[\w-]+|mjml[\w-]*|@react-pdf\/renderer)['"]/.test(head)) return 'email/PDF renderer has no CSS variables';
-  if (/\.html?$/i.test(file) && (/(^|[\/])(e-?mails?|mail|newsletters?)([\/]|$)/i.test(file) || /<!--\[if mso|mso-[a-z-]+\s*:|role=["']presentation["']|\bbgcolor=/i.test(text))) return 'email HTML: most email clients ignore CSS variables';
+  const head = text.slice(0, 6000);
+  const p = file.split(path.sep).join('/');
+  if (/from\s+['"](next\/og|@vercel\/og|satori)['"]|\bImageResponse\b/.test(head) || /(^|[\/._-])(opengraph|og-?images?|twitter-image)([\/._-][^/]*)?\.[cm]?[jt]sx?$|(^|\/)og\/.*route\.[cm]?[jt]sx?$/i.test(p)) return 'OG-image renderer (satori) has no CSS variables';
+  if (/from\s+['"](react-native|react-native-[\w-]+|expo(-[\w-]+)?)['"]/.test(head)) return 'React Native has no CSS variables';
+  if (/from\s+['"](@react-email\/[\w-]+|react-email|jsx-email|mjml[\w-]*|@react-pdf\/renderer)['"]/.test(head)) return 'email/PDF renderer has no CSS variables';
+  if (/(^|\/)(e-?mails?|mailers?|mail-templates?|newsletters?)\//i.test(p) || /(^|[-_.\/])(e-?mails?|mailers?|newsletters?)([-_.][^/]*)?\.[a-z]+$/i.test(p)) return 'email template: most email clients ignore CSS variables';
+  if (/\.html?$/i.test(file) && /<!--\[if mso|mso-[a-z-]+\s*:|role=["']presentation["']|\bbgcolor=/i.test(text)) return 'email HTML: most email clients ignore CSS variables';
   return null;
+}
+
+/** Generated files (compiled CSS, codegen) are not hand-written drift. */
+export function isGenerated(text) {
+  const head = text.slice(0, 400);
+  return /^\s*\/\*!\s*tailwindcss v\d/.test(head) || /@generated\b|auto-?generated|do not edit/i.test(head);
 }
 
 /* ------------------------------------------------------------------ CSS -- */
@@ -93,9 +116,11 @@ function scanCss(S, content, base, lang, context, extra = {}) {
   const blanked = blankCssComments(content, lang);
   walkCss(blanked, {
     base,
-    onDecl: ({ prop, value, valueStart, selectors }) => {
+    onDecl: ({ prop, value, valueStart, propStart, selectors }) => {
       if (prop.startsWith('$') || prop.startsWith('@')) return; // SCSS/LESS variable definitions are tokens
-      if (prop.startsWith('--') && selectors.length && selectors.some((s) => ROOTISH.test(s))) return; // token definition
+      if (selectors.some((s) => /^@(font-face|property|counter-style|font-palette-values|font-feature-values|page)\b/.test(s))) return; // descriptors, not properties: var() is invalid there
+      if (prop.startsWith('--tw-')) return; // Tailwind's own internals
+      if (prop.startsWith('--') && S.env.tokenDefSites?.has(S.file + ':' + propStart)) return; // a token definition (root / theme / mixin scope)
       scanDecl(S, prop, value, valueStart, { lang, context, selectors, ...extra });
     },
     onAt: ({ name, params, paramsStart }) => {
@@ -106,6 +131,19 @@ function scanCss(S, content, base, lang, context, extra = {}) {
 
 /** Scan one declaration value. `valueStart` is the absolute offset of value[0]. */
 export function scanDecl(S, prop, value, valueStart, meta) {
+  const start = S.count();
+  scanDeclInner(S, prop, value, valueStart, meta);
+  if (meta.lang === 'scss' || meta.lang === 'less') {
+    const masks = maskedRanges(value);
+    const outside = blankRanges(value, masks).replace(/#\{[^}]*\}/g, (m) => ' '.repeat(m.length)).replace(/\s*!important\s*$/, '');
+    const arith = /[\d.)a-z%]\s*[*+\/]\s*[\d.$(@-]|\s-\s|\)\s*-|-\s*\(|\d(px|rem|em|%)?-[\d.$(@]/.test(outside.replace(/^\s*-/, ''));
+    if (arith) S.markSince(start, 'part of Sass/Less arithmetic, which needs a real number (var() would break it)');
+    else for (let k = start; k < S.count(); k++) { const f = S.at(k); if (f && f.category !== 'color' && insidePreprocessorFn(value, f.start - valueStart)) f.noFix = 'inside a Sass/Less function, which needs a real number (var() would break it)'; }
+  }
+}
+const blankRanges = (s, ranges) => { let out = s; for (const [a, b] of ranges) out = out.slice(0, a) + ' '.repeat(b - a) + out.slice(b); return out; };
+
+function scanDeclInner(S, prop, value, valueStart, meta) {
   const p = prop.toLowerCase();
   const isCustom = p.startsWith('--');
   const cat = isCustom ? customPropCategory(p.slice(2)) : propCategory(p);
@@ -125,15 +163,17 @@ export function scanDecl(S, prop, value, valueStart, meta) {
     if (sh) S.add({ ...base, category: 'shadow', value: v.trim(), start: valueStart, end: valueStart + v.trimEnd().length, shadow: sh, key: shadowKey(sh) });
     return;
   }
-  // colors anywhere in the value (gradients, borders, custom props …)
-  if (isCustom || COLORISH_PROP.test(p) || (!cat && !/^(-webkit-)?mask/.test(p))) {
+  // colors anywhere in the value (gradients, borders, custom props …); masks only use alpha
+  if ((isCustom && !/mask|fade/.test(p)) || COLORISH_PROP.test(p) || (!cat && !isCustom && !/^(-webkit-)?mask/.test(p))) {
     COLOR_RE.lastIndex = 0;
     let m;
     while ((m = COLOR_RE.exec(v))) {
       if (inRanges(masks, m.index)) continue;
       const color = describeColor(m[0]);
       if (!color || color.alpha === 0) continue; // fully transparent stops are not design colors
-      S.add({ ...base, category: 'color', value: m[0], start: valueStart + m.index, end: valueStart + m.index + m[0].length, color });
+      const f = { ...base, category: 'color', value: m[0], start: valueStart + m.index, end: valueStart + m.index + m[0].length, color };
+      if ((meta.lang === 'scss' || meta.lang === 'less') && insidePreprocessorFn(v, m.index)) f.noFix = 'inside a Sass/Less color function, which needs a real color (var() would not compile)';
+      S.add(f);
     }
   }
   if (cat === 'space' || cat === 'radius' || cat === 'font-size') {
@@ -151,15 +191,42 @@ export function scanDecl(S, prop, value, valueStart, meta) {
     const t = v.trim();
     if (/^-?\d+$/.test(t)) S.add({ ...base, category: cat, value: t, start: valueStart, end: valueStart + t.length, n: Number(t) });
   } else if (cat === 'duration') {
+    // in `transition` / `animation` shorthands only the first time of each layer is a duration; the second is a delay
+    const shorthand = p === 'transition' || p === 'animation';
+    const firstTimeOfLayer = new Set();
+    if (shorthand) {
+      let depth = 0, layerStart = 0;
+      const layers = [];
+      for (let i = 0; i <= v.length; i++) { const ch = v[i]; if (ch === '(') depth++; else if (ch === ')') depth--; else if ((ch === ',' && depth === 0) || i === v.length) { layers.push([layerStart, i]); layerStart = i + 1; } }
+      for (const [a, b] of layers) { DURATION_RE.lastIndex = 0; let mm; while ((mm = DURATION_RE.exec(v.slice(0, b)))) { if (mm.index >= a && !inRanges(masks, mm.index)) { firstTimeOfLayer.add(mm.index); break; } } }
+    }
     DURATION_RE.lastIndex = 0;
     let m;
     while ((m = DURATION_RE.exec(v))) {
       if (inRanges(masks, m.index)) continue;
+      if (shorthand && !firstTimeOfLayer.has(m.index)) continue;
       const ms = m[2] === 's' ? parseFloat(m[1]) * 1000 : parseFloat(m[1]);
       if (ms < 5) continue; // 0.01ms reduced-motion overrides
       S.add({ ...base, category: 'duration', value: m[0], start: valueStart + m.index, end: valueStart + m.index + m[0].length, ms });
     }
   }
+}
+
+// CSS functions that accept var() arguments; anything else wrapping a color in SCSS/LESS is a preprocessor function
+const CSS_FNS = new Set(['linear-gradient', 'radial-gradient', 'conic-gradient', 'repeating-linear-gradient', 'repeating-radial-gradient', 'repeating-conic-gradient',
+  'color-mix', 'light-dark', 'drop-shadow', 'calc', 'var', 'min', 'max', 'clamp', 'image', 'cross-fade', 'env']);
+function insidePreprocessorFn(value, idx) {
+  let depth = 0;
+  for (let i = idx - 1; i >= 0; i--) {
+    const ch = value[i];
+    if (ch === ')') depth++;
+    else if (ch === '(') {
+      if (depth) { depth--; continue; }
+      const name = (value.slice(0, i).match(/([\w.$-]+)\s*$/) || [])[1];
+      if (name && !CSS_FNS.has(name.toLowerCase())) return true;
+    }
+  }
+  return false;
 }
 
 /* ------------------------------------------------------------- markup -- */
@@ -273,12 +340,16 @@ function scanStyleObject(S, content, blanked, strings, from, to, base, consumed)
         if (cat === 'font-weight' && !/^[1-9]00$/.test(trimmed)) { /* skip */ } else S.add({ file: S.file, prop, context: 'jsx-style', lang: 'css', category: cat, value: trimmed, numeric: true, start: st, end: en, n });
       }
     } else {
-      for (const s of inner) {
-        if (s.start < vs || s.end > ve) continue;
+      // `isDark ? '#fff' : '#000'`, `getColor()`: the value is chosen by JS logic, so report it but never rewrite it
+      const lits = inner.filter((s) => s.start >= vs && s.end <= ve);
+      const dynamic = !(lits.length === 1 && trimmed === content.slice(lits[0].start, lits[0].end));
+      const before = S.count();
+      for (const s of lits) {
         consumed.add(s.start);
         if (s.holes.length) continue;
         scanDecl(S, prop, s.content, base + s.contentStart, meta);
       }
+      if (dynamic) S.markSince(before, 'value computed in JS (conditional or expression); review by hand');
     }
     i = ve + 1;
   }
@@ -343,7 +414,7 @@ function scanClasses(S, str, base, meta) {
       }
       let cat = null;
       const f = { file: S.file, prop: util, context: 'tw-class', lang: meta.lang, value: tok.slice(last + 1), display: tok, start: base + m.index, end: base + m.index + tok.length,
-        tw: { variants, impPre, impSuf, neg, util, modifier: arb[3] || '', prefix } };
+        tw: { variants, impPre, impSuf, neg, util, modifier: arb[3] || '', prefix, hasLeading: /(^|[\s:])!?leading-/.test(str) } };
       const lenM = val.match(/^(-?\d*\.?\d+)(px|rem)$/);
       if (UTILS.color.includes(util) && hint !== 'length' && /^(#[0-9a-fA-F]{3,8}|(rgba?|hsla?|oklch|oklab)\(.*\))$/.test(val)) {
         const color = describeColor(val);
@@ -353,7 +424,7 @@ function scanClasses(S, str, base, meta) {
         if (UTILS.space.includes(util)) cat = 'space';
         else if (util === 'text') cat = 'font-size';
         else if (UTILS.radius.includes(util)) cat = 'radius';
-        if (cat) { f.px = Math.abs(px); f.negative = neg || px < 0; }
+        if (cat) { f.px = Math.abs(px); f.negative = neg !== (px < 0); }
       } else if (util === 'z' && /^-?\d+$/.test(val)) { cat = 'z-index'; f.n = Number(val) * (neg ? -1 : 1); }
       else if (util === 'font' && /^[1-9]00$/.test(val)) { cat = 'font-weight'; f.n = Number(val); }
       else if (util === 'duration' && /^\d*\.?\d+m?s$/.test(val)) { cat = 'duration'; f.ms = val.endsWith('ms') ? parseFloat(val) : parseFloat(val) * 1000; }

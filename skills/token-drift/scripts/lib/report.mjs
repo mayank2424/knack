@@ -37,8 +37,15 @@ export function printSummary(r, { scriptRel, showNext = true } = {}) {
   if (cats.length) {
     console.log(c.bold('  By category') + c.dim('            tokens  exact  near   off  score'));
     for (const [cat, v] of cats) {
+      if (v.noTokens) { console.log(c.dim(`    ${cat.padEnd(20)} ${String(v.tokenized).padStart(7)}  ${String(v.raw).padStart(4)} raw values, no ${cat} tokens: not scored`)); continue; }
       console.log(`    ${cat.padEnd(20)} ${String(v.tokenized).padStart(7)} ${String(v.EXACT).padStart(6)} ${String(v.NEAR).padStart(5)} ${String(v['OFF-SCALE']).padStart(5)} ${String(v.score + '%').padStart(6)}`);
     }
+    console.log('');
+  }
+  const reasons = blockers(r);
+  if (reasons.length) {
+    console.log(c.bold('  Not auto-fixable') + c.dim(' (EXACT/NEAR that need a human)'));
+    for (const [why, n] of reasons.slice(0, 6)) console.log(`    ${String(n).padStart(5)}  ${c.dim(why)}`);
     console.log('');
   }
   if (r.byFile.length) {
@@ -49,21 +56,26 @@ export function printSummary(r, { scriptRel, showNext = true } = {}) {
     }
     console.log('');
   }
-  const near = r.findings.filter((f) => f.status === 'NEAR').slice(0, 6);
+  const near = r.findings.filter((f) => f.status === 'NEAR' && !f.excluded).sort((a, b) => (!a.fix - !b.fix)).slice(0, 6);
   if (near.length) {
     console.log(c.bold('  Near misses') + c.dim(' (first 6)'));
     for (const f of near) {
       const sw = f.category === 'color' && swatch(f.color.hex) ? `${swatch(f.color.hex)}${swatch(f.token.meas.color.hex)} ` : '';
-      console.log(`    ${sw}${c.dim(`${f.rel}:${f.line}`)}  ${f.display || f.value} → ${c.cyan(f.fix?.text || f.token.usage.split('  ·  ')[0])}  ${c.dim(distText(f))}`);
+      console.log(`    ${sw}${c.dim(`${f.rel}:${f.line}`)}  ${f.display || f.value} → ${c.cyan(f.fix?.text || f.token.usage.split('  ·  ')[0])}  ${c.dim(distText(f) + (f.fix ? '' : '  (by hand)'))}`);
     }
     console.log('');
   }
+  const jl = r.jsLiterals || {};
+  if (jl.EXACT + jl.NEAR + jl['OFF-SCALE']) console.log(c.dim(`  ${jl.EXACT + jl.NEAR + jl['OFF-SCALE']} colors in plain JS strings (${jl.EXACT} equal a token) are listed in the report but not scored.\n`));
   if (r.noVarFiles?.length) {
     const n = r.noVarFiles.reduce((a, f) => a + f.count, 0);
-    console.log(c.yellow(`  ! ${n} values in ${plural(r.noVarFiles.length, 'file')} that cannot use CSS variables (emails, OG images, React Native) are report-only:`));
+    console.log(c.yellow(`  ! ${n} values in ${plural(r.noVarFiles.length, 'file')} that cannot use CSS variables (emails, OG images, React Native) are listed, not scored:`));
     for (const f of r.noVarFiles.slice(0, 4)) console.log(c.dim(`      ${f.file} (${f.reason})`));
-    console.log(c.dim(`    Exclude them from the score with --exclude "<glob>".\n`));
+    if (r.noVarFiles.length > 4) console.log(c.dim(`      … ${r.noVarFiles.length - 4} more in the report`));
+    console.log('');
   }
+  const sk = r.skipped || {};
+  if (sk.generated?.length || sk.themeFiles?.length) console.log(c.dim(`  Skipped: ${[sk.generated?.length && plural(sk.generated.length, 'generated file'), sk.themeFiles?.length && plural(sk.themeFiles.length, 'JS theme/palette file') + ' (token definitions)'].filter(Boolean).join(', ')}`));
   if (r.written) console.log(c.dim(`  Report: ${r.written.md}  (+ report.json, swatches/)`));
   if (showNext && scriptRel) {
     const tgt = r.argTarget || r.target;
@@ -86,9 +98,40 @@ function gaugeSvg(score) {
 }
 
 const esc = (s) => String(s).replace(/\|/g, '\\|').replace(/</g, '&lt;');
-const code = (s) => '`' + String(s).replace(/`/g, "'") + '`';
+const code = (s) => '`' + String(s).replace(/`/g, "'").replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ') + '`';
+
+/** Why EXACT/NEAR findings were left alone, grouped: [[reason, count], …] sorted by count. */
+export function blockers(r) {
+  const m = new Map();
+  for (const f of r.findings) {
+    if (f.excluded || f.status === 'OFF-SCALE' || f.fix) continue;
+    let why = String(f.fixNote || 'not fixable');
+    for (let i = 0; i < 4 && /\([^()]*\)/.test(why); i++) why = why.replace(/\s*\([^()]*\)/g, '');
+    why = why.replace(/[\w.-]*--[\w-]+(?: × [\d.]+)?|\$[\w-]+|@[\w-]+/g, '<token>').replace(/ \/\S+/, ' /modifier').replace(/\s+([;,])/g, '$1').replace(/\s+/g, ' ').trim();
+    m.set(why, (m.get(why) || 0) + 1);
+  }
+  return [...m.entries()].sort((a, b) => b[1] - a[1]);
+}
+
+const loc = (f) => `${f.rel}:${f.line}:${f.col}`;
+function details(L, summary, lines, open = false) {
+  if (lines.length <= 25) { L.push(...lines); return; }
+  L.push(`<details${open ? ' open' : ''}><summary>${summary}</summary>`, '', ...lines, '', '</details>');
+}
+/** Group findings by (value → token/replacement) so one row covers every occurrence. */
+function grouped(list, keyOf) {
+  const g = new Map();
+  for (const f of list) {
+    const k = keyOf(f);
+    const e = g.get(k) || { f, count: 0, files: new Set(), where: [] };
+    e.count++; e.files.add(f.rel); if (e.where.length < 3) e.where.push(loc(f));
+    g.set(k, e);
+  }
+  return [...g.values()].sort((a, b) => b.count - a.count);
+}
 
 export function writeReports(r, outDir, { proposal } = {}) {
+  const themed = r.findings.filter((f) => f.fix && f.status === 'EXACT' && (f.token.dark || f.token.themes)).length;
   fs.mkdirSync(path.join(outDir, 'swatches'), { recursive: true });
   const sw = (a, b) => {
     const name = b ? `${a.slice(1)}-${b.slice(1)}.svg` : `${a.slice(1)}.svg`;
@@ -98,53 +141,104 @@ export function writeReports(r, outDir, { proposal } = {}) {
   };
   fs.writeFileSync(path.join(outDir, 'swatches', 'gauge.svg'), gaugeSvg(r.score));
   const L = [];
+  const n = (x) => Number(x).toLocaleString('en-US');
   L.push(`# Token drift report`, '');
-  L.push(`Scanned ${code(r.target)} on ${r.generatedAt.slice(0, 10)} · ${plural(r.fileCount, 'file')} · ${plural(r.tokenCount, 'token')} from ${plural(r.sources.length, 'source')}${r.tailwind?.version ? ` · Tailwind v${r.tailwind.version}` : ''}`, '');
+  L.push(`Scanned ${code(r.target)} on ${r.generatedAt.slice(0, 10)} · ${plural(r.fileCount, 'file')} · ${plural(r.tokenCount, 'token')} from ${plural(r.sources.length, 'source')}${r.tailwind?.version ? ` · Tailwind v${r.tailwind.mixed ? r.tailwind.versions.join(' + v') : r.tailwind.version}` : ''}${r.packages > 1 ? ` · ${r.packages} workspace packages` : ''}`, '');
   L.push(`![drift score](swatches/gauge.svg)`, '');
-  L.push(`**Drift score: ${r.score}%**. ${r.tokenized} of ${r.tokenized + r.raw} design values reference a token.`, '');
-  L.push('| Class | Count | Meaning |', '|---|---:|---|');
-  L.push(`| EXACT | ${r.counts.EXACT} | Raw value equals a token. Swap in the token (${r.fixable.EXACT} auto-fixable). |`);
-  L.push(`| NEAR | ${r.counts.NEAR} | Within threshold of a token. Almost certainly drift; review (${r.fixable.NEAR} fixable with \`--fix=near\`). |`);
-  L.push(`| OFF-SCALE | ${r.counts['OFF-SCALE']} | Far from every token. Add a token, or keep it as a deliberate one-off. |`, '');
-  L.push('## By category', '', '| Category | Tokenized | Exact | Near | Off-scale | Score |', '|---|---:|---:|---:|---:|---:|');
-  for (const [cat, v] of Object.entries(r.byCategory)) if (v.raw + v.tokenized) L.push(`| ${cat} | ${v.tokenized} | ${v.EXACT} | ${v.NEAR} | ${v['OFF-SCALE']} | ${v.score}% |`);
+  L.push(`**Drift score: ${r.score}%**. ${n(r.tokenized)} of ${n(r.tokenized + r.raw)} design values reference a token.`, '');
+  L.push('| Class | Count | Auto-fixable | Meaning |', '|---|---:|---:|---|');
+  L.push(`| EXACT | ${n(r.counts.EXACT)} | ${n(r.fixable.EXACT)} | Raw value equals a token. Swap in the token; nothing changes visually. |`);
+  L.push(`| NEAR | ${n(r.counts.NEAR)} | ${n(r.fixable.NEAR)} with \`--fix=near\` | Within threshold of a token. Almost certainly drift; review before fixing. |`);
+  L.push(`| OFF-SCALE | ${n(r.counts['OFF-SCALE'])} | never | Far from every token. Add a token, or keep it as a deliberate one-off. |`, '');
+  const unscored = Object.entries(r.untracked || {});
+  if (unscored.length) L.push(`> **Not scored:** ${unscored.map(([k, v]) => `${k} (${n(v)} raw values)`).join(', ')}. The project has no tokens in ${unscored.length === 1 ? 'this category' : 'these categories'}; \`--propose\` drafts a starter set.`, '');
+
+  // next steps first: what the reader can do right now
+  L.push('## What to do next', '');
+  const fixFiles = new Set(r.findings.filter((f) => f.fix && f.status === 'EXACT').map((f) => f.rel)).size;
+  const steps = [];
+  if (r.fixable.EXACT) steps.push(`**Apply the safe fixes.** ${n(r.fixable.EXACT)} EXACT values in ${plural(fixFiles, 'file')} can be swapped for their token with no visual change: \`scan.mjs --fix --dry-run\`, review the diff, then \`--fix\`.${themed ? ` ${plural(themed, 'replacement')} use a theme-aware token and will start following dark mode / other themes.` : ''}`);
+  if (r.counts.NEAR) {
+    const dirs = grouped(r.findings.filter((f) => f.status === 'NEAR' && !f.excluded), (f) => f.rel.split('/').slice(0, -1).join('/') || '.').slice(0, 3).map((g) => `\`${g.f.rel.split('/').slice(0, -1).join('/') || '.'}/\` (${g.count})`);
+    steps.push(`**Review the near misses in batches.** ${n(r.counts.NEAR)} NEAR values (${n(r.fixable.NEAR)} fixable), mostly in ${dirs.join(', ')}: \`scan.mjs --fix=near --dry-run --include "<dir>/**"\`.`);
+  }
+  const bl = blockers(r);
+  if (bl.length) steps.push(`**Hand-fix or accept the rest.** ${n(bl.reduce((a, [, c]) => a + c, 0))} EXACT/NEAR values can't be rewritten automatically; reasons are listed under "Not auto-fixable".`);
+  if (r.counts['OFF-SCALE']) steps.push(`**Decide the off-scale values.** ${n(r.counts['OFF-SCALE'])} values (${n(grouped(r.findings.filter((f) => f.status === 'OFF-SCALE' && !f.excluded), (f) => f.category + ':' + (f.color?.key || f.key || f.px || f.n || f.ms || f.value)).length)} distinct) don't fit the system: \`scan.mjs --propose\` clusters them into candidate tokens.`);
+  steps.push(`**Guard it in CI.** \`scan.mjs --fail-under ${Math.max(0, Math.min(99, Math.floor(r.scoreExact)))}\` fails the build if the score drops.`);
+  steps.forEach((t, i) => L.push(`${i + 1}. ${t}`));
+
+  L.push('', '## By category', '', '| Category | Tokenized | Exact | Near | Off-scale | Score |', '|---|---:|---:|---:|---:|---:|');
+  for (const [cat, v] of Object.entries(r.byCategory)) {
+    if (!(v.raw + v.tokenized)) continue;
+    L.push(v.noTokens ? `| ${cat} | ${n(v.tokenized)} | | | ${n(v.raw)} raw | no tokens |` : `| ${cat} | ${n(v.tokenized)} | ${n(v.EXACT)} | ${n(v.NEAR)} | ${n(v['OFF-SCALE'])} | ${v.score}% |`);
+  }
   L.push('', '## Top offenders', '', '| File | Raw values | Exact | Near | Off-scale |', '|---|---:|---:|---:|---:|');
   for (const f of r.byFile.slice(0, 15)) L.push(`| ${code(f.file)} | ${f.total} | ${f.EXACT} | ${f.NEAR} | ${f['OFF-SCALE']} |`);
   if (r.byFile.length > 15) L.push(`| … ${r.byFile.length - 15} more files | | | | |`);
 
   const cap = 300;
-  const nearColors = r.findings.filter((f) => f.status === 'NEAR' && f.category === 'color');
+  const live = r.findings.filter((f) => !f.excluded);
+  const nearColors = live.filter((f) => f.status === 'NEAR' && f.category === 'color');
   if (nearColors.length) {
-    L.push('', '## Near-miss colors', '', 'Left: the hard-coded value. Right: the nearest token.', '', '| Swatch | Found | Nearest token | Difference | Where |', '|---|---|---|---|---|');
-    for (const f of nearColors.slice(0, cap)) L.push(`| ${sw(f.color.hex, f.token.meas.color.hex)} | ${code(f.display || f.value)} | ${code(f.token.name)} ${code(f.token.value)} | ${distText(f)} | ${code(`${f.rel}:${f.line}:${f.col}`)} |`);
+    L.push('', `## Near-miss colors (${n(nearColors.length)})`, '', 'Left: the hard-coded value. Right: the nearest token. ΔE2000 below ~1 is invisible, 2–4 is subtle side by side.', '');
+    const rows = ['| Swatch | Found | Nearest token | Difference | Fix | Where |', '|---|---|---|---|---|---|'];
+    for (const f of nearColors.slice(0, cap)) rows.push(`| ${sw(f.color.hex, f.token.meas.color.hex)} | ${code(f.display || f.value)} | ${code(f.token.name)} ${code(f.token.value)} | ${distText(f)} | ${f.fix ? code(f.fix.text) : esc(f.fixNote || '')} | ${code(loc(f))} |`);
+    details(L, `${n(nearColors.length)} near-miss colors`, rows, true);
   }
-  const nearOther = r.findings.filter((f) => f.status === 'NEAR' && f.category !== 'color');
+  const nearOther = live.filter((f) => f.status === 'NEAR' && f.category !== 'color');
   if (nearOther.length) {
-    L.push('', '## Near misses (sizes, weights, motion, shadows)', '', '| Found | Property | Nearest token | Difference | Suggested | Where |', '|---|---|---|---|---|---|');
-    for (const f of nearOther.slice(0, cap)) L.push(`| ${code(f.display || f.value)} | ${f.prop} | ${code(f.token.name)} ${code(tokenValue(f.token))} | ${distText(f)} | ${f.fix ? code(f.fix.text) : esc(f.fixNote || '')} | ${code(`${f.rel}:${f.line}:${f.col}`)} |`);
+    L.push('', `## Near misses: sizes, weights, motion, shadows (${n(nearOther.length)})`, '');
+    const rows = ['| Found | Property | Nearest token | Difference | Fix | Where |', '|---|---|---|---|---|---|'];
+    for (const f of nearOther.slice(0, cap)) rows.push(`| ${code(f.display || f.value)} | ${esc(f.prop)} | ${code(f.token.name)} ${code(tokenValue(f.token))} | ${distText(f)} | ${f.fix ? code(f.fix.text) : esc(f.fixNote || '')} | ${code(loc(f))} |`);
+    if (nearOther.length > cap) rows.push(`| … ${nearOther.length - cap} more in report.json | | | | | |`);
+    details(L, `${n(nearOther.length)} near misses`, rows);
   }
-  const exact = r.findings.filter((f) => f.status === 'EXACT');
+  const exact = live.filter((f) => f.status === 'EXACT');
   if (exact.length) {
-    L.push('', '## Exact matches (use the token)', '', '| Found | Property | Token | Replacement | Where |', '|---|---|---|---|---|');
-    for (const f of exact.slice(0, cap)) L.push(`| ${f.color ? sw(f.color.hex) + ' ' : ''}${code(f.display || f.value)} | ${f.prop} | ${code(f.token.name)} | ${f.fix ? code(f.fix.text) : esc(f.fixNote || '')} | ${code(`${f.rel}:${f.line}:${f.col}`)} |`);
-    if (exact.length > cap) L.push(`| … ${exact.length - cap} more in report.json | | | | |`);
+    const g = grouped(exact, (f) => `${f.display || f.value}→${f.fix ? f.fix.text : f.token.name}`);
+    L.push('', `## Exact matches: use the token (${n(exact.length)} values, ${n(g.length)} distinct)`, '');
+    const rows = ['| Found | Token | Replacement | Uses | Files | Examples |', '|---|---|---|---:|---:|---|'];
+    for (const e of g.slice(0, cap)) rows.push(`| ${e.f.color ? sw(e.f.color.hex) + ' ' : ''}${code(e.f.display || e.f.value)} | ${code(e.f.token.name)} | ${e.f.fix ? code(e.f.fix.text) : esc(e.f.fixNote || '')} | ${e.count} | ${e.files.size} | ${e.where.map(code).join(' ')} |`);
+    if (g.length > cap) rows.push(`| … ${g.length - cap} more in report.json | | | | | |`);
+    details(L, `${n(g.length)} distinct exact matches`, rows);
   }
-  const off = r.findings.filter((f) => f.status === 'OFF-SCALE');
+  const off = live.filter((f) => f.status === 'OFF-SCALE');
   if (off.length) {
-    L.push('', '## Off-scale values', '', '| Found | Property | Closest token | Where |', '|---|---|---|---|');
-    for (const f of off.slice(0, cap)) L.push(`| ${f.color ? sw(f.color.hex) + ' ' : ''}${code(f.display || f.value)} | ${f.prop} | ${f.token ? `${code(f.token.name)} (${distText(f)})` : '(none)'} | ${code(`${f.rel}:${f.line}:${f.col}`)} |`);
+    const g = grouped(off, (f) => f.category + ':' + (f.color?.key || f.key || f.px || f.n || f.ms || f.value));
+    L.push('', `## Off-scale values (${n(off.length)} values, ${n(g.length)} distinct)`, '');
+    const rows = ['| Found | Category | Closest token | Uses | Examples |', '|---|---|---|---:|---|'];
+    for (const e of g.slice(0, cap)) rows.push(`| ${e.f.color ? sw(e.f.color.hex) + ' ' : ''}${code(e.f.display || e.f.value)} | ${e.f.category} | ${e.f.between ? `midway: ${code(e.f.between[0])} / ${code(e.f.between[1])} (${distText(e.f)})` : e.f.token ? `${code(e.f.token.name)} (${distText(e.f)})` : '(none)'} | ${e.count} | ${e.where.map(code).join(' ')} |`);
+    if (g.length > cap) rows.push(`| … ${g.length - cap} more in report.json | | | | |`);
+    details(L, `${n(g.length)} distinct off-scale values`, rows);
   }
+  const lits = r.findings.filter((f) => f.excluded === 'js-literal');
+  if (lits.length) {
+    const g = grouped(lits, (f) => (f.color?.key || f.value) + '→' + (f.status === 'OFF-SCALE' ? '' : f.token?.name));
+    L.push('', `## Colors in JS strings (${n(lits.length)}, report-only, not scored)`, '', 'Plain string literals such as \`const RED = "#ef4444"\`. They often feed canvas, charts or data, which can\'t use \`var()\`; when one duplicates a token, consider importing a shared constant instead.', '');
+    const rows = ['| Found | Status | Token | Uses | Examples |', '|---|---|---|---:|---|'];
+    for (const e of g.slice(0, 100)) rows.push(`| ${e.f.color ? sw(e.f.color.hex) + ' ' : ''}${code(e.f.value)} | ${e.f.status} | ${e.f.token && e.f.status !== 'OFF-SCALE' ? `${code(e.f.token.name)} (${distText(e.f)})` : ''} | ${e.count} | ${e.where.map(code).join(' ')} |`);
+    if (g.length > 100) rows.push(`| … ${g.length - 100} more in report.json | | | | |`);
+    details(L, `${n(g.length)} distinct JS color literals`, rows);
+  }
+  if (bl.length) {
+    L.push('', '## Not auto-fixable', '', 'EXACT and NEAR values the fixer leaves alone, and why:', '', '| Reason | Values |', '|---|---:|');
+    for (const [why, c2] of bl) L.push(`| ${esc(why)} | ${n(c2)} |`);
+  }
+  const sk = r.skipped || {};
+  const notes = [];
+  if (r.noVarFiles?.length) notes.push(`**Not scored: ${n(r.noVarFiles.reduce((a, f) => a + f.count, 0))} values in ${plural(r.noVarFiles.length, 'file')} with no CSS variables at runtime** (emails, OG images, React Native): ${r.noVarFiles.slice(0, 8).map((f) => `${code(f.file)} (${f.reason})`).join(', ')}${r.noVarFiles.length > 8 ? `, … ${r.noVarFiles.length - 8} more` : ''}. They are in report.json with their nearest token; share values through a JS constants module if they must match.`);
+  if (sk.themeFiles?.length) notes.push(`**Treated as token definitions** (JS/TS palette or theme objects): ${sk.themeFiles.slice(0, 8).map((f) => code(f.file)).join(', ')}${sk.themeFiles.length > 8 ? `, … ${sk.themeFiles.length - 8} more` : ''}.`);
+  if (sk.ignoredByComment) notes.push(`**Ignored by comment:** ${n(sk.ignoredByComment)} values on lines marked \`token-drift-ignore\` or \`stylelint-disable-line\` (or the line before with \`-next-line\`).`);
+  if (sk.generated?.length) notes.push(`**Skipped as generated:** ${sk.generated.slice(0, 8).map(code).join(', ')}${sk.generated.length > 8 ? `, … ${sk.generated.length - 8} more` : ''}.`);
+  if (r.warnings?.length) notes.push(...r.warnings.map((w) => `**Warning:** ${esc(w)}`));
+  if (notes.length) { L.push('', '## Notes', ''); for (const x of notes) L.push(`- ${x}`); }
   if (proposal && proposal.proposals.length) {
     L.push('', '## Proposed tokens', '', 'Off-scale values clustered into candidate tokens. Rename to fit your naming before adding them.', '');
     L.push('| Proposed | Value | Uses | Absorbs |', '|---|---|---:|---|');
-    for (const p of proposal.proposals) L.push(`| ${p.hex ? sw(p.hex) + ' ' : ''}${code(p.name)} | ${code(p.value)} | ${p.count} | ${p.members.map((m) => `${m.hex ? sw(m.hex) + ' ' : ''}${code(m.value)}×${m.count}`).join(', ')}${p.note ? ` (${p.note})` : ''} |`);
+    for (const p of proposal.proposals) L.push(`| ${p.hex ? sw(p.hex) + ' ' : ''}${code(p.name)} | ${code(p.value)} | ${p.count} | ${p.members.map((m) => `${m.hex ? sw(m.hex) + ' ' : ''}${code(m.value)}×${m.count}`).join(', ')}${p.note ? ` (${esc(p.note)})` : ''} |`);
     L.push('', '```css', proposal.css.trimEnd(), '```');
   }
-  L.push('', '## Next steps', '');
-  L.push('1. Preview safe fixes: `scan.mjs --fix --dry-run` (EXACT only), then apply with `--fix`.');
-  L.push('2. Review NEAR in batches: `scan.mjs --fix=near --dry-run --include "src/components/**"`.');
-  L.push('3. Decide OFF-SCALE: `scan.mjs --propose` clusters them into candidate tokens.');
-  L.push('4. Guard it in CI: `scan.mjs --fail-under ' + Math.min(95, Math.max(r.score, 50)) + '`.');
   const md = L.join('\n') + '\n';
   fs.writeFileSync(path.join(outDir, 'report.md'), md);
   fs.writeFileSync(path.join(outDir, 'report.json'), JSON.stringify(toJson(r, proposal), null, 2));
@@ -155,12 +249,12 @@ export function writeReports(r, outDir, { proposal } = {}) {
 export function toJson(r, proposal) {
   return {
     target: r.target, generatedAt: r.generatedAt, score: r.score, tokenized: r.tokenized, raw: r.raw,
-    counts: r.counts, fixable: r.fixable, byCategory: r.byCategory, byFile: r.byFile,
+    counts: r.counts, fixable: r.fixable, byCategory: r.byCategory, untracked: r.untracked, byFile: r.byFile, skipped: r.skipped,
     sources: r.sources, tailwind: r.tailwind, warnings: r.warnings, thresholds: r.thresholds, noVarFiles: r.noVarFiles,
     findings: r.findings.map((f) => ({
       file: f.rel, line: f.line, col: f.col, category: f.category, property: f.prop, context: f.context,
-      value: f.display || f.value, status: f.status,
-      token: f.token ? { name: f.token.name, value: f.token.value, usage: f.token.usage } : null,
+      value: f.display || f.value, status: f.status, excluded: f.excluded,
+      token: f.token ? { name: f.token.name, value: f.token.value, usage: f.token.usage, themed: f.token.dark ? 'dark: ' + f.token.dark : f.token.themes || undefined } : null,
       alternatives: f.alternatives?.length ? f.alternatives : undefined,
       distance: f.distance ? Object.fromEntries(Object.entries(f.distance).filter(([k, v]) => typeof v === 'number' && k !== 'd').map(([k, v]) => [k, round(v, 3)])) : null,
       replacement: f.fix?.text ?? null, note: f.fix ? undefined : f.fixNote,

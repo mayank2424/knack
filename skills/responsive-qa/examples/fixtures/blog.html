@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shipping faster with edge caching · Devlog</title>
+<!--
+  Recall fixture: a typical AI-generated blog post. Planted bugs (EXPECT lines are machine-read):
+  EXPECT horizontal-overflow pre.snippet       @320-1920  BUG F: code block without overflow-x:auto widens the page
+  EXPECT image-overflow      img.diagram       @320-768   BUG G: image has CSS width: 720px and no max-width
+  EXPECT anchor-hidden       #why              @320-1920  BUG H: 72px fixed header, no scroll-margin/scroll-padding: TOC jumps land the heading under the header
+  EXPECT horizontal-overflow div.band          @1024-1920 BUG M: full-bleed band uses width:100vw + margin-left:calc(50% - 50vw); with a classic (Windows) scrollbar it is 15px wider than the page
+  OK: the table scrolls in its own wrapper; the article is capped at 68ch; long URL wraps (overflow-wrap:anywhere); the share bar icons are 44px.
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 17px/1.7 Georgia, serif; color: #1f2328; background: #fff; }
+  /* BUG H: fixed header with no matching scroll-padding-top on html */
+  .top { position: fixed; top: 0; left: 0; right: 0; height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 20px; background: #fff; border-bottom: 1px solid #d0d7de; z-index: 5; font: 600 16px system-ui, sans-serif; }
+  .top a { color: #1f2328; text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; padding: 0 6px; }
+  article { max-width: 68ch; margin: 0 auto; padding: 96px 20px 80px; }
+  h1 { font: 800 clamp(30px, 6vw, 46px)/1.1 system-ui, sans-serif; letter-spacing: -0.02em; }
+  h2 { font: 750 26px/1.2 system-ui, sans-serif; margin-top: 48px; }
+  .toc { background: #f6f8fa; border-radius: 10px; padding: 12px 20px; font-family: system-ui, sans-serif; }
+  .toc a { display: block; padding: 10px 0; color: #0969da; }
+  p a { overflow-wrap: anywhere; }
+  /* BUG F: no overflow-x: auto */
+  .snippet { background: #0d1117; color: #e6edf3; padding: 16px; border-radius: 10px; font-size: 14px; line-height: 1.5; }
+  /* BUG G */
+  .diagram { width: 720px; height: auto; display: block; margin: 24px 0; border-radius: 8px; }
+  .table-wrap { overflow-x: auto; }
+  table { min-width: 560px; border-collapse: collapse; font: 15px system-ui, sans-serif; }
+  td, th { border-bottom: 1px solid #d0d7de; padding: 8px 12px; text-align: left; }
+  /* BUG M */
+  .band { width: 100vw; margin-left: calc(50% - 50vw); background: #0969da; color: #fff; padding: 24px 20px; text-align: center; font-family: system-ui, sans-serif; }
+  .share { display: flex; gap: 8px; margin-top: 40px; }
+  .share a { width: 44px; height: 44px; border-radius: 50%; background: #eaeef2; display: block; }
+</style>
+</head>
+<body>
+<header class="top"><a href="/">Devlog</a><a href="#subscribe">Subscribe</a></header>
+<article>
+  <h1>Shipping faster with edge caching</h1>
+  <nav class="toc" aria-label="Contents">
+    <a href="#why">Why cache at the edge</a>
+    <a href="#caching">Cache keys that actually work</a>
+    <a href="#results">Results</a>
+  </nav>
+  <h2 id="why">Why cache at the edge</h2>
+  <p>Most of our traffic is anonymous and read-heavy, so every millisecond spent going back to the origin is wasted. Moving rendering closer to readers cut median latency in half. The full benchmark lives at <a href="#">https://github.com/devlog-example/edge-cache-benchmarks/blob/main/results/2026-09-full-run.md</a>.</p>
+  <p>Before the change, a cold request from Sydney took 840ms. After it, the same request took 190ms. Warm requests dropped from 320ms to under 40ms.</p>
+  <h2 id="caching">Cache keys that actually work</h2>
+  <p>The trick is to keep the cache key small. We strip tracking parameters and normalise the Accept-Language header before hashing:</p>
+  <pre class="snippet"><code>const key = new URL(request.url); key.searchParams.forEach((_, k) =&gt; k.startsWith('utm_') &amp;&amp; key.searchParams.delete(k)); return caches.default.match(key.toString());</code></pre>
+  <img class="diagram" src="../img/hero.jpg" width="1200" height="750" alt="Request flow through the edge cache">
+  <p>Each region keeps its own copy, and we purge by surrogate key when an article changes.</p>
+  <div class="table-wrap"><table><tr><th>Region</th><th>Before</th><th>After</th><th>Hit ratio</th></tr><tr><td>Sydney</td><td>840ms</td><td>190ms</td><td>94%</td></tr><tr><td>Frankfurt</td><td>310ms</td><td>60ms</td><td>97%</td></tr></table></div>
+  <h2 id="results">Results</h2>
+  <p>Origin load fell by 81%, and our hosting bill followed. The next step is caching personalised fragments with a short TTL.</p>
+  <p>We also learned that the hardest part is invalidation, not caching. Tag every response with the entities it depends on and purge by tag.</p>
+  <p>Thanks for reading. Questions and corrections are welcome by email.</p>
+  <div class="share" aria-label="Share"><a href="#" aria-label="Share on X"></a><a href="#" aria-label="Share on LinkedIn"></a><a href="#" aria-label="Copy link"></a></div>
+  <div class="band">Enjoyed this? Get the next post in your inbox.</div>
+  <h2 id="subscribe">Subscribe</h2>
+  <p>One email a month. No tracking pixels.</p>
+  <div style="height:60vh"></div>
+</article>
+</body>
+</html>

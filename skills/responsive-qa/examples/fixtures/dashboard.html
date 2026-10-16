@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Acme Analytics · Dashboard</title>
+<!--
+  Recall fixture: a typical AI-generated SaaS dashboard. Planted bugs (EXPECT lines are machine-read):
+  EXPECT horizontal-overflow div.meta          @320-1024  BUG A: flex child keeps min-width:auto, so the ellipsis on the long file path never kicks in
+  EXPECT horizontal-overflow div.stats         @320       BUG B: grid 1fr track blown open by a long email (1fr = minmax(auto, 1fr))
+  EXPECT horizontal-overflow div.promo         @1024-1920 BUG C: full-bleed banner uses width:100vw, wider than the page when a classic scrollbar is present
+  EXPECT horizontal-overflow span.ribbon       @320-1920  BUG D: absolutely positioned ribbon with right:-32px pokes past the screen edge
+  EXPECT tap-target          button.icon-btn   @320-768   BUG E: 20px icon buttons 2px apart
+  OK: sidebar is hidden below 900px; the curl <pre> scrolls (overflow-x:auto) inside a min-width:0 panel; table sits in an overflow-x:auto wrapper; avatar stack overlap is aria-hidden.
+-->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; color: #0f172a; background: #f8fafc; }
+  .shell { display: flex; min-height: 100vh; }
+  .sidebar { flex: 0 0 220px; background: #0f172a; color: #cbd5e1; padding: 20px; }
+  .sidebar a { display: block; color: #e2e8f0; text-decoration: none; padding: 10px 8px; border-radius: 8px; }
+  .content { flex: 1; min-width: 0; padding: 24px; }
+  .file-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+  .file-row .ico { flex: 0 0 36px; height: 36px; border-radius: 8px; background: #e0e7ff; }
+  /* BUG A: no min-width: 0 on the flex child */
+  .file-row .meta { flex: 1; }
+  .file-row code { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #475569; }
+  @media (max-width: 900px) { .sidebar { display: none; } }
+  .topbar { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .topbar h1 { font-size: 22px; margin: 0; margin-right: auto; }
+  .icon-btns { display: flex; gap: 2px; }
+  /* BUG E */
+  .icon-btn { width: 20px; height: 20px; padding: 0; border: 0; border-radius: 5px; background: #e2e8f0; cursor: pointer; }
+  .avatars { display: flex; }
+  .avatars span { width: 32px; height: 32px; border-radius: 50%; border: 2px solid #fff; background: #94a3b8; margin-left: -10px; display: grid; place-items: center; font-size: 12px; color: #fff; }
+  /* BUG B: repeat(3, 1fr) instead of minmax(0, 1fr) */
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 640px) { .stats { grid-template-columns: 1fr; } }
+  .stat { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; }
+  .stat b { display: block; font-size: 28px; }
+  .stat small { color: #64748b; }
+  /* BUG D */
+  .ribbon { position: absolute; top: 10px; right: -32px; background: #f43f5e; color: #fff; font-size: 12px; font-weight: 700; padding: 2px 10px; border-radius: 4px; }
+  .panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 14px; padding: 18px; margin-top: 20px; }
+  .table-scroll { overflow-x: auto; }
+  table { border-collapse: collapse; min-width: 640px; width: 100%; }
+  td, th { text-align: left; padding: 10px; border-bottom: 1px solid #e2e8f0; }
+  pre { background: #0f172a; color: #e2e8f0; padding: 14px; border-radius: 10px; overflow-x: auto; font-size: 13px; }
+  /* BUG C */
+  .promo { width: 100vw; margin-left: calc(50% - 50vw); background: #4f46e5; color: #fff; padding: 18px 24px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <nav class="sidebar" aria-label="Main"><a href="#">Overview</a><a href="#">Reports</a><a href="#">Customers</a><a href="#">Settings</a></nav>
+  <main class="content">
+    <div class="topbar">
+      <h1>Overview</h1>
+      <div class="icon-btns"><button class="icon-btn" aria-label="Search"></button><button class="icon-btn" aria-label="Notifications"></button><button class="icon-btn" aria-label="Help"></button></div>
+      <div class="avatars" aria-hidden="true"><span>AB</span><span>CD</span><span>EF</span></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><small>Revenue</small><b>$48,210</b><small>+12% vs last month</small></div>
+      <div class="stat"><small>Active users</small><b>3,904</b><small>+4%</small></div>
+      <div class="stat"><small>Top account</small><b>Globex</b><small>billingnotifications@globexinternationalholdings.com</small></div>
+    </div>
+    <div class="panel" style="position:relative">
+      <h2>Recent invoices</h2><span class="ribbon">NEW</span>
+      <div class="table-scroll"><table><tr><th>Invoice</th><th>Customer</th><th>Amount</th><th>Status</th><th>Due</th></tr><tr><td>#1042</td><td>Globex</td><td>$1,200</td><td>Paid</td><td>Oct 3</td></tr><tr><td>#1043</td><td>Initech</td><td>$860</td><td>Open</td><td>Oct 9</td></tr></table></div>
+    </div>
+    <div class="panel">
+      <h2>Latest export</h2>
+      <div class="file-row"><span class="ico"></span><div class="meta"><b>Quarterly revenue export</b><code>s3://acme-analytics-exports/workspaces/7f3e9c2a/reports/2026/q3/revenue-by-customer-segment-final-v2.csv</code></div></div>
+    </div>
+    <div class="panel">
+      <h2>API quickstart</h2>
+      <pre><code>curl -X POST https://api.acme-analytics.io/v1/events -H "Authorization: Bearer $ACME_KEY" -d '{"event":"signup","plan":"pro"}'</code></pre>
+    </div>
+    <div class="promo">Upgrade to Pro and get unlimited dashboards, SSO and priority support.</div>
+    <p style="max-width:60ch">Data refreshes every five minutes. Times are shown in your local timezone.</p>
+  </main>
+</div>
+</body>
+</html>

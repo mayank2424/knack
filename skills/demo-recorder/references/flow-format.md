@@ -31,7 +31,7 @@ overlays, and captures every frame.
 | `format` | `"mp4"` | `"mp4"`, `"gif"`, `"webm"`, or an array. |
 | `name` | flow file name | Output base name in `.knack/demo-recorder/`. |
 | `frame` | off | `true` or `{ background, title, theme, padding, radius }`. Backgrounds: `aurora`, `sunset`, `ocean`, `mint`, `mono`, `midnight`, or any CSS background. `theme`: `light`/`dark` title bar (defaults to `colorScheme`). |
-| `cursor` | visible | `false` to hide, or `{ size, color, speed, start: [x, y] }`. `color` tints click ripples and highlights (default `#6366f1`); `speed` > 1 moves faster. |
+| `cursor` | visible | `false` to hide, or `{ size, color, speed, blur, start: [x, y] }`. `size` defaults to 1.35 (a macOS-size arrow is hard to follow once the clip is scaled down). `color` tints click ripples and highlights (default `#6366f1`); `speed` > 1 moves faster; `blur` is the motion-blur shutter as a fraction of a frame (default 0.5 = 180°, 0 = off). |
 | `typeDelay` | `55` | Base ms per character; each keystroke gets human-like jitter, longer after spaces and punctuation. |
 | `pauses` | see below | Override the default pause after each step type, e.g. `{ "click": 800 }`. |
 | `leadIn` / `tail` | `400` / `1200` | Still time before the first step and after the last (a calm end frame loops better). |
@@ -47,6 +47,8 @@ overlays, and captures every frame.
 | `hideScrollbars` | `true` | Hides all scrollbars. |
 | `timeout` | `8000` | Default ms a step waits for its target to appear (virtual time). |
 | `realtime` | `false` | Turn off virtual time (see Limitations). Same as `--realtime`. |
+| `zoom` | `true` | `false` skips every `zoom` step (a reduced-motion take). Same as `--no-zoom`. |
+| `idleSkip` | `true` | Reuse the previous frame when nothing changed (no DOM mutation, scroll, load, running animation, visible canvas/video/iframe, input, or overlay change). Every 15th reuse is checked against a real screenshot; a mismatch turns reuse off for the rest of the take. `false` / `--no-idle-skip` screenshots every frame. |
 | `seed` | `7` | Seed for typing jitter, so re-recordings are identical. |
 | `sheet` | `12` | Frames in the contact sheet. |
 
@@ -78,7 +80,7 @@ then the cursor travels to the element centre. Adjust the landing point with
 | `pause` | ms to hold after the step. Defaults: goto 700, click 650, type 450, press 650, hover 500, scroll 450, drag 600, select 600, zoom 200, others 0. |
 | `timeout` | Override how long to wait for the target. |
 | `nth` | Use the nth match (0-based) instead of the first. |
-| `moveDuration` | Force cursor travel time in ms (normally derived from distance, 320 to 1050 ms). |
+| `moveDuration` | Force cursor travel time in ms (normally derived from distance, Fitts-style: 320 to 1050 ms). |
 
 ## Steps
 
@@ -96,8 +98,10 @@ Navigates (a hard cut in the video). `waitUntil`: `load` (default), `domcontentl
 { "click": "#menu", "button": "right" }
 { "click": [880, 120] }
 ```
-Eased, slightly curved cursor travel, a press-down squish, real mouse events (hover and
-`:active` styles show), and a ripple at the click point.
+Slightly curved cursor travel with a human velocity profile (minimum-jerk, peaking early
+at ~1.8x average speed, then settling gently onto the target) and motion blur while it
+moves, a press-down squish, real mouse events (hover and `:active` styles show), and a
+ripple at the click point.
 
 ### type
 ```json
@@ -115,7 +119,9 @@ element. `clear` selects all and deletes before typing. `\n` presses Enter.
 { "press": "Escape", "hud": false }
 ```
 Playwright key names. Aliases: `Cmd`/`Command` → Meta, `Ctrl` → Control, `Option` → Alt,
-`ControlOrMeta` (⌘ on macOS, Ctrl elsewhere). Combos (anything with `+`), Escape and Tab show
+`ControlOrMeta` (⌘ on macOS, Ctrl elsewhere). A letter in a combo is sent lowercase unless
+Shift is part of it (`Meta+K` arrives as `key: "k"`, like a real keyboard; palettes such as
+DocSearch ignore an uppercase `K`). Combos (anything with `+`), Escape and Tab show
 a keystroke HUD (`⌘ K`) at the bottom; force with `"hud": true` / `false`, length with
 `hudDuration` (default 1000 ms).
 
@@ -171,8 +177,13 @@ not render in headless screenshots, so it is not opened).
 { "zoom": "out" }
 ```
 Smooth camera zoom that re-renders at higher resolution (sharp text, not upscaled pixels).
-`to` centres on a target (default: the cursor). `follow: true` keeps the cursor in frame,
-panning gently when it nears the edge. Stays zoomed until `"zoom": "out"`. Scale 1 to 4.
+`to` centres on a target (default: the cursor); without `scale` it fits the target to ~80%
+of the width / 70% of the height (1.25x to 2.2x). Zoom is interpolated in log space and,
+when one view contains the other, around their shared fixed point, so the target scales
+straight in instead of sliding sideways; the easing commits quickly and settles softly.
+`follow: true` keeps the cursor in frame, panning gently when it nears the edge (it can
+crop the far side of a wide row; prefer a plain zoom on a container). Stays zoomed until
+`"zoom": "out"`. Scale 1 to 4. `duration` defaults to 800 ms.
 
 ### highlight
 ```json
@@ -208,6 +219,20 @@ item), or hide/show it.
 { "js": "document.querySelector('#chat-widget')?.remove()" }
 ```
 Runs an expression in the page. Best in `setup`.
+
+## Output encoding
+
+- **MP4** (H.264 High, yuv420p, `+faststart`, even dimensions) and **WebM** (VP9) are
+  converted with the BT.709 matrix and tagged BT.709 primaries/matrix, sRGB transfer,
+  limited range. Measured on a swatch chart, rendered in Chrome: mean ΔE 0.3 (untagged
+  BT.601, the ffmpeg default, gave 5.6, max 12.4). Tagging the transfer as bt709 instead
+  makes Safari wash colours out (ΔE 3.8), so sRGB is used.
+- **GIF**: one palette built from every pixel of the clip (`stats_mode=full`),
+  Floyd-Steinberg dithering, only changed rectangles re-encoded. Compared with the common
+  `stats_mode=diff` recipe: PSNR 35.7 → 43.3 dB and ~8% smaller on the bundled example;
+  window chrome and wallpaper gradients no longer speckle.
+- Zoomed frames are captured a few pixels oversize and cropped exactly (Chrome truncates
+  fractional-scale clips by 1 to 3 px; rescaling those made zooms wobble).
 
 ## Recipes
 

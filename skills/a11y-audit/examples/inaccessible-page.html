@@ -9,6 +9,9 @@
    6. low-contrast hero text and footer text     14. off-screen mobile menu links still take focus
    7. global outline:none, no focus styles       15. newsletter form traps Tab between two fields
    8. icon-only button with no name; h1 → h4      16. feature cards clickable via addEventListener only
+  17. "Resources" submenu opens on mouse hover only
+  18. language <select> reloads the page as soon as it changes (no Go button)
+  19. fixed cookie bar covers focused controls near the bottom of the viewport
 -->
 <html>
 <head>
@@ -47,6 +50,12 @@
     .foot a { color: #b9bdc7; }
     .news { display: flex; gap: 8px; }
     .news input { padding: 8px 10px; border: 1px solid #e3e5ea; border-radius: 8px; font: inherit; }
+    .has-menu { position: relative; }
+    .submenu { display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid #eef0f4; border-radius: 10px; padding: 8px 12px; min-width: 140px; z-index: 5; }
+    .submenu a { display: block; color: #4b5161; padding: 4px 0; }
+    .has-menu:hover .submenu { display: block; }
+    .cookie { position: fixed; left: 0; right: 0; bottom: 0; padding: 18px 24px; background: #1f2330; color: #fff; display: flex; gap: 16px; align-items: center; justify-content: center; z-index: 20; }
+    .cookie button { border: 0; border-radius: 8px; padding: 8px 14px; font: inherit; background: #fff; color: #1f2330; }
   </style>
 </head>
 <body>
@@ -60,6 +69,9 @@
         <div class="nav-item" onclick="location.hash='features'">Features</div>
         <div class="nav-item" onclick="location.hash='pricing'">Pricing</div>
         <div class="nav-item" onclick="location.hash='customers'">Customers</div>
+        <div class="nav-item has-menu">Resources
+          <div class="submenu"><a href="#blog">Blog</a><a href="#guides">Guides</a></div>
+        </div>
       </div>
       <div style="display:flex;gap:10px;align-items:center">
         <button class="icon-btn" onclick="document.body.classList.toggle('dark')">
@@ -116,9 +128,11 @@
         <input id="news-name" placeholder="Name">
         <input id="news-email" placeholder="Email for updates">
       </div>
-      <div><a href="#privacy">Privacy</a> · <a href="#status">Status</a></div>
+      <div><a href="#privacy">Privacy</a> · <a href="#status">Status</a>
+        <select onchange="location.search = '?lang=' + this.value"><option value="en">English</option><option value="de">Deutsch</option></select></div>
     </div>
   </div>
+  <div class="cookie">We use cookies to improve Brightly. <button type="button" onclick="this.parentElement.remove()">OK</button></div>
 
   <script>
     // Feature cards: click handlers attached in JS, no keyboard support.

@@ -2,150 +2,127 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="description" content="Knack launch promo, made with the motion-video skill (16:9, 15s)" />
+<meta name="description" content="Knack launch film, made with the motion-video skill from real skill output (16:9, 16s)" />
 <title>Knack promo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=block" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=block" rel="stylesheet" />
 <script src="motion.js"></script>
 <style>
-  :root { --bg: #0b0b0e; --paper: #f3efe6; --muted: #8d8a83; --line: #26252b; --accent: #ff5a1f; }
-  #stage { background: var(--bg); color: var(--paper); font-family: 'Geist', sans-serif; }
-  em { font-family: 'Instrument Serif', serif; font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
-  .glow { position: absolute; width: 1600px; height: 1600px; left: 160px; top: -900px; border-radius: 50%;
-    background: radial-gradient(closest-side, rgba(255,90,31,.16), transparent 70%); }
-  .dots { position: absolute; inset: 0; opacity: .35;
-    background-image: radial-gradient(var(--line) 1.5px, transparent 1.5px); background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse at 50% 50%, #000 30%, transparent 75%); }
+  :root { --bg: #fafafa; --surface: #fff; --ink: #111214; --ink-2: #33353a; --muted: #61646b; --rule: #e1e1e4; --bad: #c42f1f; --good: #16793c; }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; }
+  .mono { font-family: 'IBM Plex Mono', monospace; }
 
-  .center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-  .headline { font-size: 150px; font-weight: 600; letter-spacing: -0.05em; line-height: 1; }
-  .headline em { font-size: 1.12em; color: var(--accent); }
-  .mask { display: inline-block; overflow: hidden; vertical-align: bottom; padding: 0 .04em .12em; margin: 0 -.04em -.12em; }
-  .mask > span { display: inline-block; }
+  /* Scene A: the request */
+  .prompt { position: absolute; left: 380px; top: 484px; width: 1160px; height: 112px; display: flex; align-items: center; gap: 28px; padding: 0 40px;
+    background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; transform-origin: 50% 50%; }
+  .prompt .who { font: 500 32px 'IBM Plex Mono', monospace; color: var(--muted); }
+  .prompt .text { font-size: 38px; color: var(--ink); white-space: nowrap; }
 
-  /* Scene 2 · skill ticker */
-  .ticker { position: absolute; left: 200px; right: 200px; top: 50%; height: 600px; margin-top: -300px; overflow: hidden;
-    mask-image: linear-gradient(transparent, #000 28%, #000 72%, transparent); }
-  .rail { position: absolute; left: 0; right: 0; top: 0; }
-  .row { height: 200px; display: grid; grid-template-columns: 120px 1fr auto; align-items: center; gap: 36px; }
-  .row .idx { font: 500 30px 'Geist Mono', monospace; color: var(--muted); }
-  .row h3 { margin: 0; font-size: 104px; font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
-  .row p { margin: 12px 0 0; font-size: 34px; color: var(--muted); letter-spacing: -0.01em; }
-  .chip { font: 500 26px 'Geist Mono', monospace; padding: 10px 20px; border-radius: 999px; border: 1px solid var(--line); color: var(--paper); }
-  .chip.media { border-color: rgba(255,90,31,.5); color: #ffb08f; }
-  .chip.design { border-color: rgba(167,139,250,.5); color: #cdbcff; }
-  .chip.dev { border-color: rgba(52,211,153,.5); color: #9ff0cd; }
-  .label { position: absolute; left: 200px; top: 150px; font: 500 28px 'Geist Mono', monospace; color: var(--muted); letter-spacing: .04em; }
-  .label b { color: var(--accent); font-weight: 500; }
+  /* Scene B: one real run of responsive-qa */
+  .phone { position: absolute; left: 380px; top: 220px; width: 440px; height: 820px; border: 1px solid var(--rule); border-radius: 18px; overflow: hidden; background: var(--surface); }
+  .phone img { position: absolute; inset: 0; width: 100%; display: block; }
+  .phone .after { clip-path: inset(0 calc(100% - var(--r, 0%)) 0 0); }
+  .result { position: absolute; left: 920px; top: 250px; width: 760px; }
+  .count { display: flex; align-items: baseline; gap: 20px; }
+  .count b { font-size: 220px; line-height: 1; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .count span { font-size: 56px; font-weight: 500; }
+  .label { margin-top: 28px; font: 500 28px 'IBM Plex Mono', monospace; color: var(--muted); }
+  .log { margin-top: 52px; display: grid; gap: 20px; font: 400 28px/1.35 'IBM Plex Mono', monospace; color: var(--ink-2); }
+  .log .x { color: var(--bad); margin-right: 14px; }
+  .log .ok { color: var(--good); }
 
-  /* Scene 3 */
-  .verify { font-size: 120px; font-weight: 600; letter-spacing: -0.045em; line-height: 1.05; }
-  .verify em { color: var(--accent); }
-  .check { width: 110px; height: 110px; vertical-align: -12px; margin-left: 18px; }
-  .check path { fill: none; stroke: var(--accent); stroke-width: 12; stroke-linecap: round; stroke-linejoin: round; }
+  /* Scene C: the six skills, each with its evidence */
+  .grid-title { position: absolute; left: 160px; top: 96px; font-size: 56px; font-weight: 600; letter-spacing: -0.015em; }
+  .tiles { position: absolute; left: 160px; top: 210px; width: 1600px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; }
+  .tile { background: var(--surface); border: 1px solid var(--rule); border-radius: 14px; overflow: hidden; }
+  .tile .img { height: 300px; overflow: hidden; border-bottom: 1px solid var(--rule); background: #f3f3f4; }
+  .tile img { width: 100%; height: 100%; object-fit: cover; object-position: top; display: block; }
+  .tile .term { height: 300px; padding: 26px 28px; font: 400 23px/1.55 'IBM Plex Mono', monospace; color: var(--ink-2); border-bottom: 1px solid var(--rule); white-space: pre; }
+  .tile .cap { display: flex; justify-content: space-between; align-items: baseline; padding: 18px 24px; }
+  .tile .cap b { font-size: 28px; font-weight: 600; }
+  .tile .cap span { font: 400 24px 'IBM Plex Mono', monospace; color: var(--muted); }
 
-  /* Scene 4 */
-  .brand { display: flex; align-items: center; gap: 30px; justify-content: center; }
-  .logo { width: 132px; height: 132px; border-radius: 34px; background: var(--accent); display: grid; place-items: center; }
-  .logo svg path { fill: none; stroke: var(--bg); stroke-width: 14; stroke-linecap: round; stroke-linejoin: round; }
-  .word { font-size: 168px; font-weight: 700; letter-spacing: -0.055em; }
-  .cmd { margin-top: 56px; display: inline-flex; gap: 18px; align-items: center; font: 400 38px 'Geist Mono', monospace;
-    padding: 22px 34px; border-radius: 18px; border: 1px solid var(--line); background: #131317; color: var(--paper); min-width: 1080px; text-align: left; }
-  .cmd .p { color: var(--accent); }
+  /* Scene D: lockup */
+  .end { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .brand { display: flex; align-items: center; justify-content: center; gap: 28px; }
+  .brand svg { width: 104px; height: 104px; }
+  .brand b { font-size: 132px; font-weight: 600; letter-spacing: -0.02em; }
+  .line { margin-top: 28px; font-size: 46px; color: var(--ink-2); }
+  .cmd { margin-top: 56px; display: inline-block; padding: 22px 36px; border: 1px solid var(--rule); border-radius: 14px; background: var(--surface); font: 400 34px 'IBM Plex Mono', monospace; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div class="dots"></div>
-  <div class="glow" id="glow"></div>
+  <div class="prompt" id="prompt"><span class="who">You</span><span class="text" id="ask">Check the landing page on mobile and fix what breaks.</span></div>
 
-  <div class="center"><div class="headline" id="h1">Give your agent a <em>knack.</em></div></div>
-
-  <div class="label" id="label"><b>/</b> six skills, all verified</div>
-  <div class="ticker"><div class="rail" id="rail"></div></div>
-
-  <div class="center"><div class="verify" id="v">Skills that <em id="vw">verify</em><svg class="check" viewBox="0 0 100 100"><path id="ck" d="M18 54 L42 76 L84 26" /></svg><br />not just advise.</div></div>
-
-  <div class="center" id="end"><div>
-    <div class="brand" id="brand">
-      <div class="logo" id="logo"><svg viewBox="0 0 100 100" width="84" height="84"><path d="M30 18 V82" /><path d="M74 20 L36 54 L74 82" /></svg></div>
-      <div class="word" id="word">Knack</div>
+  <div class="phone" id="phone"><img src="assets/responsive-before.png" alt="" /><img class="after" id="after" src="assets/responsive-after.png" alt="" /></div>
+  <div class="result" id="result">
+    <div class="count" id="countRow"><b id="n">0</b><span id="unit">errors</span></div>
+    <div class="label">responsive-qa · 375px and 1280px</div>
+    <div class="log" id="log">
+      <div class="l"><span class="x">✖</span>horizontal-overflow  table.compare</div>
+      <div class="l"><span class="x">✖</span>image-overflow       img.hero-shot</div>
+      <div class="l"><span class="x">✖</span>overlap              a.header-cta</div>
+      <div class="l"><span class="x">✖</span>tap-target           4× .social a</div>
+      <div class="l ok" id="okline">✓ No errors · fixed in source, re-run</div>
     </div>
-    <div class="cmd" id="cmdbox"><span class="p">❯</span><span id="cmd">/plugin marketplace add mayank2424/knack</span></div>
+  </div>
+
+  <div class="grid-title" id="gtitle">Six skills, each with its own evidence</div>
+  <div class="tiles" id="tiles">
+    <div class="tile"><div class="img"><img src="assets/motion-still.png" alt="" /></div><div class="cap"><b>Motion Video</b><span>render.mjs</span></div></div>
+    <div class="tile"><div class="img"><img src="assets/demo-poster.png" alt="" /></div><div class="cap"><b>Demo Recorder</b><span>record.mjs</span></div></div>
+    <div class="tile"><div class="img"><img src="assets/responsive-before.png" alt="" /></div><div class="cap"><b>Responsive QA</b><span>sweep.mjs</span></div></div>
+    <div class="tile"><div class="img"><img src="assets/a11y.png" alt="" /></div><div class="cap"><b>A11y Audit</b><span>audit.mjs</span></div></div>
+    <div class="tile"><div class="term">Drift score   13%
+
+EXACT       50
+NEAR        16
+OFF-SCALE   10
+
+#1e4fd6 → brand-600  ΔE 0.41</div><div class="cap"><b>Token Drift</b><span>scan.mjs</span></div></div>
+    <div class="tile"><div class="img"><img src="assets/prdiff.png" alt="" style="object-position: 0 0" /></div><div class="cap"><b>PR Visual Diff</b><span>capture.mjs</span></div></div>
+  </div>
+
+  <div class="end"><div>
+    <div class="brand" id="brand"><svg viewBox="0 0 24 24" id="mark"><rect width="24" height="24" rx="5" fill="#111214"/><path d="M8.2 6v12M16.4 6.4 10 12l6.4 5.6" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><b>Knack</b></div>
+    <div class="line" id="line">Agent skills that show their work.</div>
+    <div class="cmd" id="cmd">/plugin marketplace add mayank2424/knack</div>
   </div></div>
 </div>
 <script>
-  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 16, background: '#0b0b0e' });
+  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 16, background: '#fafafa' });
 
-  const skills = [
-    ['Motion Video', 'Storyboard → code → rendered MP4', 'media'],
-    ['Demo Recorder', 'Polished GIFs of real app flows', 'media'],
-    ['Responsive QA', 'Finds layout bugs at every breakpoint', 'design'],
-    ['A11y Audit', 'axe + keyboard pass, fixes in source', 'design'],
-    ['Token Drift', 'Hard-coded values → design tokens', 'design'],
-    ['PR Visual Diff', 'Before/after screenshots for reviews', 'dev'],
-  ];
-  const rail = document.getElementById('rail');
-  skills.forEach(([name, job, cat], i) => {
-    rail.insertAdjacentHTML('beforeend', `<div class="row" id="r${i}"><div class="idx">0${i + 1}</div><div><h3>${name}</h3><p>${job}</p></div><span class="chip ${cat}">${cat}</span></div>`);
-  });
+  // ── A · The request (0–2.9s): types at a readable pace, then docks at the top.
+  Motion.from('#prompt', { opacity: 0, y: 24 }, { start: 0.1, duration: 0.6, ease: 'outCubic' });
+  Motion.type('#ask', { start: 0.5, cps: 34 });
+  Motion.to('#prompt', { start: 2.5, duration: 0.8, ease: 'smooth', to: { y: -380, scale: 0.72 } });
 
-  // Mask helper: wrap each word so it can rise from below its baseline.
-  const maskWords = (sel) => {
-    const out = [];
-    const walk = (node) => Array.from(node.childNodes).forEach((c) => {
-      if (c.nodeType !== 3) return walk(c);
-      const frag = document.createDocumentFragment();
-      c.textContent.split(/(\s+)/).forEach((w) => {
-        if (!w) return;
-        if (/^\s+$/.test(w)) return frag.appendChild(document.createTextNode(w));
-        const m = document.createElement('span'); m.className = 'mask';
-        const s = document.createElement('span'); s.textContent = w;
-        m.appendChild(s); frag.appendChild(m); out.push(s);
-      });
-      c.replaceWith(frag);
-    });
-    walk(document.querySelector(sel));
-    return out;
-  };
+  // ── B · The run (3.0–8.7s): broken page and error count, then the fix.
+  Motion.from('#phone', { opacity: 0, y: 60 }, { start: 3.0, duration: 0.8, ease: 'snappy' });
+  Motion.from('#result', { opacity: 0, x: 30 }, { start: 3.3, duration: 0.7, ease: 'snappy' });
+  Motion.counter('#n', { from: 0, to: 12, start: 3.5, duration: 1.4, ease: 'outCubic' });
+  Motion.to('#countRow', { start: 0, duration: 0, to: { color: '#c42f1f' } });
+  Motion.from('#log .l:not(.ok)', { opacity: 0, x: -16 }, { start: 3.8, duration: 0.45, stagger: 0.22, ease: 'outCubic' });
+  Motion.to('#okline', { start: 0, duration: 0, to: { opacity: 0 } });
+  // The fix: wipe to the corrected page while the count falls to zero.
+  Motion.to('#after', { start: 6.0, duration: 1.0, ease: 'smooth', from: { '--r': '0%' }, to: { '--r': '100%' } });
+  Motion.counter('#n', { from: 12, to: 0, start: 6.0, duration: 1.0, ease: 'inOutCubic' });
+  Motion.to('#countRow', { start: 6.6, duration: 0.4, ease: 'linear', to: { color: '#16793c' } });
+  Motion.to('#log .l:not(.ok)', { start: 6.1, duration: 0.4, ease: 'outCubic', to: { opacity: 0.28 } });
+  Motion.to('#okline', { start: 7.1, duration: 0.5, ease: 'outCubic', from: { opacity: 0, x: -16 }, to: { opacity: 1, x: 0 } });
+  Motion.to('#phone, #result', { start: 8.5, duration: 0.45, ease: 'inCubic', to: { opacity: 0, y: -40 } });
+  Motion.to('#prompt', { start: 8.5, duration: 0.45, ease: 'inCubic', to: { opacity: 0, y: -420 } });
 
-  Motion.on((t) => { document.getElementById('glow').style.translate = `${Math.sin(t * 0.45) * 90}px ${Math.cos(t * 0.35) * 50}px`; });
+  // ── C · Six skills (9.0–12.6s): tiles build left to right, top to bottom.
+  Motion.from('#gtitle', { opacity: 0, y: 20 }, { start: 9.0, duration: 0.6, ease: 'snappy' });
+  Motion.from('#tiles .tile', { opacity: 0, y: 36 }, { start: 9.25, duration: 0.6, stagger: 0.09, ease: 'snappy' });
+  Motion.to('#gtitle, #tiles', { start: 12.3, duration: 0.45, ease: 'inCubic', to: { opacity: 0, y: -30 } });
 
-  // ── 1 · Hook (0–2.6s)
-  const h = maskWords('#h1');
-  Motion.to(h.slice(0, -1), { start: 0.2, duration: 0.8, stagger: 0.07, ease: 'snappy', from: { y: '115%' }, to: { y: '0%' } });
-  Motion.to(h.at(-1), { start: 0.65, duration: 0.9, ease: { stiffness: 200, damping: 17 }, from: { y: '115%', rotate: 6 }, to: { y: '0%', rotate: 0 } });
-  Motion.to(h, { start: 2.35, duration: 0.4, stagger: 0.03, ease: 'inCubic', to: { y: '-120%' } });
-
-  // ── 2 · Ticker (2.8–9.4s): rail steps one row every 1.1s; active row is bright.
-  const ROW = 200, first = 2.8, step = 1.1;
-  Motion.from('#label', { opacity: 0, y: 16 }, { start: 2.7, duration: 0.5, ease: 'outCubic' });
-  Motion.to('#label', { start: 9.2, duration: 0.3, ease: 'inCubic', to: { opacity: 0, y: -16 } });
-  // Rail starts with row 0 entering from below the window center.
-  Motion.to('#rail', { start: first, duration: 0.7, ease: 'snappy', from: { y: 600 }, to: { y: ROW } });
-  for (let i = 1; i < skills.length; i++) {
-    Motion.to('#rail', { start: first + i * step, duration: 0.55, ease: 'smooth', to: { y: ROW - i * ROW } });
-  }
-  Motion.to('#rail', { start: first + skills.length * step - 0.1, duration: 0.45, ease: 'inCubic', to: { y: ROW - skills.length * ROW - 200, opacity: 0 } });
-  skills.forEach((_, i) => {
-    const on = first + i * step;
-    Motion.to(`#r${i}`, { start: on - 0.2, duration: 0.4, ease: 'outCubic', from: { opacity: 0.22 }, to: { opacity: 1 } });
-    if (i < skills.length - 1) Motion.to(`#r${i}`, { start: on + step - 0.15, duration: 0.4, ease: 'outCubic', to: { opacity: 0.22 } });
-  });
-
-  // ── 3 · Verify (9.6–12.0s)
-  const v = maskWords('#v');
-  Motion.to(v, { start: 9.6, duration: 0.75, stagger: 0.06, ease: 'snappy', from: { y: '115%' }, to: { y: '0%' } });
-  Motion.from('.check', { opacity: 0, scale: 0.6 }, { start: 10.1, duration: 0.4, ease: 'outBack' });
-  Motion.draw('#ck', { start: 10.15, duration: 0.5, ease: 'outCubic' });
-  Motion.to(v, { start: 11.75, duration: 0.4, stagger: 0.025, ease: 'inCubic', to: { y: '-120%' } });
-  Motion.to('.check', { start: 11.8, duration: 0.3, ease: 'inCubic', to: { opacity: 0, y: -40 } });
-
-  // ── 4 · End card (12.2–15s): logo spring, wordmark slides, command types and holds.
-  Motion.from('#logo', { scale: 0, rotate: -25 }, { start: 12.2, duration: 0.9, ease: { stiffness: 210, damping: 14 } });
-  Motion.from('#word', { opacity: 0, x: -40 }, { start: 12.4, duration: 0.7, ease: 'snappy' });
-  Motion.from('#cmdbox', { opacity: 0, y: 24 }, { start: 12.7, duration: 0.6, ease: 'outCubic' });
-  Motion.type('#cmd', { start: 12.9, cps: 40, cursor: true });
+  // ── D · Lockup (12.9–16s): holds still for the last 2.2s.
+  Motion.from('#brand', { opacity: 0, y: 30 }, { start: 12.9, duration: 0.7, ease: 'snappy' });
+  Motion.from('#line', { opacity: 0, y: 20 }, { start: 13.15, duration: 0.6, ease: 'outCubic' });
+  Motion.from('#cmd', { opacity: 0, y: 16 }, { start: 13.4, duration: 0.6, ease: 'outCubic' });
 </script>
 </body>
 </html>

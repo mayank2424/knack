@@ -5,15 +5,16 @@
 <meta name="description" content="Data story: headline stat counter, animated bar chart, takeaway line (16:9, 10s)" />
 <title>Data story</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=block" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=block" rel="stylesheet" />
 <script src="motion.js"></script>
 <style>
   :root { --bg: #fbfaf7; --ink: #15151a; --muted: #6b6b76; --rule: #e6e3dc; --hi: #1f6feb; --lo: #c9cdd6; }
-  #stage { background: var(--bg); color: var(--ink); font-family: 'Inter', sans-serif; font-variant-numeric: tabular-nums; }
-  .eyebrow { position: absolute; left: 140px; top: 120px; font-size: 30px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--hi); }
-  .big { position: absolute; left: 130px; top: 170px; font-size: 300px; font-weight: 800; letter-spacing: -0.06em; line-height: 1; }
+  /* Tabular figures so counters don't jitter sideways while they count. */
+  #stage { background: var(--bg); color: var(--ink); font-family: 'IBM Plex Sans', sans-serif; font-variant-numeric: tabular-nums; }
+  .eyebrow { position: absolute; left: 140px; top: 120px; font: 500 28px 'IBM Plex Mono', monospace; letter-spacing: .12em; text-transform: uppercase; color: var(--hi); }
+  .big { position: absolute; left: 124px; top: 186px; font-size: 300px; font-weight: 700; letter-spacing: -0.055em; line-height: 1; }
   .big small { font-size: 120px; letter-spacing: -0.03em; color: var(--muted); }
-  .caption { position: absolute; left: 140px; top: 500px; width: 760px; font-size: 44px; line-height: 1.25; font-weight: 500; letter-spacing: -0.015em; }
+  .caption { position: absolute; left: 140px; top: 516px; width: 760px; font-size: 44px; line-height: 1.25; font-weight: 500; letter-spacing: -0.015em; }
   .chart { position: absolute; right: 140px; bottom: 170px; width: 760px; height: 640px; display: flex; align-items: flex-end; gap: 28px;
     border-bottom: 3px solid var(--ink); padding: 0 10px; }
   .col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; gap: 14px; }
@@ -24,7 +25,7 @@
   .col { position: relative; }
   .takeaway { position: absolute; left: 140px; bottom: 150px; font-size: 40px; font-weight: 600; letter-spacing: -0.01em; }
   .takeaway mark { background: linear-gradient(transparent 60%, rgba(31,111,235,.25) 60%); background-size: var(--hl, 0%) 100%; background-repeat: no-repeat; color: inherit; padding: 0 4px; }
-  .source { position: absolute; right: 140px; bottom: 60px; font-size: 22px; color: var(--muted); }
+  .source { position: absolute; right: 140px; bottom: 60px; font: 500 22px 'IBM Plex Mono', monospace; color: var(--muted); }
 </style>
 </head>
 <body>
@@ -52,10 +53,10 @@
   });
 
   // 1 · Stat (0–2.5s): number counts up while the caption rises in.
-  Motion.from('#eyebrow', { opacity: 0, x: -20 }, { start: 0.2, duration: 0.6, ease: 'outCubic' });
-  Motion.from('.big', { opacity: 0, y: 40 }, { start: 0.3, duration: 0.8, ease: 'snappy' });
+  Motion.from('#eyebrow', { opacity: 0, x: -20 }, { start: 0.15, duration: 0.6, ease: 'strong' });
+  Motion.from('.big', { opacity: 0, y: 40 }, { start: 0.25, duration: 0.9, ease: 'strong' });
   Motion.counter('#num', { from: 0, to: 74, start: 0.4, duration: 1.8, ease: 'outExpo' });
-  Motion.from('#caption', { opacity: 0, y: 24 }, { start: 1.1, duration: 0.7, ease: 'outCubic' });
+  Motion.from('#caption', { opacity: 0, y: 24 }, { start: 1.0, duration: 0.8, ease: 'strong' });
 
   // 2 · Chart (2.5–6s): baseline draws, bars grow in sequence, the
   // highlighted bar lands last and slightly overshoots to draw the eye.
@@ -63,7 +64,7 @@
   data.forEach((d, i) => {
     const s = 2.6 + i * 0.35;
     const h = (d.value / max) * 520;
-    Motion.to(`#b${i}`, { start: s, duration: d.hi ? 1.0 : 0.8, ease: d.hi ? { stiffness: 120, damping: 12 } : 'outCubic', from: { height: 0 }, to: { height: h } });
+    Motion.to(`#b${i}`, { start: s, duration: d.hi ? 1.0 : 0.8, ease: d.hi ? { stiffness: 150, damping: 16 } : 'strong', from: { height: 0 }, to: { height: h } });
     Motion.counter(`#v${i}`, { from: 0, to: d.value, start: s, duration: 0.8, format: (n) => Math.round(n) + '%' });
     Motion.from(`#v${i}`, { opacity: 0 }, { start: s, duration: 0.3 });
   });
@@ -71,7 +72,7 @@
   Motion.to('.bar:not(.hi)', { start: 5.2, duration: 0.6, ease: 'smooth', to: { opacity: 0.45 } });
 
   // 3 · Takeaway (6–10s): the highlighter sweeps across the key phrase.
-  Motion.from('#takeaway', { opacity: 0, y: 20 }, { start: 6.0, duration: 0.7, ease: 'outCubic' });
+  Motion.from('#takeaway', { opacity: 0, y: 20 }, { start: 6.0, duration: 0.8, ease: 'strong' });
   Motion.to('#mark', { start: 6.6, duration: 0.9, ease: 'inOutCubic', from: { '--hl': '0%' }, to: { '--hl': '100%' } });
   Motion.from('#source', { opacity: 0 }, { start: 7.0, duration: 0.6 });
 </script>

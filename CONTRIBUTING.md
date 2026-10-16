@@ -2,7 +2,7 @@
 
 Thanks for helping! Knack skills follow one rule above all others:
 
-> **A skill must verify, not just advise.** Every skill ships deterministic scripts that measure, render, or check something real, so the agent can see its own output and fix it. Pure "best practices" prose belongs in a blog post.
+> **A skill must check its own output.** Every skill ships deterministic scripts that measure, render, or check something real, so the agent can see its own output and fix it. Pure "best practices" prose belongs in a blog post.
 
 ## Skill anatomy
 

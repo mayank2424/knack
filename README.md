@@ -4,7 +4,7 @@
 
 # Knack
 
-**Agent skills that verify, not just advise.**
+**Agent skills that show their work.**
 
 Six open-source skills for developers and designers. Each one ships real tooling (Playwright, axe-core, ffmpeg, pixel diffs) so your agent can see its own output and fix it before you ever look.
 

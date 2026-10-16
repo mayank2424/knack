@@ -8,8 +8,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&display=block" rel="stylesheet" />
 <script src="motion.js"></script>
 <style>
-  :root { --bg1: #1a1240; --bg2: #0a3a52; --ink: #fff; --accent: #ffd166; }
-  #stage { background: linear-gradient(135deg, var(--bg1), var(--bg2)); color: var(--ink); font-family: 'Manrope', sans-serif; }
+  /* Neutral graphite + one warm accent. A purple-to-teal gradient backdrop is the #1 "made by AI" tell. */
+  :root { --bg: #0f1013; --ink: #f5f5f4; --accent: #ffc857; }
+  #stage { background: radial-gradient(1400px 800px at 50% 62%, #1d1c1a 0%, var(--bg) 70%); color: var(--ink); font-family: 'Manrope', sans-serif; }
   /* The camera is a wrapper we scale/translate; content inside never moves on its own. */
   #camera { position: absolute; inset: 0; transform-origin: 0 0; }
   .window { position: absolute; left: 260px; top: 150px; width: 1400px; height: 860px; border-radius: 18px; overflow: hidden;
@@ -30,7 +31,7 @@
   .kpi span { color: #7a8194; font-weight: 600; }
   .panel { background: #fff; border: 1px solid #e7e9ee; border-radius: 14px; padding: 22px; }
   .spark { height: 220px; }
-  .label { position: absolute; padding: 14px 22px; border-radius: 14px; background: rgba(10,10,20,.82); backdrop-filter: blur(6px);
+  .label { position: absolute; padding: 14px 22px; border-radius: 14px; background: rgba(14,14,16,.88); border: 1px solid rgba(255,255,255,.08); box-shadow: 0 18px 40px rgba(0,0,0,.35);
     font-size: 36px; font-weight: 800; letter-spacing: -0.02em; white-space: nowrap; }
   .label::before { content: ''; display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); margin-right: 14px; vertical-align: middle; }
   .title { position: absolute; left: 0; right: 0; top: 64px; text-align: center; font-size: 64px; font-weight: 800; letter-spacing: -0.03em; }
@@ -56,11 +57,12 @@
       </div>
     </div>
   </div>
-  <div class="label" id="lab1" style="left: 1120px; top: 330px">Live user counts</div>
-  <div class="label" id="lab2" style="left: 210px; top: 760px">Trends, not tables</div>
+  <div class="label" id="lab1">Live user counts</div>
+  <div class="label" id="lab2">Trends, not tables</div>
 </div>
 <script>
-  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 10 });
+  // 60fps: camera pans judder at 30fps. Drafts: --fps 30 or --scale 0.5.
+  Motion.config({ width: 1920, height: 1080, fps: 60, duration: 10 });
 
   // Camera helper: frame a rectangle (in stage px) so it fills `fill` of the frame.
   // Animating one wrapper keeps every move coherent, like a real camera.
@@ -70,8 +72,16 @@
     return { scale: s, x: W / 2 - (x + w / 2) * s, y: H / 2 - (y + h / 2) * s };
   };
   const wide = { scale: 1, x: 0, y: 0 };
-  const kpi = shot(260 + 240 + 34, 150 + 46 + 34, 360, 130, 0.55);
-  const chartShot = shot(260 + 240 + 34, 150 + 46 + 34 + 130 + 24, 1092, 270, 0.75);
+  // Keep camera scale ≤ ~2× on raster screenshots (capture them at 2× DPR if you need closer).
+  const kpi = shot(260 + 240 + 34, 150 + 46 + 34, 1092, 130, 0.84);
+  const chartShot = shot(260 + 240 + 34, 150 + 46 + 34 + 130 + 24, 1092, 270, 0.8);
+  // Labels live outside the camera, so place them in screen space next to the framed rect.
+  const onScreen = (cam, x, y) => [x * cam.scale + cam.x, y * cam.scale + cam.y];
+  const [l1x] = onScreen(kpi, 260 + 240 + 34, 0);          // left edge of the KPI row
+  const [, winTop] = onScreen(kpi, 0, 150);                 // top of the browser window on screen
+  Object.assign(document.getElementById('lab1').style, { left: l1x + 'px', top: winTop - 104 + 'px' }); // in the clear space above
+  const [l2x, l2y] = onScreen(chartShot, 260 + 240 + 34, 150 + 46 + 34 + 130 + 24 + 270);
+  Object.assign(document.getElementById('lab2').style, { left: l2x + 'px', top: Math.min(l2y + 30, H - 140) + 'px' });
 
   // 1 · Establish (0–2.5s): window floats up, title above.
   Motion.from('#title', { opacity: 0, y: -20 }, { start: 0.2, duration: 0.7, ease: 'outCubic' });
@@ -82,7 +92,7 @@
 
   // 2 · Push in on the KPI (2.6–5s), callout appears once the camera settles.
   Motion.to('#camera', { start: 2.6, duration: 1.1, ease: 'smooth', from: wide, to: kpi });
-  Motion.from('#lab1', { opacity: 0, x: -20 }, { start: 3.6, duration: 0.5, ease: 'outCubic' });
+  Motion.from('#lab1', { opacity: 0, y: 16 }, { start: 3.6, duration: 0.5, ease: 'strong' });
   Motion.to('#lab1', { start: 4.9, duration: 0.3, ease: 'inCubic', to: { opacity: 0 } });
 
   // 3 · Pan to the chart (5–7.6s); redraw the line so motion has a purpose.

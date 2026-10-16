@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { SHADES, V3, V4 } from './palette.mjs';
 
 const SPACING_KEYS = ['px', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8', '9', '10', '11', '12',
   '14', '16', '20', '24', '28', '32', '36', '40', '44', '48', '52', '56', '60', '64', '72', '80', '96'];
@@ -21,10 +22,22 @@ export function defaultTheme(version) {
     : { sm: '0.125rem', DEFAULT: '0.25rem', md: '0.375rem', lg: '0.5rem', xl: '0.75rem', '2xl': '1rem', '3xl': '1.5rem', full: '9999px' };
   const boxShadow = version >= 4
     ? { '2xs': '0 1px rgb(0 0 0 / 0.05)', xs: '0 1px 2px 0 rgb(0 0 0 / 0.05)', sm: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)', lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' }
+        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)', lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)' }
     : { sm: '0 1px 2px 0 rgb(0 0 0 / 0.05)', DEFAULT: '0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1)',
-        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)', lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)' };
-  return { spacing, fontSize, fontWeight, zIndex, transitionDuration, borderRadius, boxShadow, colors: { white: '#ffffff', black: '#000000' } };
+        md: '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)', lg: '0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1)',
+        xl: '0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1)', '2xl': '0 25px 50px -12px rgb(0 0 0 / 0.25)', inner: 'inset 0 2px 4px 0 rgb(0 0 0 / 0.05)' };
+  return { spacing, fontSize, fontWeight, zIndex, transitionDuration, borderRadius, boxShadow, colors: defaultColors(version) };
+}
+
+/** Tailwind's default color palette for a major version: { white, black, red: { 50: …, … }, … }. */
+export function defaultColors(version) {
+  const colors = { white: '#ffffff', black: '#000000' };
+  for (const [fam, list] of Object.entries(version >= 4 ? V4 : V3)) {
+    const vals = version >= 4 ? list.split(',').map((v) => `oklch(${v})`) : list.split(' ').map((h) => '#' + h);
+    colors[fam] = Object.fromEntries(SHADES.map((sh, i) => [sh, vals[i]]));
+  }
+  return colors;
 }
 
 /** Theme key → token category. */
@@ -61,8 +74,10 @@ export const ALL_UTILS = [...new Set(Object.values(UTILS).flat())].sort((a, b) =
 const UNRESOLVED = Symbol('unresolved');
 
 /** Tolerant JS literal parser: objects, arrays, strings, numbers, simple template strings, local const refs. */
-function parseLiteral(src, consts, warnings) {
+function parseLiteral(src, consts, warnings, { loadReq } = {}) {
   let i = 0;
+  const keyStack = [];
+  const warn = (w) => { if (keyStack.some((k) => THEME_KEY_SET.has(k))) warnings.add(w); };
   const ws = () => { while (i < src.length && /\s/.test(src[i])) i++; };
   const skipExpr = () => {
     // skip an unsupported expression until , or closing bracket at depth 0
@@ -112,13 +127,15 @@ function parseLiteral(src, consts, warnings) {
     if (ch === '"' || ch === "'" || ch === '`') return readString();
     const numM = src.slice(i).match(/^-?\d*\.?\d+(?![\w.])/);
     if (numM) { i += numM[0].length; return Number(numM[0]); }
+    const reqM = loadReq && src.slice(i).match(/^require\(\s*(['"])([^'"]+)\1\s*\)(?:\.default)?/);
+    if (reqM) { i += reqM[0].length; return loadReq(reqM[2]); }
     const idM = src.slice(i).match(/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*/);
     if (idM) {
       const after = src.slice(i + idM[0].length).trimStart();
       const drilled = idM[0].split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), consts);
       if (!after.startsWith('(') && !after.startsWith('=>') && drilled !== undefined) { i += idM[0].length; return drilled; }
       if (idM[0] === 'true' || idM[0] === 'false') { i += idM[0].length; return idM[0] === 'true'; }
-      warnings.add(idM[0]);
+      warn(idM[0]);
     }
     skipExpr();
     return UNRESOLVED;
@@ -135,7 +152,7 @@ function parseLiteral(src, consts, warnings) {
         const idM = src.slice(i).match(/^[A-Za-z_$][\w$.]*/);
         const spread = idM && idM[0].split('.').reduce((x, k) => (x && typeof x === 'object' ? x[k] : undefined), consts);
         if (spread && typeof spread === 'object') { Object.assign(o, spread); i += idM[0].length; }
-        else { if (idM) warnings.add('...' + idM[0]); skipExpr(); }
+        else { if (idM) warn('...' + idM[0]); skipExpr(); }
         continue;
       }
       let key;
@@ -148,7 +165,7 @@ function parseLiteral(src, consts, warnings) {
       }
       ws();
       if (src[i] === '(') { // method shorthand: key() { ... }
-        warnings.add(key + '()');
+        warn(key + '()');
         skipExpr(); ws(); if (src[i] === '{') { let d = 0; do { if (src[i] === '{') d++; else if (src[i] === '}') d--; i++; } while (i < src.length && d); }
         continue;
       }
@@ -157,7 +174,9 @@ function parseLiteral(src, consts, warnings) {
         continue;
       }
       i++;
+      keyStack.push(key);
       const v = value();
+      keyStack.pop();
       if (v !== UNRESOLVED) o[key] = v;
     }
   };
@@ -176,31 +195,100 @@ function parseLiteral(src, consts, warnings) {
   return value();
 }
 
-/** Statically read `theme` from a tailwind config without executing it. */
-export function readConfigStatic(file) {
+const THEME_KEY_SET = new Set(['colors', 'spacing', 'borderRadius', 'fontSize', 'fontWeight', 'boxShadow', 'zIndex', 'transitionDuration']);
+
+/**
+ * Statically read a tailwind config (and the presets / modules it `require`s or
+ * imports, when they live in the repo) without executing anything.
+ * `resolveModule(fromFile, spec)` maps a specifier to a file (relative paths and
+ * workspace packages). Returns { config, theme, prefix, warnings, files }.
+ */
+export function readConfigStatic(file, { resolveModule, depth = 0, seen = new Set([file]) } = {}) {
   const raw = fs.readFileSync(file, 'utf8')
     .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, ' '))
-    .replace(/(^|[^:"'`])\/\/.*$/gm, '$1');
+    .replace(/(^|[^:"'`\\])\/\/.*$/gm, '$1');
   const warnings = new Set();
+  const files = [file];
+  const requires = {};
+  const loadReq = (spec) => {
+    if (spec in requires) return requires[spec];
+    let v = UNRESOLVED;
+    if (/^tailwindcss\/colors(\.js)?$/.test(spec)) v = defaultColors(3);
+    else if (/^tailwindcss\/defaultTheme(\.js)?$/.test(spec)) v = defaultTheme(3);
+    else if (resolveModule && depth < 6) {
+      const f = resolveModule(file, spec);
+      if (f && !seen.has(f) && /\.(c|m)?[jt]s$/.test(f)) {
+        seen.add(f);
+        try {
+          const sub = readConfigStatic(f, { resolveModule, depth: depth + 1, seen });
+          if (sub.config && typeof sub.config === 'object') v = sub.config;
+          files.push(...sub.files);
+          for (const w of sub.warnings) warnings.add(w);
+        } catch {}
+      }
+    }
+    requires[spec] = v;
+    return v;
+  };
   const consts = {};
+  const bindings = [
+    [/(?:^|\n)\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)(\.default)?/g, 'one'],
+    [/(?:^|\n)\s*import\s+(?:\*\s+as\s+)?([A-Za-z_$][\w$]*)\s+from\s+['"]([^'"]+)['"]/g, 'one'],
+    [/(?:^|\n)\s*(?:const|let|var)\s*\{([^}]*)\}\s*=\s*require\(\s*['"]([^'"]+)['"]\s*\)/g, 'many'],
+    [/(?:^|\n)\s*import\s*\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g, 'many'],
+  ];
+  for (const [re, kind] of bindings) {
+    let m;
+    while ((m = re.exec(raw))) {
+      if (/^tailwindcss\/(plugin|resolveConfig)|^@tailwindcss\//.test(m[2])) continue;
+      const mod = loadReq(m[2]);
+      if (mod === UNRESOLVED) continue;
+      if (kind === 'one') consts[m[1]] = mod;
+      else for (const part of m[1].split(',')) {
+        const [k, as] = part.split(/\s*(?::|\bas\b)\s*/).map((x) => x.trim());
+        if (k && mod[k] !== undefined) consts[as || k] = mod[k];
+      }
+    }
+  }
   // top-level const NAME = { … } | '…'  (in source order, so later ones can reference earlier ones)
   const constRe = /(?:^|\n)\s*(?:export\s+)?(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*(?::[^=]+)?=\s*(?=[{['"`\d])/g;
   let m;
   while ((m = constRe.exec(raw))) {
-    const v = parseLiteral(raw.slice(m.index + m[0].length), consts, warnings);
+    const v = parseLiteral(raw.slice(m.index + m[0].length), consts, warnings, { loadReq });
     if (v !== UNRESOLVED) consts[m[1]] = v;
   }
-  const themeIdx = raw.search(/\btheme\s*:\s*\{/);
-  let theme = {};
-  if (themeIdx !== -1) {
-    const start = raw.indexOf('{', themeIdx);
-    theme = parseLiteral(raw.slice(start), consts, warnings) || {};
-    if (theme === UNRESOLVED) theme = {};
-  } else if (/\btheme\s*:/.test(raw)) {
-    warnings.add('theme (not an object literal)');
+  let config = null;
+  const exp = raw.match(/\bmodule\.exports\s*=\s*|\bexport\s+default\s+/);
+  if (exp) {
+    const v = parseLiteral(raw.slice(exp.index + exp[0].length), consts, warnings, { loadReq });
+    if (v && v !== UNRESOLVED && typeof v === 'object') config = v;
+  }
+  if (!config) {
+    // wrapped exports (withTV({ … }), defineConfig({ … })): fall back to the first `theme: {`
+    const themeIdx = raw.search(/\btheme\s*:\s*\{/);
+    config = {};
+    if (themeIdx !== -1) {
+      const t = parseLiteral(raw.slice(raw.indexOf('{', themeIdx)), consts, warnings, { loadReq });
+      if (t && t !== UNRESOLVED) config.theme = t;
+    } else if (/\btheme\s*:/.test(raw)) warnings.add('theme (not an object literal)');
+    const presetsM = raw.match(/\bpresets\s*:\s*\[/);
+    if (presetsM) {
+      const p = parseLiteral(raw.slice(presetsM.index + presetsM[0].length - 1), consts, warnings, { loadReq });
+      if (Array.isArray(p)) config.presets = p;
+    }
   }
   const prefixM = raw.match(/\bprefix\s*:\s*['"]([^'"]*)['"]/);
-  return { theme, prefix: prefixM ? prefixM[1] : '', warnings: [...warnings] };
+  if (prefixM && config.prefix == null) config.prefix = prefixM[1];
+  return { config, theme: config.theme || {}, prefix: config.prefix || '', warnings: [...warnings], files };
+}
+
+/** Flatten a config's preset chain in Tailwind's merge order: deepest preset first, the config itself last. */
+export function presetChain(config, depth = 0) {
+  if (!config || typeof config !== 'object' || depth > 8) return [];
+  const out = [];
+  for (const p of Array.isArray(config.presets) ? config.presets : []) out.push(...presetChain(p, depth + 1));
+  out.push(config);
+  return out;
 }
 
 /** Evaluate the config in a child Node process (opt-in). Uses the project's resolveConfig when installed. */

@@ -16,7 +16,7 @@ metadata:
   title: PR Visual Diff
   category: dev
   tags: visual-regression, screenshots, pull-request, playwright, pixelmatch, code-review
-  version: 0.1.0
+  version: 0.2.0
   author: Mayank Gupta
 ---
 
@@ -60,8 +60,8 @@ then a `PAGES=` line. Use it as a starting point, not gospel:
 
 - Dynamic routes (`/blog/[slug]`, `/users/:id`) need a real value. Find one from seed
   data, fixtures, or links on the index page, or ask the user.
-- "Global change" (Tailwind config, global CSS, root layout) means every page can move.
-  Capture a representative set: home, one form-heavy page, one list/table page.
+- "Global change" (Tailwind config, global CSS, theme tokens, root layout) means every page
+  can move. Capture a representative set: home, one form-heavy page, one list/table page.
 - If nothing maps (SPA with unusual routing), read the diff and pick pages yourself.
 - Widths: default `375,1280`. Add `768` when breakpoint or grid code changed.
 - Keep it to about 3-8 pages. More is slow and buries the signal.
@@ -88,7 +88,10 @@ it answers, and prints `BASE_URL=`. Notes:
 - Run `--dry-run` first if unsure; it prints the plan without executing.
 - The worktree lacks untracked `.env` files. If the app needs them, tell the user, then
   re-run with `--copy-env` (copies `.env*` into the temp worktree only).
-- Lockfile unchanged since base? `--link-node-modules` skips the install by symlinking.
+- Lockfile unchanged since base? `--link-node-modules` skips the install by symlinking
+  (ignored for Next.js: Turbopack rejects it).
+- It warns if `/` answers HTTP 5xx (app erroring: read the log tail it prints) and copes
+  with dev servers that detach themselves (Astro 7 does when it detects an agent).
 - If it can't start, it prints exactly what to run instead. Follow that, or pass
   `--cmd "pnpm dev --port {port}"`. Port flags per framework: `references/frameworks.md`.
 - Static sites without package.json are served by a built-in static server. Plain folders
@@ -103,29 +106,50 @@ it answers, and prints `BASE_URL=`. Notes:
 node "${CLAUDE_SKILL_DIR}/scripts/capture.mjs" \
   --base "$BASE_URL" --head "$HEAD_URL" \
   --pages /,/pricing,/settings --widths 375,1280 \
-  --freeze-time --label-base "main @ a1b2c3d" --label-head "feat/new-nav"
+  --label-base "main @ a1b2c3d" --label-head "feat/new-nav"
 ```
+
+Determinism is on by default: a virtual clock (timers, `requestAnimationFrame` and `Date`
+advance by identical fixed steps on both sides), seeded `Math.random`, media that never
+plays, CSS/JS animations, GIFs and SMIL frozen or stepped, fonts, images and `aria-busy`
+waited for. Unchanged pages diffed at exactly 0 pixels on 116 of 120 test pairs; what's
+left (canvas, embeds, exotic widgets) needs `--mask`. Details: `references/stabilization.md`.
 
 Useful flags: `--full-page` (whole scroll height; use when the change is below the fold),
 `--mask ".timestamp,.avatar"` (paint over dynamic regions), `--hide` (visibility:hidden),
-`--wait-for <selector|networkidle|ms>`, `--threshold 0.1` (% of pixels separating "minor"
-from "changed"), `--color-scheme dark`, `--fail-on-change` (exit 2, for CI).
+`--wait-for <selector|networkidle|ms>`, `--settle <ms>` (JS time after load, default 2000),
+`--color-scheme dark`, `--fail-on-change` (exit 2, for CI).
 
-Output per page × width: `base.png`, `head.png`, `diff.png` (changes in red, regions boxed
-in blue), `compare.png` (all three side by side, labelled), plus `summary.md` and
-`summary.json` (change %, region boxes, size changes, content shifts, HTTP status,
-new console errors, stability).
+Output per page × width: `base.png`, `head.png`, `diff.png`, `compare.png` (base | head |
+diff, labelled), `focus.png` (close-ups of the changed regions, base vs head at up to 2x),
+plus `summary.md` and `summary.json` (change %, moved %, regions with `kind`, shifts, size
+changes, HTTP status, new console errors, stability, what was still loading).
+
+Reading the diff: **red** = changed pixels (boxed), **blue wash** = rows that only moved
+(row alignment recognises "everything below y moved down 70px", so a taller header is one
+red region plus a blue band, not a page of red), **amber** = faint change below the
+visible threshold (a colour-token tweak, or the edge of a pale element). Removed blocks are
+marked with a dashed red bar where they used to be; added blocks are solid red.
+
+Result per pair: `changed` (≥ 0.1% of pixels changed or moved, a size change, or one solid
+cluster: ≥ 40 px², or ≥ 16 px² without a sub-pixel halo, e.g. one changed digit), `minor`
+(scattered or faint differences only), `unchanged`, `error`. A 1-2px padding change usually
+reads as "moved" (blue band from that element down, ±1px is tolerated as sub-pixel
+jitter); `focus.png` puts an orange box where the move starts.
 
 ### 6. Look at the evidence (do not skip)
 
-Read **every** `compare.png` the script lists (changed and minor). For each:
+Read **every** `focus.png` and `compare.png` the script lists (changed and minor). The
+close-up shows what changed; the compare shows where and what it pushed around. For each:
 
-1. **Is it noise?** Clocks, avatars, ads, carousels, randomized content, "unstable"
-   warnings. Fix with `--mask`, `--hide`, `--freeze-time` or `--wait-for` and re-run.
-   See `references/stabilization.md`. Don't report noise as a change.
+1. **Is it noise?** Third-party embeds, avatars, ads, data that differs between base and
+   head, "kept changing" / "still loading" notes. Fix with `--mask`, `--hide`, `--settle`
+   or `--wait-for` and re-run. See `references/stabilization.md`. Don't report noise as a change.
 2. **Describe it in plain words**: "Primary button is now a pink gradient pill",
-   "Hero CTA wraps to two lines at 375px". Use `shift` in summary.json ("content below
-   y≈360 shifted down 70px") to explain cascades instead of listing every moved element.
+   "Hero CTA wraps to two lines at 375px". Explain cascades with `shifts` in summary.json
+   ("content from y≈360 moved down 70px") instead of listing every moved element; the red
+   region just above the blue band is usually the cause. Name faint (amber) changes too;
+   the note gives the dominant colour pair: "date text colour #6b7280 → #64748b".
 3. **Intended or not?** Compare against the PR's purpose and `git diff`. Anything the
    PR didn't set out to change (other pages affected by shared CSS, overflow at mobile
    widths, missing styles, a page that now 404s or throws new console errors) is a
@@ -157,18 +181,23 @@ Write `.knack/pr-visual-diff/pr-section.md` from `summary.md`:
 Show it to the user. Images are relative paths until hosted; pick a hosting option with
 the user (details and trade-offs: `references/pr-images.md`):
 
-- **Drag and drop (default, works for private repos):** the user drags the compare PNGs
-  into the PR description on github.com, which uploads them. Open the folder for them
+- **Drag and drop (default, works for private repos):** the user drags the focus/compare
+  PNGs into the PR description on github.com, which uploads them. Open the folder for them
   (`open .knack/pr-visual-diff/pages` on macOS).
-- **Assets branch (scriptable):** pushes images to an orphan branch and rewrites links.
+- **gh attachments (gh 2.99+, push access):** `gh pr comment|edit --attach` uploads local
+  images and rewrites matching references. Print the command, show it, run after a yes:
+  ```bash
+  node "${CLAUDE_SKILL_DIR}/scripts/publish-assets.mjs" --gh-attach <pr-number>
+  ```
+- **Assets branch (any gh version):** pushes images to an orphan branch and rewrites links.
   Dry run first, push only after a clear yes:
   ```bash
   node "${CLAUDE_SKILL_DIR}/scripts/publish-assets.mjs" --prefix pr-123          # plan only
   node "${CLAUDE_SKILL_DIR}/scripts/publish-assets.mjs" --prefix pr-123 --push   # → summary.pr.md
   ```
   Then rebuild `pr-section.md` with the absolute URLs from `summary.pr.md`.
-- GitHub has no API for image uploads into PR bodies, and `gh gist create` rejects
-  binary files. Don't promise either.
+- The REST/GraphQL APIs have no image upload, and `gh gist create` rejects binary files.
+  Don't promise either.
 
 Updating the PR (only when asked): fetch the body with `gh pr view <n> --json body -q .body`,
 replace the block between the `pr-visual-diff` markers (or append it), write it to a file,
@@ -188,7 +217,9 @@ Suggest adding `.knack/` to `.gitignore` if it isn't there yet.
 | Symptom | Fix |
 |---|---|
 | Every pixel differs | Different data on each side (dev DB vs seed), or a font failed to load. Compare `base.png`/`head.png`; mask data regions or point both at the same backend. |
-| "page kept changing" | Animation/video/live data. `--freeze-time`, `--mask`, `--wait-for <ms>`. |
+| "page kept changing" | Canvas/WebGL, live data, third-party widget. `--mask` / `--hide` it. |
+| "still loading after 8s" | Slow or broken images/fonts/video; check `base.png`/`head.png` for gaps. |
+| Content missing on both sides | It waits on a timer longer than the 2 s JS budget: `--settle 5000` or `--wait-for <selector>`. |
 | HTTP 404 on both sides | Wrong path. Check routes with `affected-pages.mjs --all`. |
 | Base won't start | Read the log tail it prints. Usually env vars (`--copy-env`), a monorepo (`--dir`), or a compound dev script (`--cmd`). |
 | Login wall in screenshots | `--storage-state` (step 4). |

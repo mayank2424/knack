@@ -16,7 +16,7 @@ The skill pins **Claude Opus** with `model: opus` and `effort: high`. Opus curre
 |---|---|---|
 | Plans first | Writes a beat-sheet storyboard (timing, motion, purpose) and asks for a 👍 | Jumps straight to code |
 | Sees its output | Renders **filmstrips** and stills, reads them, fixes problems | Can't watch video, so ships blind |
-| Lints itself | `--check` flags off-frame text, tiny type, unloaded fonts, cut-off animations | Not available |
+| Lints itself | `--check` flags off-frame text, overlapping text, tiny type, unloaded fonts, cut-off animations, empty poster frames | Not available |
 | Craft built in | Timing tables, easing vocabulary, choreography rules, platform safe zones | Generic tweens |
 | Zero lock-in | One HTML file plus a ~20 KB MIT runtime, no framework or license fees | Not applicable |
 
@@ -35,17 +35,17 @@ The skill pins **Claude Opus** with `model: opus` and `effort: high`. Opus curre
 2. **Storyboard.** It writes `storyboard.md` with beats, timings and the reason each beat exists.
 3. **Build.** It scaffolds from one of 6 templates into `videos/<slug>/index.html`. Open the file to scrub through it live.
 4. **Self-review.** It runs `--check` and reads the `--filmstrip` contact sheet, fixing collisions, legibility and pacing.
-5. **Render.** It produces an MP4 (H.264), GIF, WebM, or ProRes 4444 with alpha, with optional music muxing.
+5. **Render.** It produces an MP4 (H.264), GIF, WebM, ProRes 4444 with alpha, or a PNG sequence, with optional music muxing and film-style motion blur. Colors are converted and tagged as BT.709, so brand colors match the browser (measured mean ΔE2000 ≈ 0.2 in Chrome).
 
 ## Templates
 
 | Template | Size | Length |
 |---|---|---|
-| `kinetic-type` | 16:9 | 8s |
-| `product-launch` | 16:9 | 12s |
+| `kinetic-type` | 16:9 | 10s |
+| `product-launch` | 16:9 | 13s |
 | `logo-sting` | 16:9, 60fps | 4s |
 | `data-story` | 16:9 | 10s |
-| `app-showcase` | 16:9 | 10s |
+| `app-showcase` | 16:9, 60fps | 10s |
 | `social-vertical` | 9:16 | 12s |
 
 `examples/knack-promo/` holds the composition behind the Knack website's hero video, so you can see a complete real-world piece.

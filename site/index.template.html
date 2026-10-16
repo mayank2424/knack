@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Knack · Agent skills that show their work</title>
+<meta name="description" content="Six open-source agent skills for developers and designers. Each runs real tools (Playwright, axe-core, ffmpeg, pixel diffs) and checks the result before it reports done." />
+<meta name="theme-color" content="#fafafa" />
+<meta property="og:title" content="Knack · Agent skills that show their work" />
+<meta property="og:description" content="Open-source skills for Claude Code and any Agent Skills agent: motion video, demo recording, responsive QA, accessibility, design-token drift and visual PR diffs." />
+<meta property="og:image" content="https://mayank2424.github.io/knack/assets/og.png" />
+<meta property="og:type" content="website" />
+<meta name="twitter:card" content="summary_large_image" />
+<link rel="icon" href="{{base}}assets/favicon.svg" type="image/svg+xml" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="{{base}}styles.css" />
+</head>
+<body>
+{{header}}
+
+<main id="main">
+  <section class="hero wrap">
+    <div class="hero-copy">
+      <h1>Agent skills that show their work.</h1>
+      <p class="lede">Six open-source skills for developers and designers. Each one runs real tools, looks at what they produce, and fixes the problems before it tells you it's done.</p>
+
+      <div class="install" id="install">
+        <div class="tabs" role="tablist" aria-label="Install method">
+          <button role="tab" id="t-claude" aria-controls="p-claude" aria-selected="true">Claude Code</button>
+          <button role="tab" id="t-npx" aria-controls="p-npx" aria-selected="false" tabindex="-1">Other agents</button>
+          <button role="tab" id="t-manual" aria-controls="p-manual" aria-selected="false" tabindex="-1">Manual</button>
+        </div>
+        <div class="panel" role="tabpanel" id="p-claude" aria-labelledby="t-claude">
+          <div class="cmd"><code>/plugin marketplace add mayank2424/knack</code><button class="copy" type="button">Copy</button></div>
+          <div class="cmd"><code>/plugin install knack@knack</code><button class="copy" type="button">Copy</button></div>
+        </div>
+        <div class="panel" role="tabpanel" id="p-npx" aria-labelledby="t-npx" hidden>
+          <div class="cmd"><code>npx skills add mayank2424/knack</code><button class="copy" type="button">Copy</button></div>
+          <p class="note">Codex, Cursor, Gemini CLI, OpenCode and 40 more. Add <code>--skill a11y-audit</code> to install one.</p>
+        </div>
+        <div class="panel" role="tabpanel" id="p-manual" aria-labelledby="t-manual" hidden>
+          <div class="cmd"><code>git clone https://github.com/mayank2424/knack</code><button class="copy" type="button">Copy</button></div>
+          <div class="cmd"><code>cp -r knack/skills/* ~/.claude/skills/</code><button class="copy" type="button">Copy</button></div>
+        </div>
+      </div>
+      <p class="facts">MIT licensed · Agent Skills format · Node 18+, no telemetry</p>
+    </div>
+
+    <figure class="run" aria-label="Example run of the responsive-qa skill">
+      <div class="run-head">
+        <span class="mono">responsive-qa</span>
+        <span class="mono muted">examples/broken-page.html</span>
+      </div>
+      <p class="run-prompt"><span class="mono muted">You</span>Check the landing page on mobile and fix what breaks.</p>
+      <div class="run-shots">
+        <div class="shot">
+          <img src="{{base}}assets/evidence/responsive-before.png" width="375" height="812" alt="The broken landing page at 375px with numbered boxes on each layout bug" />
+          <span class="tally bad">12 errors</span>
+        </div>
+        <div class="shot">
+          <img src="{{base}}assets/evidence/responsive-after.png" width="375" height="812" alt="The same page after fixes at 375px, with no boxes" />
+          <span class="tally good">0 errors</span>
+        </div>
+      </div>
+      <pre class="run-log" tabindex="0" aria-label="Excerpt of the skill's output"><span class="bad">✖</span> horizontal-overflow  table.compare   runs 409px past the 375px viewport
+  ↳ wrap it in an overflow-x: auto container
+<span class="bad">✖</span> image-overflow       img.hero-shot   640px wide, 45% cut off at 375px
+<span class="bad">✖</span> tap-target           4× .social a    18×18px, below the 24×24px minimum
+<span class="muted">… 9 more, fixed in source, then re-run</span>
+<span class="good">✓</span> No errors  no warnings  2 viewports · 3.4s</pre>
+    </figure>
+  </section>
+
+  <section class="skills wrap" id="skills" aria-labelledby="skills-h">
+    <header class="section-head">
+      <h2 id="skills-h">The skills</h2>
+      <p>Every skill ships the scripts it needs and reads their output. You get evidence with the result: a contact sheet, an annotated screenshot, a report, a diff.</p>
+    </header>
+    {{skills}}
+  </section>
+
+  <section class="loop wrap" aria-labelledby="loop-h">
+    <header class="section-head">
+      <h2 id="loop-h">How a Knack skill works</h2>
+      <p>A skill is a folder: a <code>SKILL.md</code> the agent follows, scripts it runs, and references it reads when it needs them. The scripts turn "looks done" into something the agent can check.</p>
+    </header>
+    <ol class="steps">
+      <li><h3>Act</h3><p>Writes the composition, the flow file or the fix, following the skill's workflow.</p></li>
+      <li><h3>Measure</h3><p>Runs the bundled tool: <code>render.mjs --check</code>, <code>audit.mjs</code>, <code>sweep.mjs</code>, <code>capture.mjs</code>.</p></li>
+      <li><h3>Look</h3><p>Reads the evidence: <code>filmstrip.png</code>, annotated screenshots, <code>report.json</code>, <code>compare.png</code>.</p></li>
+      <li><h3>Repeat</h3><p>Fixes what the evidence shows and runs again until it's clean, then reports with the proof attached.</p></li>
+    </ol>
+    <pre class="tree" tabindex="0" aria-label="Folder layout of a skill">skills/a11y-audit/
+├── SKILL.md          <span class="muted">workflow the agent follows</span>
+├── scripts/          <span class="muted">audit.mjs, contrast.mjs, setup.sh</span>
+├── references/       <span class="muted">fix recipes, manual checks</span>
+└── examples/         <span class="muted">a broken page and its fixed twin</span></pre>
+  </section>
+
+  <section class="catalog wrap" id="catalog" aria-labelledby="catalog-h">
+    <header class="section-head row">
+      <div>
+        <h2 id="catalog-h">Popular skills from the ecosystem</h2>
+        <p>Widely used skills from Anthropic, Vercel and the community, sorted by GitHub stars. Counts refresh on every deploy. Not affiliated with Knack.</p>
+      </div>
+      <div class="controls">
+        <label class="search"><span class="sr">Search popular skills</span><input id="q" type="search" placeholder="Search" autocomplete="off" /></label>
+        <div class="seg" role="group" aria-label="Filter by category">
+          <button type="button" aria-pressed="true" data-cat="all">All</button>
+          <button type="button" aria-pressed="false" data-cat="dev">Dev</button>
+          <button type="button" aria-pressed="false" data-cat="design">Design</button>
+          <button type="button" aria-pressed="false" data-cat="media">Media</button>
+          <button type="button" aria-pressed="false" data-cat="docs">Docs</button>
+          <button type="button" aria-pressed="false" data-cat="productivity">Productivity</button>
+        </div>
+      </div>
+    </header>
+    <div class="table-wrap">
+      <table class="table" id="catalogTable">
+        <thead><tr><th scope="col">Skill</th><th scope="col">Maintainer</th><th scope="col">Category</th><th scope="col" class="num">Stars</th><th scope="col"><span class="sr">Install</span></th></tr></thead>
+        <tbody>{{catalog}}</tbody>
+      </table>
+      <p class="empty" id="catalogEmpty" hidden>No skills match that search.</p>
+    </div>
+    <p class="more">More lists: {{lists}}</p>
+  </section>
+
+  <section class="contribute wrap" aria-labelledby="contrib-h">
+    <div>
+      <h2 id="contrib-h">Add a skill</h2>
+      <p>Knack takes skills that check their own output. If yours renders, measures or diffs something real, open a pull request and it will appear here.</p>
+      <p class="links-inline"><a href="https://github.com/mayank2424/knack/blob/main/CONTRIBUTING.md">Contributing guide</a><a href="https://github.com/mayank2424/knack/issues/new?template=skill-request.yml">Request a skill</a></p>
+    </div>
+    <ul class="checklist">
+      <li>A <code>SKILL.md</code> under 500 lines that leads with the workflow</li>
+      <li>Scripts with <code>--help</code>, pinned dependencies and clear errors</li>
+      <li>A small example the skill can be run against</li>
+      <li>A preview image made from the skill's real output</li>
+    </ul>
+  </section>
+</main>
+
+{{footer}}
+<script src="{{base}}app.js" defer></script>
+</body>
+</html>

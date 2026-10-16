@@ -51,24 +51,39 @@ can also run `--cmd "pnpm --filter web dev --port {port}"`.
   server log ("Local: http://localhost:5174") and warns.
 - **Env vars**: worktrees don't have untracked `.env*` files. `--copy-env` copies them.
 - **Install cost**: a fresh worktree needs its own `node_modules`. If the lockfile is
-  unchanged since base, `--link-node-modules` symlinks the user's instead. Caveat: tools
-  that cache inside `node_modules` (Vite's `.vite`) then share that cache.
+  unchanged since base, `--link-node-modules` symlinks the user's instead. Caveats: tools
+  that cache inside `node_modules` (Vite's `.vite`) then share that cache, and Next.js with
+  Turbopack (the default since Next 16) refuses a `node_modules` that resolves outside the
+  project ("Next.js package not found", HTTP 500), so the flag is ignored for Next and the
+  worktree installs normally (pnpm with a warm store: ~10 s).
+- **Astro 7 under an AI agent**: `astro dev` detects agents (`CLAUDECODE`, `AI_AGENT`...)
+  and detaches into a background daemon, so the process we started exits at once.
+  `worktree-serve.mjs` exports `ASTRO_DEV_BACKGROUND=1` to keep it in the foreground. Astro 7
+  also refuses a second dev server for the same project folder; reuse the user's.
+- **Self-detaching servers in general**: if the start command exits cleanly but something
+  answers on the port within 30 s, the script tracks the PID listening there (only if it
+  started after the command) so `stop` can end it. A server that was already running is
+  reported as `external` and never stopped.
+- **HTTP 5xx on `/`**: the server is up but the app is erroring. The script prints the log
+  tail and warns; fix it (often env vars: `--copy-env`) before capturing.
 
 ## How affected-pages.mjs maps files to routes
 
 Route files changed directly → **high**. Components/styles imported by a route within 2
 hops → **high**, deeper → **medium**. Layout files → every route below them, **medium**.
-Root layouts and global styles/config → "global change", representative routes as
-**medium/low**.
+Root layouts and global styles/config/tokens (`globals.css`, `theme.css`, `tokens.*`,
+Tailwind config...) → "global change" warning plus representative routes as
+**medium/low**, even when imports also reach specific pages. Error pages (`/404`, `/500`)
+are left out of `PAGES=` unless their own file changed.
 
 | Framework | Route files | Layout / global files |
 |---|---|---|
-| Next.js app router | `app/**/page.(tsx\|jsx\|ts\|js\|mdx)` (also `src/app`). `(group)` and `@slot` segments dropped; `(.)` intercepting routes skipped. | `layout`, `template`, `loading`, `error`, `not-found` → routes in that folder; root `app/layout` → global |
+| Next.js app router | `app/**/page.(tsx\|jsx\|ts\|js\|mdx)` (also `src/app`). `(group)` and `@slot` segments dropped; `(.)` intercepting routes and `_private` folders skipped; `[[...slug]]` also suggests the parent. | `layout`, `template`, `loading`, `error`, `not-found` → routes in that folder; root `app/layout` → global |
 | Next.js pages router | `pages/**/*.(tsx\|jsx\|ts\|js\|mdx)`, `index` → parent, `api/` skipped | `_app`, `_document` → global |
 | Remix / React Router (file routes) | `app/routes/<name>.tsx` or `app/routes/<name>/route.tsx`. `.` → `/`, `_index` → index, leading `_` pathless, trailing `_` dropped, `$id` → `:id`, `$` → `*` | `app/root.tsx` → global; `dashboard.tsx` is also the layout for `dashboard.*` |
 | SvelteKit | `src/routes/**/+page(.server).(svelte\|ts\|js)`, `(group)` dropped | `+layout*` → routes in that folder; root layout, `src/app.html` → global |
 | Nuxt | `pages/**/*.vue` (or `app/pages` in Nuxt 4), `index` → parent | `app.vue`, `error.vue`, `layouts/*` → global |
-| Astro | `src/pages/**/*.(astro\|md\|mdx\|html)` | layouts traced through imports |
+| Astro | `src/pages/**/*.(astro\|md\|mdx\|html)`; `_`-prefixed files/folders skipped (not routable); `[...page]` also suggests the parent (`/posts`) | layouts traced through imports |
 | Plain HTML | any `*.html` → `/<path>.html`, `index.html` → `/` (or folder) | CSS/JS traced through `<link href>` / `<script src>` |
 | React Router / Vue Router SPA | `<Route path="/x" element={<X/>}>` and `{ path: '/x', element/component: X }` in code | changed component → route whose element imports it (**medium**) |
 

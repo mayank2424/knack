@@ -2,129 +2,167 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="description" content="Feature/product announcement: hook, UI card reveal, 3 feature callouts, CTA (16:9, 12s)" />
+<meta name="description" content="Feature/product announcement: masked headline, live product UI with real copy, feature line, held end card (16:9, 13s)" />
 <title>Product launch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=block" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=block" rel="stylesheet" />
 <script src="motion.js"></script>
 <style>
+  /* One neutral family + ONE accent. No gradient text, no purple-to-cyan glow: those read as generic AI output. */
   :root {
-    --bg: #07080c; --panel: #11131a; --line: #23262f;
-    --ink: #eef0f5; --muted: #8b90a0; --brand: #6d5cff; --brand-2: #22d3ee;
+    --bg: #0b0b0c; --surface: #131315; --raised: #1a1a1d; --line: rgba(255,255,255,.08);
+    --ink: #ededed; --muted: #8e8e93; --dim: #5c5c62; --accent: #5af0b4;
   }
-  #stage { background: var(--bg); color: var(--ink); font-family: 'Geist', sans-serif; }
-  .glow { position: absolute; width: 1400px; height: 1400px; left: 260px; top: -420px; border-radius: 50%;
-    background: radial-gradient(closest-side, rgba(109,92,255,.35), rgba(34,211,238,.10) 55%, transparent 70%); filter: blur(20px); }
-  .grid { position: absolute; inset: 0; opacity: .5;
-    background-image: linear-gradient(var(--line) 1px, transparent 1px), linear-gradient(90deg, var(--line) 1px, transparent 1px);
-    background-size: 80px 80px; mask-image: radial-gradient(ellipse at 50% 40%, #000 20%, transparent 70%); }
+  #stage { background: var(--bg); color: var(--ink); font-family: 'Geist', sans-serif; font-feature-settings: 'ss01'; }
+  .mono { font-family: 'Geist Mono', monospace; }
+  /* Depth layer 1: a soft neutral top light, static. Ambient loops for their own sake look cheap. */
+  .light { position: absolute; inset: 0; background: radial-gradient(1200px 520px at 50% -8%, rgba(255,255,255,.07), transparent 70%); }
+  /* Depth layer 3: grain. Hidden in GIFs, where per-frame noise multiplies file size. */
+  .grain { position: absolute; inset: -50%; opacity: .045; pointer-events: none; mix-blend-mode: overlay;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  .knack-out-gif .grain { display: none; }
 
-  /* Scene 1: hook */
-  .hook { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-  .pill { display: inline-flex; gap: 10px; align-items: center; padding: 10px 20px; border: 1px solid var(--line); border-radius: 999px;
-    font: 500 26px 'Geist Mono', monospace; color: var(--muted); background: rgba(17,19,26,.7); }
-  .pill b { width: 10px; height: 10px; border-radius: 50%; background: var(--brand-2); box-shadow: 0 0 16px var(--brand-2); }
-  .hook h1 { margin: 34px 0 0; font-size: 120px; line-height: 1.02; letter-spacing: -0.045em; font-weight: 700; }
-  .hook h1 .grad { display: inline-block; padding: 0 .04em .08em; background: linear-gradient(90deg, var(--brand), var(--brand-2)); -webkit-background-clip: text; background-clip: text; color: transparent;
-    /* --r drives a left-to-right wipe; background-clip:text can't be split into per-char spans. */
-    clip-path: inset(-10% calc(100% - var(--r, 100%)) -10% 0); }
+  /* Lines rise out of an overflow:hidden mask: the most reliable "premium" text reveal.
+     Travel ±130%, not ±100%: the glyph box is taller than the line box, so 100% leaves slivers in the mask. */
+  .mask { display: block; overflow: hidden; padding-bottom: .1em; margin-bottom: -.1em; }
+  .mask > span { display: inline-block; }
 
-  /* Scene 2: product card */
-  .card { position: absolute; left: 50%; top: 50%; width: 1180px; height: 700px; margin: -350px 0 0 -590px;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 28px; overflow: hidden;
-    box-shadow: 0 60px 120px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03) inset; }
-  .card .top { height: 64px; display: flex; align-items: center; gap: 10px; padding: 0 24px; border-bottom: 1px solid var(--line); }
-  .card .top i { width: 14px; height: 14px; border-radius: 50%; background: #2b2e38; display: block; }
-  .card .body { display: grid; grid-template-columns: 300px 1fr; height: calc(100% - 64px); }
-  .side { border-right: 1px solid var(--line); padding: 28px 22px; display: grid; gap: 14px; align-content: start; }
-  .side span { height: 22px; border-radius: 6px; background: #1b1e27; }
-  .side span.on { background: rgba(109,92,255,.35); }
-  .main { padding: 40px; display: grid; gap: 22px; align-content: start; }
-  .row { height: 92px; border-radius: 16px; background: #161922; border: 1px solid var(--line); display: flex; align-items: center; gap: 20px; padding: 0 26px; }
-  .row .ic { width: 44px; height: 44px; border-radius: 12px; background: linear-gradient(135deg, var(--brand), var(--brand-2)); }
-  .row .tx { flex: 1; display: grid; gap: 10px; }
-  .row .tx b { height: 16px; width: 60%; border-radius: 4px; background: #2a2e3a; display: block; }
-  .row .tx s { height: 12px; width: 35%; border-radius: 4px; background: #1f222c; display: block; }
-  .row em { font: 500 22px 'Geist Mono', monospace; color: var(--brand-2); font-style: normal; }
+  /* ── Scene 1 · hook */
+  .hook { position: absolute; left: 160px; top: 320px; }
+  .eyebrow { display: flex; align-items: center; gap: 14px; font-size: 26px; color: var(--muted); letter-spacing: .02em; margin-bottom: 34px; }
+  .eyebrow i { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 18px var(--accent); }
+  .hook h1 { margin: 0; font-size: 156px; line-height: 1.0; letter-spacing: -0.045em; }
+  .hook .l1 { font-weight: 400; color: #a9a9ae; }
+  .hook .l2 { font-weight: 700; }
+  .dot { color: var(--accent); }
 
-  /* Scene 3: callouts */
-  .callout { position: absolute; display: flex; align-items: center; gap: 16px; padding: 18px 26px; border-radius: 18px;
-    background: rgba(17,19,26,.92); border: 1px solid var(--line); font-size: 34px; font-weight: 600; letter-spacing: -0.02em;
-    box-shadow: 0 20px 50px rgba(0,0,0,.5); }
-  .callout .k { font: 500 24px 'Geist Mono', monospace; color: var(--bg); background: var(--brand-2); padding: 6px 10px; border-radius: 8px; }
+  /* ── Scene 2 · product UI (real copy beats skeleton bars) */
+  .scene2 { position: absolute; inset: 0; perspective: 1800px; }
+  .win { position: absolute; left: 50%; top: 50%; width: 1360px; height: 730px; margin: -365px 0 0 -680px; border-radius: 22px;
+    background: var(--surface); border: 1px solid var(--line); overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255,255,255,.06) inset, 0 50px 120px rgba(0,0,0,.55), 0 0 0 1px rgba(0,0,0,.6); }
+  .search { height: 124px; display: flex; align-items: center; gap: 22px; padding: 0 44px; border-bottom: 1px solid var(--line); font-size: 46px; letter-spacing: -0.02em; }
+  .search svg { width: 34px; height: 34px; flex: none; }
+  .search .q { flex: 1; white-space: pre; }
+  .search .q:empty::before { content: 'Search files, logs, people…'; color: var(--dim); }
+  .lat { font-size: 26px; color: var(--accent); padding: 8px 14px; border-radius: 10px; background: rgba(90,240,180,.08); border: 1px solid rgba(90,240,180,.18); }
+  .group { padding: 26px 44px 12px; font-size: 23px; color: var(--dim); letter-spacing: .08em; text-transform: uppercase; }
+  .list { position: relative; padding: 0 24px; }
+  .sel { position: absolute; left: 24px; right: 24px; top: 0; height: 100px; border-radius: 14px; background: var(--raised); border: 1px solid var(--line); }
+  .sel::before { content: ''; position: absolute; left: -1px; top: 28px; bottom: 28px; width: 3px; border-radius: 3px; background: var(--accent); }
+  .row { position: relative; height: 100px; display: flex; align-items: center; gap: 24px; padding: 0 20px; }
+  .ico { width: 54px; height: 54px; border-radius: 12px; background: var(--raised); border: 1px solid var(--line); display: grid; place-items: center; font-size: 22px; color: var(--muted); flex: none; }
+  .row b { font-weight: 500; font-size: 36px; letter-spacing: -0.015em; }
+  .row .path { font-size: 25px; color: var(--dim); margin-left: 4px; }
+  .row .meta { margin-left: auto; font-size: 25px; color: var(--dim); }
+  .row .meta kbd { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 8px; color: var(--muted); }
 
-  /* Scene 4: CTA */
-  .cta { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-  .cta h2 { margin: 0; font-size: 112px; letter-spacing: -0.045em; font-weight: 700; }
-  .cta .url { margin-top: 30px; display: inline-block; font: 500 40px 'Geist Mono', monospace; padding: 16px 30px;
-    border-radius: 16px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+  /* ── Scene 3 · feature line */
+  .features { position: absolute; left: 160px; top: 50%; margin-top: -90px; display: flex; gap: .3em; font-size: 132px; font-weight: 700; letter-spacing: -0.05em; line-height: 1; }
+  .features .w { display: inline-block; }
+  .features .sub { position: absolute; left: 4px; top: 176px; font-size: 38px; font-weight: 400; letter-spacing: -0.01em; color: var(--muted); white-space: nowrap; }
+
+  /* ── Scene 4 · end card */
+  .end { position: absolute; inset: 0; display: grid; place-items: center; }
+  .lockup { display: flex; align-items: center; gap: 30px; }
+  .mark { width: 112px; height: 112px; border-radius: 30px; background: var(--ink); display: grid; place-items: center; }
+  .mark svg { width: 58px; height: 58px; }
+  .name { font-size: 112px; font-weight: 600; letter-spacing: -0.05em; }
+  .cta { margin-top: 44px; display: flex; justify-content: center; gap: 18px; align-items: center; font-size: 34px; color: var(--muted); }
+  .cta .url { color: var(--ink); padding: 14px 26px; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: 32px; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div class="grid"></div>
-  <div class="glow" id="glow"></div>
+  <div class="light"></div>
 
-  <div class="hook" id="hook"><div>
-    <div class="pill" id="pill"><b></b>Introducing v2.0</div>
-    <h1 id="h1">Your workflow,<br /><span class="grad">10× faster.</span></h1>
-  </div></div>
+  <div class="hook" id="hook">
+    <div class="eyebrow mono" id="eyebrow"><i></i>Introducing v2.0</div>
+    <h1 aria-label="Search that keeps up.">
+      <span class="mask"><span class="l1" id="l1">Search that</span></span>
+      <span class="mask"><span class="l2" id="l2">keeps up<span class="dot">.</span></span></span>
+    </h1>
+  </div>
 
-  <div class="card" id="card">
-    <div class="top"><i></i><i></i><i></i></div>
-    <div class="body">
-      <div class="side"><span class="on"></span><span></span><span></span><span></span><span></span></div>
-      <div class="main">
-        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em id="m1">0ms</em></div>
-        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>synced</em></div>
-        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>AI</em></div>
-        <div class="row"><div class="ic"></div><div class="tx"><b></b><s></s></div><em>live</em></div>
+  <div class="scene2">
+    <div class="win" id="win">
+      <div class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#8e8e93" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <span class="q" id="q">deploy logs</span>
+        <span class="lat mono" id="lat">480 ms</span>
+      </div>
+      <div class="group mono" id="group">Best matches</div>
+      <div class="list">
+        <div class="sel" id="sel"></div>
+        <div class="row"><span class="ico mono">›_</span><b>deploy-logs</b><span class="path mono">/ops/runbooks</span><span class="meta mono"><kbd>⏎</kbd></span></div>
+        <div class="row"><span class="ico mono">#</span><b>Deploy failed on main</b><span class="path mono">#incidents</span><span class="meta mono">2m ago</span></div>
+        <div class="row"><span class="ico mono">{ }</span><b>deploy.config.ts</b><span class="path mono">/apps/web</span><span class="meta mono">edited</span></div>
+        <div class="row"><span class="ico mono">◷</span><b>Logs retention policy</b><span class="path mono">/docs/infra</span><span class="meta mono">doc</span></div>
+        <div class="row"><span class="ico mono">@</span><b>Priya (owns deploys)</b><span class="path mono">platform team</span><span class="meta mono">online</span></div>
       </div>
     </div>
   </div>
 
-  <div class="callout" id="c1" style="left:150px; top:250px"><span class="k">01</span>Instant search</div>
-  <div class="callout" id="c2" style="right:60px; top:430px"><span class="k">02</span>Real-time sync</div>
-  <div class="callout" id="c3" style="left:190px; bottom:200px"><span class="k">03</span>AI that ships</div>
+  <div class="features" id="features" aria-label="Instant. Synced. Private.">
+    <span class="w" id="f1">Instant<span class="dot">.</span></span>
+    <span class="w" id="f2">Synced<span class="dot">.</span></span>
+    <span class="w" id="f3">Private<span class="dot">.</span></span>
+    <div class="sub" id="fsub">Every file, log and teammate. One keystroke.</div>
+  </div>
 
-  <div class="cta" id="cta"><div>
-    <h2 id="cta-h">Try it free today.</h2>
-    <div class="url" id="url">yourproduct.com</div>
+  <div class="end" id="end"><div>
+    <div class="lockup">
+      <div class="mark" id="mark"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0c" stroke-width="2.6" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="6"/><path d="m19.5 19.5-4.2-4.2"/></svg></div>
+      <div class="mask"><span class="name" id="name">Yourproduct</span></div>
+    </div>
+    <div class="cta" id="cta">Try it free <span class="url mono">yourproduct.com</span></div>
   </div></div>
+
+  <div class="grain" id="grain"></div>
 </div>
 <script>
-  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 12, background: '#07080c' });
+  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 13, background: '#0b0b0c' });
 
-  // Ambient: the glow drifts slowly the whole time (never fully still).
-  Motion.on((t) => {
-    const g = document.getElementById('glow');
-    g.style.transform = `translate(${Math.sin(t * 0.5) * 60}px, ${Math.cos(t * 0.4) * 40}px)`;
-  });
+  // Motion vocabulary (state it once, keep it): content enters from below on `strong`, leaves upward
+  // on `inCubic` at ~60% of the entrance time; scene seams are zoom-throughs; no springs, no bounce.
 
-  // ── Scene 1 · Hook (0–3s)
-  Motion.from('#pill', { opacity: 0, y: 20 }, { start: 0.2, duration: 0.6, ease: 'outCubic' });
-  Motion.from('#h1', { opacity: 0, y: 40, blur: 10 }, { start: 0.4, duration: 0.9, ease: 'snappy' });
-  Motion.to('#h1 .grad', { start: 1.0, duration: 0.9, ease: 'smooth', from: { '--r': '0%', x: -24 }, to: { '--r': '100%', x: 0 } });
-  Motion.to('#hook', { start: 2.9, duration: 0.5, ease: 'inCubic', to: { opacity: 0, scale: 0.94, blur: 8 } });
+  // ── 1 · Hook (0–2.8s): eyebrow, then two masked lines. The promise reads by ~1s.
+  Motion.from('#eyebrow', { opacity: 0, x: -14 }, { start: 0.1, duration: 0.6, ease: 'strong' });
+  Motion.to(['#l1', '#l2'], { start: 0.22, duration: 1.0, stagger: 0.1, ease: 'strong', from: { y: '130%' }, to: { y: '0%' } });
+  Motion.to(['#l1', '#l2'], { start: 2.4, duration: 0.42, stagger: 0.05, ease: 'inCubic', to: { y: '-130%' } });
+  Motion.to('#eyebrow', { start: 2.4, duration: 0.3, ease: 'inCubic', to: { opacity: 0, y: -10 } });
 
-  // ── Scene 2 · Product card (3–8s): rise in 3D, then a slow push-in.
-  Motion.to('#card', { start: 3.1, duration: 1.2, ease: { stiffness: 90, damping: 16 },
-    from: { opacity: 0, y: 220, rotateX: 28, scale: 0.86 }, to: { opacity: 1, y: 0, rotateX: 0, scale: 1 } });
-  Motion.to('#card', { start: 4.3, duration: 4.5, ease: 'smooth', to: { scale: 1.06 } });
-  Motion.from('.row', { opacity: 0, x: -30 }, { start: 3.6, duration: 0.6, stagger: 0.09, ease: 'outCubic' });
-  Motion.counter('#m1', { from: 480, to: 12, start: 4.0, duration: 1.4, format: (n) => Math.round(n) + 'ms' });
-  document.getElementById('card').parentElement.style.perspective = '1600px';
+  // ── 2 · Product (2.8–7.7s): the UI is the hero. Query types, results land, selection moves.
+  Motion.to('#win', { start: 2.75, duration: 1.1, ease: 'strong',
+    from: { opacity: 0, y: 60, scale: 0.94, rotateX: 14, blur: 8 }, to: { opacity: 1, y: 0, scale: 1, rotateX: 0, blur: 0 } });
+  Motion.type('#q', { start: 3.25, cps: 18, cursor: false });
+  Motion.from('#group', { opacity: 0 }, { start: 3.8, duration: 0.3 });
+  Motion.from('.row', { opacity: 0, y: 14 }, { start: 3.85, duration: 0.55, stagger: 0.06, ease: 'strong' });
+  Motion.from('#sel', { opacity: 0 }, { start: 3.9, duration: 0.3 });
+  Motion.counter('#lat', { from: 480, to: 12, start: 3.8, duration: 0.9, ease: 'outExpo', format: (n) => Math.round(n) + ' ms' });
+  // Selection steps down twice, then comes back: decisive, not floaty.
+  Motion.to('#sel', { start: 5.0, duration: 0.32, ease: 'strongInOut', from: { y: 0 }, to: { y: 100 } });
+  Motion.to('#sel', { start: 5.7, duration: 0.32, ease: 'strongInOut', to: { y: 200 } });
+  Motion.to('#sel', { start: 6.5, duration: 0.4, ease: 'strongInOut', to: { y: 0 } });
+  // Zoom-through exit: fast, accelerating, with a little blur so the seam reads as one motion.
+  Motion.to('#win', { start: 7.3, duration: 0.32, ease: 'inCubic', to: { opacity: 0, scale: 1.12, blur: 10 } });
 
-  // ── Scene 3 · Callouts (5–8.5s): one idea at a time, ~1s apart.
-  ['#c1', '#c2', '#c3'].forEach((sel, i) => {
-    Motion.from(sel, { opacity: 0, scale: 0.8, y: 20 }, { start: 5.0 + i * 0.9, duration: 0.7, ease: { stiffness: 220, damping: 20 } });
-    Motion.to(sel, { start: 8.4 + i * 0.05, duration: 0.35, ease: 'inCubic', to: { opacity: 0, y: -16 } });
-  });
-  Motion.to('#card', { start: 8.5, duration: 0.6, ease: 'inCubic', to: { opacity: 0, y: -80, scale: 0.98 } });
+  // ── 3 · Features (7.6–10.3s): three words build one line, then a supporting sentence.
+  Motion.to(['#f1', '#f2', '#f3'], { start: 7.55, duration: 0.55, stagger: 0.28, ease: 'strong',
+    from: { opacity: 0, scale: 1.12, blur: 10 }, to: { opacity: 1, scale: 1, blur: 0 } });
+  Motion.from('#fsub', { opacity: 0, y: 16 }, { start: 8.5, duration: 0.6, ease: 'strong' });
+  Motion.to('#features', { start: 10.0, duration: 0.32, ease: 'inCubic', to: { opacity: 0, y: -30 } });
 
-  // ── Scene 4 · CTA (9–12s): hold at least 2.5s so it can be read twice.
-  Motion.from('#cta-h', { opacity: 0, y: 40 }, { start: 9.1, duration: 0.8, ease: 'snappy' });
-  Motion.from('#url', { opacity: 0, y: 20, scale: 0.96 }, { start: 9.4, duration: 0.7, ease: 'outCubic' });
+  // ── 4 · End card (10.3–13s): mark, wordmark slides out from behind it, CTA. Held still ≥ 2s.
+  Motion.from('#mark', { opacity: 0, scale: 0.9, blur: 6 }, { start: 10.25, duration: 0.8, ease: 'strong' });
+  Motion.to('#name', { start: 10.4, duration: 0.9, ease: 'strong', from: { x: '-104%' }, to: { x: '0%' } });
+  Motion.from('#cta', { opacity: 0, y: 14 }, { start: 10.75, duration: 0.6, ease: 'strong' });
+
+  // Grain re-seeds at 12 fps (deterministic): film texture without a busy shimmer.
+  const rnd = Motion.random(11);
+  const offsets = Array.from({ length: 200 }, () => [rnd() * 100 - 50, rnd() * 100 - 50]);
+  const grain = document.getElementById('grain');
+  Motion.on((t) => { const [x, y] = offsets[Math.floor(t * 12) % offsets.length]; grain.style.transform = `translate(${x}px, ${y}px)`; });
 </script>
 </body>
 </html>

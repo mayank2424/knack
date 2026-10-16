@@ -20,15 +20,17 @@
  *                         (bare flag = the previous run in --out, kept as report.prev.json)
  *   --ignore sel,sel      CSS selectors to exclude (third-party widgets, etc.).
  *                         Elements with data-responsive-qa="ignore" are always excluded.
- *   --skip check,check    Disable checks, e.g. --skip tap-target-44,long-lines
+ *   --skip check,check    Disable checks, e.g. --skip long-lines,tiny-text
  *   --wait ms             Extra settle time after load (default 300)
  *   --max-issues N        Max issues per check per viewport (default 20)
  *   --timeout ms          Navigation timeout (default 30000)
+ *   --scrollbars M        classic (default): widths ≥ 1024 get a 15px Windows-style scrollbar, so
+ *                         width: 100vw overflow shows up; overlay: no scrollbar width anywhere
  *
  * Checks: horizontal-overflow, hidden-overflow, image-overflow, text-overflow,
- *   text-clipped, overlap, tap-target (24px WCAG 2.2 AA), tap-target-44 (44px AAA/HIG),
- *   tiny-text, long-lines, image-distorted, image-dimensions (info), fixed-cover,
- *   viewport-meta
+ *   text-clipped, text-over-image, overlap, fixed-offscreen, fixed-cover, anchor-hidden,
+ *   tap-target (24px WCAG 2.2 AA), tap-target-44 (44px AAA/HIG, info), tiny-text, long-lines,
+ *   image-distorted, image-dimensions (info), viewport-meta
  *
  * Output: <out>/report.json, <out>/contact-sheet.png (one per page when several),
  *   <out>/shots/<page>/<width>x<height>.png with numbered issue overlays.
@@ -38,8 +40,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
-const VERSION = '0.1.0';
-const VALUE = new Set(['pages', 'widths', 'height', 'out', 'fail-on', 'ignore', 'skip', 'wait', 'max-issues', 'timeout', 'max-height']);
+const VERSION = '0.2.0';
+const VALUE = new Set(['pages', 'widths', 'height', 'out', 'fail-on', 'ignore', 'skip', 'wait', 'max-issues', 'timeout', 'max-height', 'scrollbars']);
 const OPTIONAL_VALUE = new Set(['compare']);
 const opts = {};
 let input;
@@ -89,6 +91,10 @@ const maxIssues = +(opts['max-issues'] ?? 20);
 const navTimeout = +(opts.timeout ?? 30000);
 const maxHeight = +(opts['max-height'] ?? 8000);
 const fullPage = !!opts['full-page'];
+const scrollbars = String(opts.scrollbars || 'classic');
+if (!['classic', 'overlay'].includes(scrollbars)) die('--scrollbars must be classic or overlay');
+// paths in messages: relative when inside the project, absolute otherwise
+const rel = (p) => { const r = path.relative(process.cwd(), p); return r.startsWith('..') ? p : r; };
 
 const DEVICE_HEIGHTS = { 320: 568, 360: 740, 375: 812, 390: 844, 393: 852, 412: 915, 414: 896, 428: 926, 430: 932, 768: 1024, 810: 1080, 820: 1180, 834: 1194, 1024: 768, 1280: 800, 1366: 768, 1440: 900, 1536: 864, 1680: 1050, 1920: 1080, 2560: 1440 };
 function heightFor(w) {
@@ -137,7 +143,8 @@ async function launch(chromium) {
   const tries = [{}, { channel: 'chrome' }, { channel: 'msedge' }];
   let lastErr;
   for (const t of tries) {
-    try { return await chromium.launch({ ...t, args: ['--hide-scrollbars', '--force-color-profile=srgb', '--font-render-hinting=none'] }); }
+    // scrollbars are controlled per viewport with CSS (overlay on touch widths, classic on desktop)
+    try { return await chromium.launch({ ...t, ignoreDefaultArgs: ['--hide-scrollbars'], args: ['--force-color-profile=srgb', '--font-render-hinting=none'] }); }
     catch (e) { lastErr = e; }
   }
   die(`Could not launch Chromium. Run: npx playwright install chromium\n  ${lastErr?.message?.split('\n')[0]}`);
@@ -147,7 +154,7 @@ async function launch(chromium) {
 // In-page detector. Runs inside the page via page.evaluate; must be
 // self-contained (no closures over Node variables).
 // ======================================================================
-function detectInPage(cfg) {
+async function detectInPage(cfg) {
   const { vw, vh, touch, mobileText, desktop, pageChecks, ignore, skip, maxPerCheck } = cfg;
   const root = document.documentElement;
   const body = document.body || root;
@@ -190,15 +197,38 @@ function detectInPage(cfg) {
   // Ancestor context (excludes the element itself, html and body):
   // clip = visible area after ancestor clipping, xBox = nearest ancestor that
   // contains horizontal overflow (scroll/hidden/clip), fixed = inside position:fixed.
+  // transform + the individual rotate/scale properties (Tailwind v4 uses those)
+  function xform(el) {
+    const s = cs(el);
+    let rot = false, scale = 1;
+    if (s.transform && s.transform !== 'none') {
+      const m = /matrix(3d)?\(([^)]+)\)/.exec(s.transform);
+      if (m) {
+        const v = m[2].split(',').map(parseFloat);
+        const [a, b, c2, d] = m[1] ? [v[0], v[1], v[4], v[5]] : v;
+        if (Math.abs(b) > 0.01 || Math.abs(c2) > 0.01) rot = true;
+        scale = Math.min(Math.hypot(a, b), Math.hypot(c2, d));
+      }
+    }
+    if (s.rotate && s.rotate !== 'none' && !/^(0deg|0turn|0rad|0)$/.test(s.rotate.trim().split(' ').pop())) rot = true;
+    if (s.scale && s.scale !== 'none') scale *= Math.min(...s.scale.split(' ').map(parseFloat).filter((n) => !isNaN(n)).slice(0, 2));
+    return { rot, scale };
+  }
   function anc(el) {
     if (ancMap.has(el)) return ancMap.get(el);
     const p = el.parentElement;
     let info;
-    if (!p || p === body || p === root) info = { clip: null, xBox: null, xKind: null, fixed: false };
+    if (!p || p === body || p === root) info = { clip: null, xBox: null, xKind: null, fixed: false, fixedRoot: null, sticky: false, rot: false, scale: 1 };
     else {
       const pi = anc(p);
       const s = cs(p);
       info = { ...pi };
+      if (s.position === 'fixed' && !pi.fixed) info.fixedRoot = p;
+      if (s.position === 'sticky') info.sticky = true;
+      // rotated/skewed ancestors make bounding boxes meaningless; scaled-down ancestors mean a mock/preview
+      const x = xform(p);
+      if (x.rot) info.rot = true;
+      if (x.scale < 1) info.scale = Math.min(pi.scale, x.scale);
       const containPaint = /paint|strict|content/.test(s.contain || '');
       const ox = containPaint && s.overflowX === 'visible' ? 'clip' : s.overflowX;
       const oy = containPaint && s.overflowY === 'visible' ? 'clip' : s.overflowY;
@@ -226,7 +256,14 @@ function detectInPage(cfg) {
   };
   const alpha = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return c === 'transparent' ? 0 : 1; const p = m[1].split(/[\s,/]+/).filter(Boolean); return p.length > 3 ? parseFloat(p[3]) : 1; };
   const opaque = (el) => { const s = cs(el); return alpha(s.backgroundColor) >= 0.85 || s.backgroundImage !== 'none' || /^(IMG|VIDEO|CANVAS)$/.test(el.tagName); };
-  const floating = (el) => { const p = cs(el).position; return p === 'fixed' || p === 'sticky' || anc(el).fixed; };
+  const floating = (el) => { const p = cs(el).position; return p === 'fixed' || p === 'sticky' || anc(el).fixed || anc(el).sticky; };
+  const rotatedSelf = (el) => xform(el).rot;
+  const rotated = (el) => anc(el).rot || rotatedSelf(el);
+  const decorative = (el) => !!el.closest('[aria-hidden="true"],[role="presentation"],[role="none"]') || (el.tagName === 'IMG' && el.getAttribute('alt') === '');
+  // WCAG relative luminance / contrast for "rgb(a)" strings
+  const rgb = (c) => { const m = /rgba?\(([^)]+)\)/.exec(c || ''); if (!m) return null; const p = m[1].split(/[\s,/]+/).filter(Boolean).map(parseFloat); return { r: p[0], g: p[1], b: p[2], a: p.length > 3 ? p[3] : 1 }; };
+  const lum = ({ r, g, b }) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b); };
+  const contrast = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
 
   // ---- readable, stable selector
   // skip utility classes with special chars (md:flex, w-[600px]) and hashed CSS-in-JS names
@@ -310,6 +347,8 @@ function detectInPage(cfg) {
   }
 
   // =========================== horizontal overflow
+  const sbW = window.innerWidth - vw; // > 0 when a classic (space-taking) scrollbar is shown
+  const is100vw = (el) => sbW > 1 && Math.abs(rect(el).width - window.innerWidth) < 1;
   const docW = Math.max(root.scrollWidth, body.scrollWidth);
   const rootClipX = isClip(cs(root).overflowX) || isClip(cs(body).overflowX);
   const pageScrolls = docW > vw + 1 && !rootClipX;
@@ -320,11 +359,14 @@ function detectInPage(cfg) {
     if (r.right <= vw + 1 || r.width < 3 || r.height < 3) continue;
     if (el !== body) { const a = anc(el); if (a.xBox || a.fixed) continue; }
     if (cs(el).position === 'fixed') continue;
+    // inline boxes (a <code> run, a link) are explained by their text, reported on the block below
+    if (INLINE.has(cs(el).display) && !/^(IMG|VIDEO|CANVAS|IFRAME|EMBED|OBJECT|INPUT|SELECT|TEXTAREA|BUTTON|svg)$/.test(el.tagName)) continue;
     overSet.add(el);
   }
   const culprits = [];
   for (const el of overSet) {
-    const p = el.parentElement;
+    let p = el.parentElement;
+    while (p && p !== body && p !== root && !overSet.has(p) && INLINE.has(cs(p).display)) p = p.parentElement; // skip inline wrappers (<a><img>)
     const pRight = !p || p === root ? vw : rect(p).right;
     if (!overSet.has(p) || rect(el).right > pRight + 1) culprits.push({ el, r: rect(el) });
   }
@@ -337,20 +379,41 @@ function detectInPage(cfg) {
     if (a.xBox || a.fixed || cs(t.el).position === 'fixed' || !INLINE.has(cs(t.el).display) && cs(t.el).overflowX !== 'visible') continue;
     const blk = blockOf(t.el);
     if (blk !== body && cs(blk).overflowX !== 'visible') continue;
-    if (overSet.has(t.el) && rect(t.el).right >= maxR - 1) continue; // its element already explains it
+    if ((overSet.has(t.el) && rect(t.el).right >= maxR - 1) || (overSet.has(blk) && rect(blk).right >= maxR - 1)) continue; // its box already explains it
     const prev = textOver.get(blk);
     if (!prev || prev.right < maxR) textOver.set(blk, { right: maxR, rects: t.rects.filter((r) => r.right > vw + 1), node: t.node });
   }
   for (const [blk, info] of textOver) culprits.push({ el: blk, r: union(info.rects), text: info });
+  // several grid/flex items sticking out of one container that fits: one root cause, report the container
+  const byParent = new Map();
+  for (const c of culprits) if (!c.text && c.el.parentElement && /grid|flex/.test(cs(c.el.parentElement).display)) { const a = byParent.get(c.el.parentElement) || []; a.push(c); byParent.set(c.el.parentElement, a); }
+  for (const [p, arr] of byParent) {
+    if (arr.length < 2) continue;
+    for (const c of arr) culprits.splice(culprits.indexOf(c), 1);
+    culprits.push({ el: p, r: union(arr.map((c) => c.r)), group: arr.length });
+  }
 
-  function overflowHints(el, r, text) {
+  function overflowHints(el, r, text, group) {
     const s = cs(el), h = [];
     const p = el.parentElement, ps = p && p !== root ? cs(p) : null;
     const tag = el.tagName;
+    if (group) {
+      const grid = /grid/.test(s.display);
+      h.push(grid ? `${group} grid items are wider than their tracks (${s.gridTemplateColumns}): 1fr/auto tracks can't shrink below their widest content; use minmax(0, 1fr) and min-width: 0`
+        : `${group} flex items overflow the row: ${s.flexWrap === 'nowrap' ? 'add flex-wrap: wrap, or ' : ''}min-width: 0 on the items`);
+      let longest = '';
+      for (const t of texts) if (el.contains(t.el)) for (const w of t.node.nodeValue.match(/\S+/g) || []) if (w.length > longest.length) longest = w;
+      if (longest.length > 20) h.push(`widest unbreakable content: ${q(longest.slice(0, 40) + (longest.length > 40 ? '…' : ''))} (add overflow-wrap: anywhere)`);
+      return h;
+    }
     if (text) {
       const longest = (text.node.nodeValue.match(/\S+/g) || []).sort((a, b) => b.length - a.length)[0] || '';
-      if (/nowrap|pre/.test(cs(text.node.parentElement).whiteSpace) || /nowrap|pre/.test(s.whiteSpace)) h.push('white-space: nowrap keeps text on one line');
+      const ws = cs(text.node.parentElement).whiteSpace;
+      if (tag === 'PRE' || text.node.parentElement.closest('pre') || /^pre/.test(ws)) h.push('code/pre block keeps lines unwrapped: give the <pre> overflow-x: auto (and max-width: 100%)');
+      else if (/nowrap/.test(ws) || /nowrap/.test(s.whiteSpace)) h.push('white-space: nowrap keeps text on one line');
       else if (longest.length > 18) h.push(`long unbroken word ${q(longest.slice(0, 32) + (longest.length > 32 ? '…' : ''))}: add overflow-wrap: anywhere`);
+      // the block itself may be a flex/grid item that refuses to shrink
+      if (ps && /flex/.test(ps.display) && s.minWidth === 'auto' && rect(el).width > rect(p).width + 1) h.push('flex item cannot shrink below its content (min-width: auto); add min-width: 0');
       return h;
     }
     if (/^(IMG|VIDEO|CANVAS|IFRAME|PICTURE|svg|EMBED|OBJECT)$/.test(tag) && s.maxWidth === 'none') h.push(`<${tag.toLowerCase()}> has no max-width: 100%`);
@@ -363,23 +426,31 @@ function detectInPage(cfg) {
     if (/grid/.test(s.display)) h.push(`grid tracks: ${s.gridTemplateColumns}`);
     if (ps && /flex/.test(ps.display) && s.minWidth === 'auto' && r.width > rect(p).width + 1) h.push('flex item cannot shrink below its content (min-width: auto); add min-width: 0');
     if (ps && /grid/.test(ps.display) && r.width > rect(p).width + 1) h.push('grid item wider than its track; use minmax(0, 1fr) / min-width: 0');
-    if (Math.abs(r.width - window.innerWidth) < 1 && vw !== window.innerWidth) h.push('width: 100vw (includes the scrollbar)');
+    if (is100vw(el)) h.push(`width: 100vw includes the ${window.innerWidth - vw}px classic scrollbar (Windows/Linux): use width: 100%, or move the full-bleed band out of the centred container`);
     if (s.transform && s.transform !== 'none') h.push('transform moves it off-screen');
     if (parseFloat(s.marginLeft) < 0 || parseFloat(s.marginRight) < 0) h.push(`negative margin (${s.marginLeft} / ${s.marginRight})`);
-    if (s.position === 'absolute' || s.position === 'relative') { if (s.left !== 'auto' && parseFloat(s.left) > 0) h.push(`position: ${s.position}; left: ${s.left}`); }
+    if (s.position === 'absolute' || s.position === 'relative') {
+      if (s.left !== 'auto' && parseFloat(s.left) > 0) h.push(`position: ${s.position}; left: ${s.left}`);
+      if (s.right !== 'auto' && parseFloat(s.right) < 0) h.push(`position: ${s.position}; right: ${s.right} pushes it past its container's edge`);
+    }
     if (/nowrap/.test(s.whiteSpace) && el.textContent.trim()) h.push('white-space: nowrap');
     return h;
   }
   culprits.sort((a, b) => b.r.right - a.r.right);
   const reportedCulprits = new Set();
-  for (const { el, r, text } of culprits.slice(0, 8)) {
+  for (const { el, r, text, group } of culprits.slice(0, 8)) {
     reportedCulprits.add(el);
     const px = Math.round(r.right - vw);
-    const hints = overflowHints(el, r, text);
+    const hints = overflowHints(el, r, text, group);
     const isImg = !text && /^(IMG|PICTURE|VIDEO)$/.test(el.tagName);
-    const what = text ? `Text ${q(text.node.nodeValue.trim().slice(0, 30))} runs` : isImg ? `Image is ${Math.round(r.width)}px wide and runs` : `Runs`;
-    if (pageScrolls) add(isImg ? 'image-overflow' : 'horizontal-overflow', 'error', el, `${what} ${px}px past the ${vw}px viewport; the page scrolls sideways.`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
-    else if (rootClipX) add('hidden-overflow', 'warn', el, `${what} ${px}px past the viewport and is cut off by overflow-x: hidden on <html>/<body> (hidden, not fixed).`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
+    const what = text ? `Text ${q(text.node.nodeValue.trim().slice(0, 30))} runs` : isImg ? `Image is ${Math.round(r.width)}px wide and runs` : group ? `Its ${group} items run` : `Runs`;
+    const vpDesc = sbW > 1 ? `${vw}px-wide page (${window.innerWidth}px window minus its scrollbar)` : `${vw}px viewport`;
+    if (pageScrolls) add(isImg ? 'image-overflow' : 'horizontal-overflow', 'error', el, `${what} ${px}px past the ${vpDesc}; the page scrolls sideways.`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
+    else if (rootClipX && !(
+      // nothing of value is lost: decorative art with no text, or a 100vw band losing only the scrollbar's width
+      (!text && !el.textContent.trim() && !el.querySelector('img[alt]:not([alt=""]),a,button,input') && (decorative(el) || cs(el).pointerEvents === 'none' || /^(CANVAS|svg|VIDEO)$/.test(el.tagName))) ||
+      (is100vw(el) && px <= sbW + 1)
+    )) add('hidden-overflow', 'warn', el, `${what} ${px}px past the viewport and is cut off by overflow-x: hidden on <html>/<body> (hidden, not fixed).`, { rect: r, magnitude: px, details: { overflowPx: px, hints } });
   }
   if (pageScrolls && !culprits.length) {
     add('horizontal-overflow', 'error', null, `Page is ${docW - vw}px wider than the viewport, but no element box sticks out (pseudo-element, box-shadow or transform?).`, { magnitude: docW - vw });
@@ -388,7 +459,7 @@ function detectInPage(cfg) {
   // =========================== text overflow / clipping
   const overflowByBlock = new Map(), clipByEl = new Map();
   for (const t of texts) {
-    if (hiddenByAria(t.el)) continue;
+    if (hiddenByAria(t.el) || rotated(t.el)) continue; // rotated labels: their bounding boxes are not their ink
     const blk = blockOf(t.el);
     // nearest clipping/scrolling ancestor-or-self per axis, starting at the text's parent
     let xC = null, yC = null, xScroll = false, yScroll = false;
@@ -405,9 +476,10 @@ function detectInPage(cfg) {
       const dx = Math.max(vis.right - b.right, b.left - vis.left, 0);
       const dy = Math.max(vis.bottom - b.bottom, 0);
       const bigX = dx > 3 && blk.scrollWidth > blk.clientWidth + 1 && !(xC && xScroll && xC.contains(blk));
-      // glyphs of tight line-heights (≤ 1.1) poke a few px out of their line box; ignore that ink overflow
-      const lineH = Math.min(...t.rects.map((r) => r.height));
-      const bigY = dy > Math.max(3, lineH * 0.3) && blk.scrollHeight > blk.clientHeight + 1 && !(yC && yScroll && yC.contains(blk));
+      // glyphs of tight line-heights poke a few px out of a fixed-height box; only count a line
+      // that is more than half outside the box (that is visible, overlapping spill)
+      const spillsLine = t.rects.some((r) => { const v = clipped(t.el, r); return area(v) > 0 && v.bottom - b.bottom > Math.max(3, r.height * 0.5); });
+      const bigY = spillsLine && blk.scrollHeight > blk.clientHeight + 1 && !(yC && yScroll && yC.contains(blk));
       if ((bigX || bigY) && area(vis) > 0) {
         const prev = overflowByBlock.get(blk) || { dx: 0, dy: 0, rects: [], node: t.node };
         prev.dx = Math.max(prev.dx, bigX ? dx : 0); prev.dy = Math.max(prev.dy, bigY ? dy : 0); prev.rects.push(...t.rects);
@@ -435,6 +507,7 @@ function detectInPage(cfg) {
     }
   }
   for (const [blk, o] of overflowByBlock) {
+    if (reportedCulprits.has(blk)) { o.dx = 0; if (!o.dy) continue; } // sideways spill is already the horizontal-overflow culprit
     const longest = (o.node.nodeValue.match(/\S+/g) || []).sort((a, b) => b.length - a.length)[0] || '';
     const s = cs(blk);
     const hints = [];
@@ -461,27 +534,36 @@ function detectInPage(cfg) {
     if (el.parentElement?.closest(INTERACTIVE)) continue; // nested inside another control
     const r = rect(el);
     if (r.width <= 2 || r.height <= 2) continue; // visually hidden (sr-only skip links)
-    if (area(clipped(el, r)) <= 0) continue;
-    targets.push({ el, r, fixed: anc(el).fixed || cs(el).position === 'fixed' });
+    if (area(clipped(el, r)) <= 0 || el.closest('[inert]')) continue;
+    if (r.right <= 0 || r.bottom <= -window.scrollY) continue; // parked off-page (left: -9999px skip links)
+    const a = anc(el);
+    targets.push({ el, r, fixed: a.fixed || cs(el).position === 'fixed', sticky: a.sticky || cs(el).position === 'sticky', mock: a.scale < 0.9 });
   }
 
   // =========================== overlap (text + controls)
   const items = [];
   const targetSet = new Set(targets.map((t) => t.el));
+  // nearest fixed/sticky ancestor-or-self: overlaps only count between items on the same layer
+  const layerOf = (el) => { for (let n = el; n && n !== body; n = n.parentElement) { const p = cs(n).position; if (p === 'fixed' || p === 'sticky') return n; } return null; };
+  // Text boxes from getClientRects() are the font's content area, taller than the ink (and than
+  // the line box when line-height < 1.2). Trim them so stacked headings don't "overlap" by a few px.
+  const ink = (r) => { const d = r.height * 0.18; return R(r.left, r.top + d, r.right, r.bottom - d); };
   for (const t of targets) {
-    if (t.fixed || t.r.width < 4 || t.r.height < 4) continue;
+    // fixed/sticky UI overlaps content by design (it scrolls underneath); see fixed-cover
+    if (t.mock || t.r.width < 4 || t.r.height < 4) continue;
     // a link wrapped over two lines has a bounding box covering both lines; use its line fragments
     const frags = cs(t.el).display === 'inline' ? [...t.el.getClientRects()].map((r) => R(r.left, r.top, r.right, r.bottom)) : [t.r];
-    items.push({ el: t.el, kind: 'control', rects: frags.map((r) => clipped(t.el, r)).filter((r) => area(r) > 0) });
+    items.push({ el: t.el, kind: 'control', layer: layerOf(t.el), rects: frags.map((r) => clipped(t.el, r)).filter((r) => area(r) > 0) });
   }
   const textByEl = new Map();
   for (const t of texts) {
-    if (hiddenByAria(t.el) || t.el.closest(INTERACTIVE) || anc(t.el).fixed || cs(t.el).position === 'fixed') continue;
+    if (hiddenByAria(t.el) || t.el.closest(INTERACTIVE) || rotated(t.el) || anc(t.el).scale < 0.9) continue;
     const arr = textByEl.get(t.el) || [];
-    for (const r of t.rects) { const v = clippedSelf(t.el, r); if (area(v) > 0) arr.push(v); }
+    for (const r of t.rects) { const v = clippedSelf(t.el, ink(r)); if (area(v) > 0) arr.push(v); }
     textByEl.set(t.el, arr);
   }
-  for (const [el, rects] of textByEl) if (rects.length) items.push({ el, kind: 'text', rects });
+  for (const [el, rects] of textByEl) if (rects.length) items.push({ el, kind: 'text', layer: layerOf(el), rects });
+  const labelFor = (txt, ctl) => { if (txt.kind !== 'text' || ctl.kind !== 'control') return false; const l = txt.el.closest('label'); return !!l && (l.control === ctl.el || l.contains(ctl.el)); };
   const entries = [];
   items.forEach((it, i) => it.rects.forEach((r) => entries.push({ i, r })));
   entries.sort((a, b) => a.r.top - b.r.top);
@@ -496,6 +578,8 @@ function detectInPage(cfg) {
       if (x.width <= 2 || x.height <= 2) continue;
       const ia = items[A.i], ib = items[B.i];
       if (ia.el.contains(ib.el) || ib.el.contains(ia.el)) continue;
+      if (ia.layer !== ib.layer) continue; // fixed/sticky UI over scrolling content is by design (see fixed-cover)
+      if (labelFor(ia, ib) || labelFor(ib, ia)) continue; // floating label / placeholder label sitting in its own input
       const ratio = area(x) / Math.min(area(A.r), area(B.r));
       const bothControls = ia.kind === 'control' && ib.kind === 'control';
       if (bothControls ? x.width <= 4 || x.height <= 4 : ratio < 0.1) continue;
@@ -511,7 +595,9 @@ function detectInPage(cfg) {
   const verified = [];
   for (const pr of pairs.values()) {
     const cx = (pr.x.left + pr.x.right) / 2 + sx0, cy = (pr.x.top + pr.x.bottom) / 2 + sy0;
-    window.scrollTo(Math.max(0, cx - vw / 2), Math.max(0, cy - vh / 2));
+    // fixed layers don't move with scrolling: measure them where they are
+    if (pr.a.layer && cs(pr.a.layer).position === 'fixed') window.scrollTo(sx0, sy0);
+    else window.scrollTo(Math.max(0, cx - vw / 2), Math.max(0, cy - vh / 2));
     const stack = document.elementsFromPoint(cx - window.scrollX, cy - window.scrollY);
     const idx = (it) => stack.findIndex((e) => e === it.el || it.el.contains(e));
     const ia = idx(pr.a), ib = idx(pr.b);
@@ -543,10 +629,17 @@ function detectInPage(cfg) {
       }
       return { ...t, r };
     });
-    const square = (r) => { const cx = (r.left + r.right) / 2, cy = (r.top + r.bottom) / 2; return R(cx - 12, cy - 12, cx + 12, cy + 12); };
+    // WCAG 2.5.8 spacing exception: a 24px-diameter circle centred on each undersized target must not
+    // intersect another target, or the circle of another undersized target
+    const centre = (r) => [(r.left + r.right) / 2, (r.top + r.bottom) / 2];
+    const circleHitsRect = ([cx, cy], r) => Math.hypot(Math.max(r.left - cx, 0, cx - r.right), Math.max(r.top - cy, 0, cy - r.bottom)) < 12;
+    const circlesHit = (a, b) => { const [ax, ay] = centre(a), [bx, by] = centre(b); return Math.hypot(ax - bx, ay - by) < 24; };
     for (const t of effective) {
       const { el, r } = t;
       if (r.width >= 44 && r.height >= 44) continue;
+      if (t.mock) continue; // inside a scaled-down product screenshot / preview, not real UI
+      // tabindex="-1" on a native control outside a roving-tabindex widget: the author took it out of use (mock UI)
+      if (el.getAttribute('tabindex') === '-1' && !el.closest('[role=toolbar],[role=tablist],[role=menu],[role=menubar],[role=listbox],[role=grid],[role=radiogroup],[role=tree],[role=treegrid]')) continue;
       const s = cs(el);
       // WCAG inline exception: links inside a sentence
       if (s.display === 'inline') {
@@ -559,11 +652,13 @@ function detectInPage(cfg) {
       const size = `${Math.round(r.width)}×${Math.round(r.height)}px`;
       const name = q(snippet(el, 28)) || `<${el.tagName.toLowerCase()}>`;
       if (r.width < 24 || r.height < 24) {
-        const mine = square(r);
-        const crowded = effective.some((o) => o !== t && (area(inter(mine, o.r)) > 0 || ((o.r.width < 24 || o.r.height < 24) && area(inter(mine, square(o.r))) > 0)));
+        const c = centre(r);
+        const crowded = effective.some((o) => o !== t && !o.el.contains(el) && !el.contains(o.el) && (circleHitsRect(c, o.r) || ((o.r.width < 24 || o.r.height < 24) && circlesHit(r, o.r))));
         if (crowded) { add('tap-target', 'error', el, `Tap target ${name} is ${size}, below the 24×24px WCAG 2.2 AA minimum, and crowded by neighbours.`, { rect: r, magnitude: 24 - Math.min(r.width, r.height), details: { width: Math.round(r.width), height: Math.round(r.height), level: 'AA' } }); continue; }
       }
-      add('tap-target-44', 'warn', el, `Tap target ${name} is ${size}; 44×44px is the comfortable touch size (WCAG 2.5.5 AAA / Apple HIG).`, { rect: r, magnitude: 44 - Math.min(r.width, r.height), details: { width: Math.round(r.width), height: Math.round(r.height), level: 'AAA' } });
+      // AAA / HIG comfort size: most well-built sites miss it on footer and list links, so it is
+      // reported as info (in report.json, not drawn or counted) to keep warnings meaningful
+      add('tap-target-44', 'info', el, `Tap target ${name} is ${size}; 44×44px is the comfortable touch size (WCAG 2.5.5 AAA / Apple HIG).`, { rect: r, magnitude: 44 - Math.min(r.width, r.height), details: { width: Math.round(r.width), height: Math.round(r.height), level: 'AAA' } });
     }
   }
 
@@ -607,12 +702,19 @@ function detectInPage(cfg) {
     const s = cs(img);
     if (r.width > vw + 1 && !reportedCulprits.has(img)) {
       const a = anc(img);
-      if (a.xKind !== 'scroll' && !a.fixed) {
-        const where = a.xBox ? `cropped by overflow on ${selector(a.xBox)}` : 'it runs off-screen';
-        add('image-overflow', 'error', img, `Image is ${Math.round(r.width)}px wide, wider than the ${vw}px viewport; ${where}.`, { rect: r, magnitude: r.width - vw, details: { hints: [s.maxWidth === 'none' ? 'no max-width: 100%' : `max-width: ${s.maxWidth}`, img.getAttribute('width') ? `width="${img.getAttribute('width')}" attribute` : `width: ${Math.round(r.width)}px`].filter(Boolean) } });
+      // Cropped (not scrolling): only a bug when the crop happens at the screen edge and hides a real
+      // share of an informative image. Decorative art (alt="", aria-hidden) and images cropped inside a
+      // card (the crop box ends before the screen edge, like object-fit: cover) are deliberate.
+      const vis = clipped(img, r);
+      const atEdge = !a.xBox || vis.right >= vw - 2 || vis.left <= 2;
+      const lost = area(vis) > 0 ? 1 - area(inter(vis, R(0, vis.top, vw, vis.bottom))) / area(r) : 1;
+      if (a.xKind !== 'scroll' && !a.fixed && !decorative(img) && atEdge && lost >= 0.1) {
+        const where = a.xBox ? `cropped by overflow on ${selector(a.xBox)}, ${Math.round(lost * 100)}% of it is cut off` : 'it runs off-screen';
+        add('image-overflow', lost >= 0.3 || !a.xBox ? 'error' : 'warn', img, `Image is ${Math.round(r.width)}px wide, wider than the ${vw}px viewport; ${where}.`, { rect: r, magnitude: r.width - vw, details: { hints: [s.maxWidth === 'none' ? 'no max-width: 100%' : `max-width: ${s.maxWidth}`, img.getAttribute('width') ? `width="${img.getAttribute('width')}" attribute` : `width: ${Math.round(r.width)}px`].filter(Boolean) } });
       }
     }
-    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0 && !/\.svg(\?|#|$)|^data:image\/svg/i.test(src) && s.objectFit === 'fill') {
+    // spacer GIFs (≤ 8px) and tiny renders can't look distorted
+    if (img.complete && (img.naturalWidth > 8 || img.naturalHeight > 8) && r.width >= 8 && r.height >= 8 && !/\.svg(\?|#|$)|^data:image\/svg/i.test(src) && s.objectFit === 'fill') {
       const bw = parseFloat(s.borderLeftWidth) + parseFloat(s.borderRightWidth) + parseFloat(s.paddingLeft) + parseFloat(s.paddingRight);
       const bh = parseFloat(s.borderTopWidth) + parseFloat(s.borderBottomWidth) + parseFloat(s.paddingTop) + parseFloat(s.paddingBottom);
       const cw = r.width - bw, ch = r.height - bh;
@@ -637,6 +739,10 @@ function detectInPage(cfg) {
       if (s.position !== 'fixed' && s.position !== 'sticky') continue;
       if (anc(el).fixed) continue;
       if (s.position === 'sticky' && s.top === 'auto' && s.bottom === 'auto') continue;
+      // a sticky element only hogs the screen while its parent scrolls past; stacked "sticky cards" and
+      // sticky media inside one section are scroll effects, not persistent chrome
+      if (s.position === 'sticky' && el.parentElement && (rect(el.parentElement).height < 0.5 * Math.max(root.scrollHeight, body.scrollHeight) || [...el.parentElement.children].filter((x) => x !== el && cs(x).position === 'sticky').length >= 2)) continue; // 3+ sticky siblings = stacking cards
+      if (decorative(el) && !el.querySelector('a,button,input')) continue;
       const transparent = /rgba\(.*,\s*0\)|transparent/.test(s.backgroundColor) && s.backgroundImage === 'none';
       if (transparent && s.pointerEvents === 'none') continue;
       const r = rect(el);
@@ -647,6 +753,169 @@ function detectInPage(cfg) {
       if (ratio > 0.3) { flagged.push(el); add('fixed-cover', ratio > 0.5 ? 'error' : 'warn', el, `${s.position === 'fixed' ? 'Fixed' : 'Sticky'} element ${q(snippet(el, 28))} covers ${Math.round(ratio * 100)}% of the ${vw}×${vh} screen.`, { rect: s.position === 'fixed' ? inter(r, screen) : r, magnitude: ratio * 100, details: { coverage: +ratio.toFixed(2) } }); }
     }
     if (!flagged.length && total > 0.4) add('fixed-cover', 'warn', null, `Fixed/sticky bars together cover ${Math.round(total * 100)}% of the ${vw}×${vh} screen.`, { magnitude: total * 100 });
+  }
+
+  // =========================== fixed UI partly off-screen (it can't be scrolled into view)
+  {
+    const screen = R(0, 0, vw, vh);
+    const lost = new Map();
+    const note = (F, v, node) => {
+      const out = { l: -v.left, r: v.right - vw, t: -v.top, b: v.bottom - vh };
+      if (Math.max(out.l, out.r, out.t, out.b) <= 2) return;
+      const p = lost.get(F) || { l: 0, r: 0, t: 0, b: 0, node };
+      for (const k of 'lrtb') p[k] = Math.max(p[k], out[k]);
+      lost.set(F, p);
+    };
+    const fixedRootOf = (el) => (cs(el).position === 'fixed' && !anc(el).fixed ? el : anc(el).fixedRoot);
+    const onScreen = (F) => { const fr = rect(F); return area(fr) > 0 && area(inter(fr, screen)) >= 0.25 * area(fr); }; // closed drawers are parked fully off-canvas
+    for (const t of texts) {
+      const F = fixedRootOf(t.el);
+      if (!F || hiddenByAria(t.el) || rotated(t.el) || !onScreen(F)) continue;
+      for (const r of t.rects) { const v = clipped(t.el, ink(r)); if (area(v) > 0) note(F, v, t.node); }
+    }
+    for (const t of targets) {
+      const F = fixedRootOf(t.el);
+      if (F && onScreen(F)) { const v = clipped(t.el, t.r); if (area(v) > 0) note(F, v, null); }
+    }
+    for (const [F, o] of lost) {
+      const r = rect(F);
+      const sides = [o.l > 2 && `${Math.round(o.l)}px off the left`, o.r > 2 && `${Math.round(o.r)}px off the right`, o.t > 2 && `${Math.round(o.t)}px off the top`, o.b > 2 && `${Math.round(o.b)}px off the bottom`].filter(Boolean).join(', ');
+      const hints = [];
+      if (o.l > 2 || o.r > 2) hints.push(`fixed width ${Math.round(r.width)}px: use width: min(460px, 100% - 32px) / max-width: calc(100vw - 32px)`);
+      if (o.t > 2 || o.b > 2) hints.push(`taller than the screen: add max-height: calc(100dvh - 32px); overflow-y: auto`);
+      add('fixed-offscreen', 'error', F, `Fixed element ${q(snippet(F, 28))} sticks out of the ${vw}×${vh} screen (${sides}); fixed content can't be scrolled into view, so that part is unreachable.`, { rect: r, magnitude: Math.max(o.l, o.r, o.t, o.b), details: { hints } });
+    }
+  }
+
+  // =========================== text spilling off its photo/gradient backdrop onto a low-contrast background
+  {
+    const imgLike = all.filter((el) => (/^(IMG|VIDEO|CANVAS)$/.test(el.tagName) || cs(el).backgroundImage !== 'none') && area(rect(el)) >= 5000 && !floating(el));
+    if (imgLike.length) {
+      const groups = new Map();
+      for (const t of texts) {
+        if (hiddenByAria(t.el) || floating(t.el) || rotated(t.el) || anc(t.el).scale < 0.9 || t.len < 2) continue;
+        const g = groups.get(t.el) || [];
+        for (const r of t.rects) { const v = clipped(t.el, ink(r)); if (area(v) > 0) g.push(v); }
+        groups.set(t.el, g);
+      }
+      const stackAt = (x, y) => { // page-relative point → paint stack
+        window.scrollTo(Math.max(0, x + sx0 - vw / 2), Math.max(0, y + sy0 - vh / 2));
+        return document.elementsFromPoint(x + sx0 - window.scrollX, y + sy0 - window.scrollY);
+      };
+      const isImgLike = (e) => /^(IMG|VIDEO|CANVAS|PICTURE|svg)$/.test(e.tagName) || cs(e).backgroundImage !== 'none';
+      const seen = new Set();
+      for (const [el, rs] of groups) {
+        if (!rs.length) continue;
+        const blk = blockOf(el);
+        if (seen.has(blk)) continue;
+        const tr = union(rs);
+        const total = rs.reduce((n, r) => n + area(r), 0);
+        for (const I of imgLike) {
+          if (I === el || el.contains(I)) continue;
+          const ir = rect(I);
+          if (area(inter(ir, tr)) <= 0) continue;
+          // text on its own surface (a card or chip with a solid background) isn't sitting on the image
+          let ownSurface = false;
+          for (let n = el; n && n !== body && !n.contains(I); n = n.parentElement) if (alpha(cs(n).backgroundColor) >= 0.85 || cs(n).backgroundImage !== 'none') { ownSurface = true; break; }
+          if (ownSurface) continue;
+          const inside = rs.reduce((n, r) => n + area(inter(r, ir)), 0) / total;
+          if (inside < 0.1) continue; // must straddle the backdrop's edge
+          // the largest piece of text outside the backdrop
+          let best = null;
+          for (const r of rs) {
+            const pieces = [R(r.left, Math.max(r.top, ir.bottom), r.right, r.bottom), R(r.left, r.top, r.right, Math.min(r.bottom, ir.top)), R(Math.max(r.left, ir.right), r.top, r.right, r.bottom), R(r.left, r.top, Math.min(r.right, ir.left), r.bottom)];
+            for (const p of pieces) if (area(p) > 0 && (!best || area(p) > area(best))) best = p;
+          }
+          const lineH = Math.min(...rs.map((r) => r.height));
+          if (!best || best.width < 4 || best.height < Math.max(4, lineH * 0.5)) continue; // at least half a line is off the backdrop
+          const inPiece = rs.map((r) => inter(r, ir)).find((p) => area(p) > 0);
+          // text must be painted above the backdrop
+          if (!I.contains(el)) {
+            const st = stackAt((inPiece.left + inPiece.right) / 2, (inPiece.top + inPiece.bottom) / 2);
+            const ti = st.findIndex((e) => e === el || el.contains(e)), ii = st.indexOf(I);
+            if (ti < 0 || ii < 0 || ti > ii) continue;
+          }
+          const st = stackAt((best.left + best.right) / 2, (best.top + best.bottom) / 2);
+          let bg = null, unknown = false;
+          for (const e of st) {
+            if (e === el || el.contains(e) || e.contains(el) && !opaque(e) && !isImgLike(e) || floating(e) || e.id === '__knack_rqa') continue; // overlays aren't the backdrop
+            if (isImgLike(e)) { unknown = true; break; }
+            const c = rgb(cs(e).backgroundColor);
+            if (c && c.a >= 0.85) { if (e.contains(el) && !e.contains(I)) unknown = true; else bg = c; break; } // its own card, not the page behind the image
+          }
+          if (unknown) continue;
+          bg ||= { r: 255, g: 255, b: 255, a: 1 }; // browser canvas default
+          const fg = rgb(cs(el).color);
+          if (!fg || fg.a < 0.5) continue;
+          const ratio = contrast(fg, bg);
+          if (ratio >= 3) continue;
+          seen.add(blk);
+          const shadow = cs(el).textShadow && cs(el).textShadow !== 'none';
+          add('text-over-image', shadow ? 'warn' : 'error', blk, `Text ${q(snippet(el, 30))} runs ${Math.round((1 - inside) * 100)}% off its ${I.tagName === 'IMG' ? 'image' : 'background image'} onto a background where it has ${ratio.toFixed(1)}:1 contrast (unreadable).`, { rect: union([tr, inter(ir, R(tr.left - 20, tr.top - 20, tr.right + 20, tr.bottom + 20))]), magnitude: (1 - inside) * 100, details: { contrast: +ratio.toFixed(2), backdrop: selector(I), hints: [`${selector(I)} has a fixed height (${cs(I).height}) or the text grew: use min-height so the backdrop grows with the text, and set a fallback background-color`] } });
+          break;
+        }
+      }
+      window.scrollTo(sx0, sy0);
+    }
+  }
+
+  // =========================== in-page anchor targets landing under a fixed/sticky header
+  if (!skipSet.has('anchor-hidden')) {
+    const bars = all.filter((el) => {
+      const s = cs(el);
+      if ((s.position !== 'fixed' && s.position !== 'sticky') || anc(el).fixed || anc(el).sticky) return false;
+      const r = rect(el);
+      return r.width >= vw * 0.5 && r.height >= 16 && r.height < vh * 0.5 && s.top !== 'auto' && parseFloat(s.top) <= 8 && (s.position === 'sticky' ? el.parentElement && rect(el.parentElement).height >= 0.5 * Math.max(root.scrollHeight, body.scrollHeight) : r.top <= 8);
+    });
+    const here = location.href.split('#')[0];
+    const anchors = [];
+    if (bars.length) {
+      const ids = new Set();
+      for (const a of document.querySelectorAll('a[href*="#"]')) {
+        let u; try { u = new URL(a.getAttribute('href'), location.href); } catch (_) { continue; }
+        if (u.href.split('#')[0] !== here) continue;
+        let id; try { id = decodeURIComponent(u.hash.slice(1)); } catch (_) { continue; }
+        if (!id || /^(top|!|\/)/.test(id) || ids.has(id)) continue;
+        const tgt = document.getElementById(id) || document.getElementsByName(id)[0];
+        if (!tgt || tgt === body || tgt === root || ignored(tgt) || bars.some((b) => b.contains(tgt))) continue;
+        ids.add(id); anchors.push({ id, tgt, link: a });
+        if (anchors.length >= 8) break;
+      }
+    }
+    const hitsByBar = new Map();
+    for (const { id, tgt, link } of anchors) {
+      tgt.scrollIntoView({ block: 'start', behavior: 'instant' });
+      await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 80))); // let hide-on-scroll headers react
+      let line = null;
+      const w = document.createTreeWalker(tgt, NodeFilter.SHOW_TEXT, { acceptNode: (n) => (n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) });
+      for (let n = w.nextNode(); n && !line; n = w.nextNode()) {
+        range.selectNodeContents(n);
+        const r = [...range.getClientRects()].find((x) => x.width > 1 && x.height > 1);
+        if (r) line = R(r.left, r.top, r.right, r.bottom);
+      }
+      if (!line) { const r = tgt.getBoundingClientRect(); if (r.height < 1 || r.width < 1) continue; line = R(r.left, r.top, r.right, Math.min(r.bottom, r.top + 24)); }
+      if (line.top >= vh || line.bottom <= 0) continue;
+      const bar = bars.find((b) => { const br = b.getBoundingClientRect(); return b.checkVisibility?.({ opacityProperty: true, visibilityProperty: true }) !== false && br.bottom > line.top + 1 && br.top < line.bottom && br.left < line.right && br.right > line.left; });
+      if (!bar) continue;
+      const br = bar.getBoundingClientRect();
+      const hidden = Math.min(br.bottom, line.bottom) - Math.max(br.top, line.top);
+      const frac = hidden / line.height;
+      if (frac < 0.3) continue;
+      const topEl = document.elementFromPoint((Math.max(line.left, br.left) + Math.min(line.right, br.right)) / 2, Math.max(line.top, br.top) + Math.min(hidden, line.height) / 2);
+      if (!topEl || !bar.contains(topEl)) continue; // something else (or nothing) is actually on top
+      const dy = window.scrollY - sy0, dx = window.scrollX - sx0;
+      const hb = hitsByBar.get(bar) || { list: [], need: 0, frac: 0 };
+      hb.list.push({ id, link, frac, rect: R(line.left + dx, line.top + dy, line.right + dx, line.bottom + dy) });
+      hb.need = Math.max(hb.need, Math.ceil(br.bottom + 8)); hb.frac = Math.max(hb.frac, frac); hb.h = Math.round(br.bottom);
+      hitsByBar.set(bar, hb);
+    }
+    for (const [bar, hb] of hitsByBar) {
+      hb.list.sort((a, b) => a.rect.top - b.rect.top);
+      const first = hb.list[0];
+      const ids = hb.list.map((x) => '#' + x.id);
+      add('anchor-hidden', hb.frac >= 0.95 ? 'error' : 'warn', document.getElementById(first.id) || bar, `${hb.list.length} of ${anchors.length} in-page link${anchors.length === 1 ? '' : 's'} (${ids.slice(0, 4).join(', ')}${ids.length > 4 ? '…' : ''}) jump${hb.list.length === 1 ? 's' : ''} to a heading that lands ${hb.frac >= 0.95 ? 'completely' : 'partly'} under the ${cs(bar).position} header ${q(snippet(bar, 20))} (${hb.h}px tall).`, { rect: first.rect, magnitude: hb.h, details: { targets: ids, header: selector(bar), hints: [`add html { scroll-padding-top: ${hb.need}px } (or scroll-margin-top: ${hb.need}px on the targets)`] } });
+    }
+    if (anchors.length) { window.scrollTo(sx0, sy0); await new Promise((res) => requestAnimationFrame(res)); }
   }
 
   // =========================== serialise
@@ -700,7 +969,7 @@ function drawOverlay({ issues, vw, docH }) {
   </style>`;
   const placed = [];
   for (const i of issues) {
-    if (!i.box) continue;
+    if (!i.box || i.severity === 'info') continue;
     const col = COL[i.severity];
     const x0 = Math.max(0, i.box.x), y0 = Math.max(0, i.box.y);
     const x1 = Math.min(vw, i.box.x + Math.max(i.box.w, 4)), y1 = Math.min(docH, i.box.y + Math.max(i.box.h, 4));
@@ -724,20 +993,26 @@ function drawOverlay({ issues, vw, docH }) {
 const SEV_RANK = { error: 0, warn: 1, info: 2 };
 const issueKey = (pageLabel, i, width) => `${pageLabel}|${i.check}|${i.selector || '(page)'}|${width}`;
 
+const CLASSIC_SCROLLBAR = 'html::-webkit-scrollbar{width:15px;height:15px;background:#f1f1f1}html::-webkit-scrollbar-thumb{background:#c1c1c1;border:3px solid #f1f1f1;border-radius:8px}';
+const HIDDEN_SCROLLBAR = 'html{scrollbar-width:none!important}html::-webkit-scrollbar{display:none}';
+const MAX_SCROLL = 30000; // CSS px scrolled while settling; guards infinite feeds
+
 async function settle(page) {
-  await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
-  // scroll through once so lazy images and reveal-on-scroll content load
-  await page.evaluate(async () => {
-    const H = innerHeight;
-    for (let y = 0, i = 0; y < document.documentElement.scrollHeight && i < 40; y += H, i++) {
-      scrollTo(0, y);
-      await new Promise((r) => setTimeout(r, 50));
-    }
+  await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+  // scroll through once so lazy images and reveal-on-scroll content load (bounded in distance and time)
+  const info = await page.evaluate(async (maxScroll) => {
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const H = innerHeight, t0 = performance.now(), h0 = document.documentElement.scrollHeight;
+    let y = 0;
+    while (y < document.documentElement.scrollHeight && y < maxScroll && performance.now() - t0 < 8000) { scrollTo(0, y); await sleep(60); y += H; }
+    const h1 = document.documentElement.scrollHeight;
     scrollTo(0, 0);
     await Promise.all([...document.images].filter((i) => !i.complete).map((i) => new Promise((r) => { i.addEventListener('load', r, { once: true }); i.addEventListener('error', r, { once: true }); setTimeout(r, 3000); })));
-    if (document.fonts) await document.fonts.ready;
-  }).catch(() => {});
+    if (document.fonts) await Promise.race([document.fonts.ready, sleep(3000)]);
+    return { grew: h1 - h0, stopped: y < h1, height: h1 };
+  }, MAX_SCROLL).catch(() => null);
   await page.waitForTimeout(waitMs);
+  return info;
 }
 
 async function sweepTarget(browser, target) {
@@ -746,41 +1021,63 @@ async function sweepTarget(browser, target) {
   const shotDir = path.join(outDir, 'shots', target.slug);
   fs.mkdirSync(shotDir, { recursive: true });
   const pageCheckWidth = widths.find((w) => w <= 768) ?? widths[0];
-  for (const w of widths) {
-    const h = heightFor(w);
-    const touch = w <= 768;
-    const ctx = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: touch, reducedMotion: 'reduce' });
-    const page = await ctx.newPage();
-    const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
-    try {
-      await page.goto(target.url, { waitUntil: 'load', timeout: navTimeout });
-    } catch (e) {
-      await ctx.close();
-      const hint = /ERR_CONNECTION_REFUSED|ECONNREFUSED/.test(e.message)
-        ? `Nothing is listening at ${target.url}. Start the dev server, or find it with: node "${path.join(path.dirname(fileURLToPath(import.meta.url)), 'detect-server.mjs')}"`
-        : e.message.split('\n')[0];
-      die(`Could not load ${target.url}\n  ${hint}`);
+  // one context per input type, reused across widths: the HTTP cache makes later widths cheap and
+  // polite to the server, and cookies (A/B buckets, consent) stay consistent between widths
+  const contexts = {};
+  const notes = new Set();
+  let tallest = 0;
+  try {
+    for (const w of widths) {
+      const h = heightFor(w);
+      const touch = w <= 768;
+      const ctx = contexts[touch] ||= await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1, hasTouch: touch, reducedMotion: 'reduce' });
+      const page = await ctx.newPage();
+      await page.setViewportSize({ width: w, height: h });
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      const t0 = Date.now();
+      try {
+        await page.goto(target.url, { waitUntil: 'load', timeout: navTimeout });
+      } catch (e) {
+        const hint = /ERR_CONNECTION_REFUSED|ECONNREFUSED/.test(e.message)
+          ? `Nothing is listening at ${target.url}. Start the dev server, or find it with: node "${path.join(path.dirname(fileURLToPath(import.meta.url)), 'detect-server.mjs')}"`
+          : e.message.split('\n')[0];
+        die(`Could not load ${target.url}\n  ${hint}`);
+      }
+      // Desktop: emulate the classic 15px scrollbar of Windows/Linux, so width: 100vw bugs show up.
+      // Touch widths keep overlay scrollbars like real phones.
+      const classic = w >= 1024 && scrollbars === 'classic';
+      await page.addStyleTag({ content: classic ? CLASSIC_SCROLLBAR : HIDDEN_SCROLLBAR }).catch(() => {});
+      const st = await settle(page);
+      if (st && st.stopped && st.grew > h * 2) notes.add(`The page kept growing while scrolling (infinite scroll or lazy feed?): settling stopped after ${MAX_SCROLL / 1000}k px; checks cover what had rendered by then.`);
+      const t1 = Date.now();
+      const res = await page.evaluate(detectInPage, {
+        vw: await page.evaluate(() => document.documentElement.clientWidth),
+        vh: h, touch, mobileText: w < 768, desktop: w >= 1024,
+        pageChecks: w === pageCheckWidth,
+        ignore: ignoreSel, skip: skipChecks, maxPerCheck: maxIssues,
+      });
+      const t2 = Date.now();
+      if (res.badIgnore.length) log(yellow(`⚠ Ignoring invalid --ignore selector(s): ${res.badIgnore.join(', ')}`));
+      res.issues.forEach((i, idx) => { i.n = idx + 1; i.viewport = { width: w, height: h }; });
+      const docH = Math.min(res.doc.scrollHeight, fullPage ? maxHeight : h);
+      if (fullPage && res.doc.scrollHeight > maxHeight) tallest = Math.max(tallest, res.doc.scrollHeight);
+      await page.evaluate(drawOverlay, { issues: res.issues, vw: res.doc.clientWidth, docH: res.doc.scrollHeight });
+      const file = path.join(shotDir, `${w}x${h}.png`);
+      await page.screenshot({ path: file, fullPage, clip: { x: 0, y: 0, width: res.doc.clientWidth, height: docH }, animations: 'disabled', caret: 'hide' });
+      await page.close();
+      if (process.env.RQA_DEBUG) log(dim(`      load+settle ${t1 - t0}ms · detect ${t2 - t1}ms · shot ${Date.now() - t2}ms`));
+      const ec = res.issues.filter((i) => i.severity === 'error').length;
+      const wc = res.issues.filter((i) => i.severity === 'warn').length;
+      log(`  ${String(w).padStart(4)}×${String(h).padEnd(5)} ${ec ? red(`✖ ${ec}`) : green('✓ 0')}  ${wc ? yellow(`⚠ ${wc}`) : dim('⚠ 0')}${res.doc.overflowX && !res.doc.rootClipsX ? red(`  scrolls sideways +${res.doc.overflowX}px`) : ''}`);
+      results.push({ page: target.label, url: target.url, viewport: { width: w, height: h }, scrollbar: classic ? 'classic' : 'overlay', screenshot: rel(file), doc: res.doc, title: res.title, truncated: res.truncated, pageErrors: errors, issues: res.issues });
     }
-    await settle(page);
-    const res = await page.evaluate(detectInPage, {
-      vw: await page.evaluate(() => document.documentElement.clientWidth),
-      vh: h, touch, mobileText: w < 768, desktop: w >= 1024,
-      pageChecks: w === pageCheckWidth,
-      ignore: ignoreSel, skip: skipChecks, maxPerCheck: maxIssues,
-    });
-    if (res.badIgnore.length) log(yellow(`⚠ Ignoring invalid --ignore selector(s): ${res.badIgnore.join(', ')}`));
-    res.issues.forEach((i, idx) => { i.n = idx + 1; i.viewport = { width: w, height: h }; });
-    const docH = Math.min(res.doc.scrollHeight, fullPage ? maxHeight : h);
-    await page.evaluate(drawOverlay, { issues: res.issues, vw: res.doc.clientWidth, docH: res.doc.scrollHeight });
-    const file = path.join(shotDir, `${w}x${h}.png`);
-    await page.screenshot({ path: file, fullPage, clip: { x: 0, y: 0, width: res.doc.clientWidth, height: docH }, animations: 'disabled', caret: 'hide' });
-    await ctx.close();
-    const ec = res.issues.filter((i) => i.severity === 'error').length;
-    const wc = res.issues.filter((i) => i.severity === 'warn').length;
-    log(`  ${String(w).padStart(4)}×${String(h).padEnd(5)} ${ec ? red(`✖ ${ec}`) : green('✓ 0')}  ${wc ? yellow(`⚠ ${wc}`) : dim('⚠ 0')}${res.doc.overflowX && !res.doc.rootClipsX ? red(`  scrolls sideways +${res.doc.overflowX}px`) : ''}`);
-    results.push({ page: target.label, url: target.url, viewport: { width: w, height: h }, screenshot: path.relative(process.cwd(), file), doc: res.doc, title: res.title, truncated: res.truncated, pageErrors: errors, issues: res.issues });
+  } finally {
+    for (const c of Object.values(contexts)) await c.close().catch(() => {});
   }
+  if (tallest) notes.add(`Screenshots are capped at ${maxHeight}px (the page is up to ${tallest}px tall); issues below that are listed in report.json but not drawn. Raise --max-height to see them.`);
+  for (const n of notes) log(dim(`  ℹ ${n}`));
+  results.notes = [...notes];
   // cross-viewport hint: same culprit width at every viewport usually means a hard-coded width
   const byEl = new Map();
   for (const r of results) for (const i of r.issues) if (/^(horizontal|image|hidden)-overflow$/.test(i.check) && i.selector && i.box) {
@@ -816,6 +1113,11 @@ async function contactSheet(browser, target, results, file) {
       <ol>${listed}${more}</ol>
     </figure>`;
   }).join('');
+  // one line per root cause (grouped across widths), so the sheet reads on its own
+  const grouped = groupIssues(results.flatMap((r) => r.issues.filter((i) => i.severity !== 'info').map((i) => ({ ...i, page: r.page, width: r.viewport.width }))));
+  const errG = grouped.filter((g) => g.severity === 'error'), warnG = grouped.filter((g) => g.severity === 'warn');
+  const topG = [...errG.slice(0, 10), ...warnG.slice(0, Math.max(3, 12 - Math.min(errG.length, 10)))];
+  const causes = topG.length ? `<section class="causes"><h2>Findings, grouped across widths</h2><ul>${topG.map((g) => `<li class="${g.severity}"><b>${g.severity === 'error' ? '✖' : '⚠'}</b><code>${esc(g.check)}</code><span class="sel">${esc((g.selector || 'page').slice(0, 48))}</span><span class="w">@${esc(fmtWidths(g.widths))}</span><span class="msg">${esc(g.message.slice(0, 150))}</span></li>`).join('')}${grouped.length > topG.length ? `<li class="more">+${grouped.length - topG.length} more grouped findings in report.json</li>` : ''}</ul></section>` : '';
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>
     *{box-sizing:border-box}body{margin:0;background:#0f1013;color:#d9dae0;font:13px/1.4 ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif}
     header{display:flex;align-items:baseline;gap:16px;padding:20px 24px 4px;flex-wrap:wrap}
@@ -831,10 +1133,15 @@ async function contactSheet(browser, target, results, file) {
     ol{list-style:none;margin:8px 0 0;padding:0;font:11px/1.45 ui-monospace,Menlo,monospace}
     li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#aeb2bd}li b{display:inline-block;min-width:18px;text-align:center;border-radius:7px;color:#fff;margin-right:3px}
     li.error b{background:#ff2d55}li.warn b{background:#ff9f0a;color:#1a1200}li span{color:#767b88}li.more{color:#767b88}
+    .causes{margin:12px 24px 0;padding:12px 16px;background:#171920;border:1px solid #2b2e36;border-radius:10px;max-width:1832px}
+    .causes h2{margin:0 0 6px;font-size:12px;font-weight:650;color:#9aa0ad;text-transform:uppercase;letter-spacing:.06em}
+    .causes ul{list-style:none;margin:0;padding:0}.causes li{display:flex;gap:10px;align-items:baseline;font:12px/1.7 ui-monospace,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .causes li b{background:none!important;width:12px;min-width:12px;display:inline-block;color:inherit}.causes li.error b{color:#ff5c7a}.causes li.warn b{color:#ffb340}
+    .causes code{color:#e6e7eb;min-width:150px}.causes .sel{color:#7fb4ff;min-width:240px;max-width:320px;overflow:hidden;text-overflow:ellipsis}.causes .w{color:#9aa0ad;min-width:110px}.causes .msg{color:#aeb2bd;overflow:hidden;text-overflow:ellipsis;font-family:ui-sans-serif,-apple-system,sans-serif}
   </style></head><body>
     <header><h1>responsive-qa</h1><code>${esc(target.url)}</code>
       <span class="tot">${totals.error ? `<span class="e">✖ ${totals.error} errors</span>` : '<span class="ok">✓ no errors</span>'} &nbsp; <span class="w">⚠ ${totals.warn} warnings</span></span></header>
-    <main>${cols}</main></body></html>`;
+    ${causes}<main>${cols}</main></body></html>`;
   const page = await browser.newPage({ viewport: { width: 1900, height: 800 } });
   await page.setContent(html, { waitUntil: 'load' });
   const w = await page.evaluate(() => Math.ceil(Math.max(...[...document.querySelectorAll('figure')].map((f) => f.getBoundingClientRect().right))));
@@ -870,14 +1177,17 @@ function compare(prev, cur) {
 
 // Group issues by page/check/selector so the terminal shows one line per bug, not per viewport.
 function groupIssues(issues) {
+  // siblings that differ only by :nth-of-type (a row of icons, a list of links) collapse into one line
   const g = new Map();
   for (const i of issues) {
-    const k = `${i.page}|${i.check}|${i.selector}|${i.severity}`;
-    const e = g.get(k) || { ...i, widths: [] };
+    const k = `${i.page}|${i.check}|${(i.selector || '').replace(/:nth-of-type\(\d+\)/g, '')}|${i.severity}`;
+    const e = g.get(k) || { ...i, widths: [], sels: new Set() };
     e.widths.push(i.width ?? i.viewport?.width);
+    e.sels.add(i.selector);
     g.set(k, e);
   }
-  return [...g.values()].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.widths.length - a.widths.length);
+  for (const e of g.values()) if (e.sels.size > 1) e.selector = `${e.sels.size}× ${(e.selector || '').replace(/:nth-of-type\(\d+\)/g, '')}`;
+  return [...g.values()].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || new Set(b.widths).size - new Set(a.widths).size);
 }
 function fmtWidths(ws) {
   const idx = [...new Set(ws)].map((w) => widths.indexOf(w)).sort((a, b) => a - b);
@@ -903,13 +1213,15 @@ try {
   log(`${magenta('◆')} responsive-qa · ${bold(base.href)} · ${widths.length} width${widths.length === 1 ? "" : "s"} (${widths.join(', ')})${fullPage ? ' · full page' : ''}`);
   const results = [];
   const sheets = [];
+  const notes = [];
   for (const t of targets) {
     if (targets.length > 1) log(`${magenta('◆')} ${t.label}`);
     const r = await sweepTarget(browser, t);
     results.push(...r);
+    notes.push(...r.notes.map((n) => (targets.length > 1 ? `${t.label}: ${n}` : n)));
     const sheet = path.join(outDir, targets.length > 1 ? `contact-sheet-${t.slug}.png` : 'contact-sheet.png');
     await contactSheet(browser, t, r, sheet);
-    sheets.push(path.relative(process.cwd(), sheet));
+    sheets.push(rel(sheet));
   }
 
   const all = results.flatMap((r) => r.issues.map((i) => ({ ...i, page: r.page, width: r.viewport.width })));
@@ -919,7 +1231,8 @@ try {
   report = {
     tool: 'knack/responsive-qa', version: VERSION, generatedAt: new Date().toISOString(),
     url: base.href, pages: targets.map((t) => ({ label: t.label, url: t.url })), widths,
-    options: { fullPage, height: heightOpt, ignore: ignoreSel, skip: skipChecks, failOn },
+    options: { fullPage, height: heightOpt, scrollbars, ignore: ignoreSel, skip: skipChecks, failOn },
+    notes,
     summary: { errors: count('error'), warnings: count('warn'), info: count('info'), byCheck, horizontalScroll: results.filter((r) => r.doc.overflowX && !r.doc.rootClipsX).map((r) => ({ page: r.page, width: r.viewport.width, px: r.doc.overflowX })) },
     contactSheets: sheets,
     results,
@@ -982,8 +1295,8 @@ try {
 
   log('');
   for (const s of sheets) log(`${magenta('◆')} Contact sheet → ${s}`);
-  log(`${magenta('◆')} Screenshots   → ${path.relative(process.cwd(), path.join(outDir, 'shots'))}/`);
-  log(`${magenta('◆')} Report        → ${path.relative(process.cwd(), reportPath)}`);
+  log(`${magenta('◆')} Screenshots   → ${rel(path.join(outDir, 'shots'))}/`);
+  log(`${magenta('◆')} Report        → ${rel(reportPath)}`);
 
   if (JSON_MODE && !outClosed) process.stdout.write(JSON.stringify(report, null, 2) + '\n');
   const failing = failOn === 'none' ? 0 : failOn === 'warn' ? e + w : e;

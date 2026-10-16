@@ -1,6 +1,6 @@
 # Manual checks
 
-Automated tools (axe-core plus this skill's keyboard pass) catch roughly 30–50% of real accessibility problems. The rest need a person. Run this list after the audit is clean, or hand it to the user as the remaining work. Each check takes a few minutes.
+Automated tools find only part of the real accessibility problems: in GDS's test page with 142 known barriers the best tool found 40% (axe 29%), and Deque's own study puts axe at 57% when counting by issue volume. This skill's keyboard pass adds behavior axe does not test, but the rest still needs a person. Run this list after the audit is clean, or hand it to the user as the remaining work. Each check takes a few minutes.
 
 ## 1. Screen reader smoke test (10 min)
 
@@ -27,8 +27,8 @@ Listen for:
 
 Unplug the mouse (or don't touch the trackpad).
 
-- [ ] Tab reaches every control; Shift+Tab goes back the same way.
-- [ ] Focus is always visible and never hidden behind a sticky header or cookie banner (WCAG 2.4.11).
+- [ ] Tab reaches every control; Shift+Tab goes back the same way (the audit only Tabs forwards).
+- [ ] Focus is always visible and never hidden behind a sticky header or cookie banner (WCAG 2.4.11). The audit catches bars that cover focus while Tabbing forwards; check Shift+Tab under sticky headers yourself.
 - [ ] Enter activates links and buttons; Space activates buttons, checkboxes; arrows move within radio groups, tabs, menus, sliders.
 - [ ] Escape closes dialogs, popovers, menus.
 - [ ] No hover-only content: tooltips and menus also open on focus and can be dismissed (1.4.13).

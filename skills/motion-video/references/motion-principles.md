@@ -30,7 +30,8 @@ Scale durations with distance and size. Large elements that travel far take long
 - **Deceleration (out-curves).** Things arriving should brake. This is the most natural entrance.
 - **Acceleration (in-curves).** Things leaving should speed away.
 - **In-out.** Anything moving between two visible positions, and every camera move.
-- **Springs.** Physical, friendly, tactile. One overshoot reads as confident; three reads as a toy.
+- **Strong ease-out.** `strong` (`0.16, 1, 0.3, 1`) is the premium default for entrances: it covers most of the distance immediately, then lands softly. Built-in CSS-style curves (`out`, `inOut`) are too weak for video.
+- **Springs.** Physical, friendly, tactile. One overshoot reads as confident; three reads as a toy. Viewers single out bounce as the fastest way to look cheap.
 - **Linear.** Machines only: progress, rotation, marquee, loops.
 
 Brand mapping:
@@ -58,7 +59,8 @@ Brand mapping:
 | Mask wipe | `clip-path: inset()` driven by a CSS variable | Reveals, before/after |
 | Scale-through | The outgoing scene scales to 1.2 and fades; the incoming one scales from 0.9 | Zooming into detail |
 | Match cut | A shape in scene A morphs or moves into the position of a shape in scene B | Premium continuity |
-| Blur dissolve | `blur` 0→12 with opacity out, reverse for in | Dreamy, soft brands |
+| Zoom-through | Outgoing scales 1→1.12 with blur 0→10 and opacity out over ~0.3s (`inCubic`); incoming lands from 1.12 with blur 10→0 (`strong`) | The premium default seam between scenes |
+| Blur dissolve | `blur` 0→10 with opacity out, reverse for in | Dreamy, soft brands |
 
 ## 6. Typography in motion
 
@@ -94,4 +96,7 @@ Brand mapping:
 | Busy background behind text | Add a scrim, blur it or darken it |
 | Ending on motion | End on a still, held lockup |
 | Inconsistent directions | Define the flow in the storyboard |
-| Tiny UI screenshots | Push in with a camera move; don't shrink the screenshot to fit |
+| Tiny UI screenshots | Push in with a camera move; don't shrink the screenshot to fit. Keep zoom ≤ 2× on screenshots captured at 1× |
+| Scaling from 0 | Start at 0.5–0.95 with opacity 0; nothing in the real world grows from nothing |
+| Slow pan or drift late in a scene to "add life" | Hold still. Stillness beats filler motion |
+| Gradient text, purple-cyan glows, centered everything | One neutral palette + one accent; left-aligned editorial layouts read as designed |

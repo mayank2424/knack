@@ -1,0 +1,102 @@
+{
+  "$comment": "Per-skill content for the website: what each skill checks, and a real output shown as evidence. Images live in site/assets/evidence/ and are produced by running the skill on its bundled example.",
+  "skills": {
+    "motion-video": {
+      "summary": "Turns a brief into a storyboard, an HTML composition and a frame-accurate MP4, GIF, WebM or transparent MOV.",
+      "checks": [
+        "Renders a filmstrip contact sheet and reviews it before the final render",
+        "Lints every frame for off-safe-area text, tiny type, unloaded fonts and cut-off animation",
+        "Encodes with Playwright and ffmpeg at the exact frame count, color-tagged for browsers and players"
+      ],
+      "evidence": {
+        "type": "video",
+        "src": "assets/evidence/motion.mp4",
+        "poster": "assets/evidence/motion-poster.png",
+        "caption": "Knack's launch film: composed from real skill output and rendered by the skill. Source in examples/knack-promo."
+      }
+    },
+    "demo-recorder": {
+      "summary": "Scripts a flow through your running app and records a crisp clip with a smooth cursor, zoom and captions.",
+      "checks": [
+        "Dry-runs the flow and screenshots every step before recording",
+        "Suggests working selectors when a step fails",
+        "Builds a contact sheet of the encoded clip and warns above GitHub's 10 MB limit"
+      ],
+      "evidence": {
+        "type": "video",
+        "src": "assets/evidence/demo.mp4",
+        "poster": "assets/evidence/demo-poster.png",
+        "caption": "examples/flow.json recorded against the bundled demo app: 14.8s, 890 KB MP4."
+      }
+    },
+    "responsive-qa": {
+      "summary": "Sweeps a page from 320px to 1920px and reports layout bugs with the element that causes them.",
+      "checks": [
+        "Finds sideways scroll and names the element pushing it",
+        "Flags clipped text, overlapping controls and tap targets under 24px",
+        "Re-runs after each fix and compares against the previous report"
+      ],
+      "evidence": {
+        "type": "image",
+        "src": "assets/evidence/responsive-desktop.png",
+        "caption": "sweep.mjs at 1280px: the API endpoint overflows its card (1) and the avatar is squashed (2). Boxes match report.json."
+      }
+    },
+    "a11y-audit": {
+      "summary": "Runs axe-core and a real keyboard pass, then fixes violations in source until the page passes.",
+      "checks": [
+        "axe-core 4.13 against WCAG 2.2 AA, with selectors and HTML for every node",
+        "Tabs through the page for traps, invisible or obscured focus, hover-only menus and unreachable controls",
+        "Suggests the nearest passing color for every contrast failure, matching WebAIM's math"
+      ],
+      "evidence": {
+        "type": "image",
+        "src": "assets/evidence/a11y.png",
+        "caption": "audit.mjs on examples/inaccessible-page.html: 4 critical, 12 serious, 4 moderate. Dashed boxes come from the keyboard pass."
+      }
+    },
+    "token-drift": {
+      "summary": "Finds colors and spacing that bypass your design tokens, maps each to the right token and fixes the safe ones.",
+      "checks": [
+        "Reads CSS variables, Tailwind v3 and v4, DTCG JSON, SCSS and LESS tokens, per package in monorepos",
+        "Matches colors by CIEDE2000 and sizes by distance to the scale",
+        "Fixes only exact, rendering-safe replacements and lists anything that changes with the theme"
+      ],
+      "evidence": {
+        "type": "terminal",
+        "command": "node scripts/scan.mjs examples/acme-dashboard",
+        "lines": [
+          "token-drift · examples/acme-dashboard/  8 files · 380 tokens from 4 sources",
+          "",
+          "  Drift score   13%  11 of 83 design values use tokens",
+          "",
+          "  EXACT       48  equals a token → swap in the token (41 auto-fixable)",
+          "  NEAR        10  within threshold of a token",
+          "  OFF-SCALE   14  far from every token",
+          "",
+          "  Button.jsx:7   hover:bg-[#1e4fd6]     → hover:bg-brand-600         ΔE 0.41",
+          "  Modal.vue:32   oklch(0.55 0.22 263)   → var(--color-brand-500)     ΔE 0.53",
+          "  global.css:14  #2563ea                → var(--color-brand-500)     ΔE 0.13",
+          "",
+          "$ node scripts/scan.mjs examples/acme-dashboard --fix",
+          "Fixed 41 values in 5 files",
+          "Drift score 13% → 63%"
+        ],
+        "caption": "Real output on the bundled example. Values that need judgment (named z-index layers, negative offsets, JS-computed styles) are listed, not changed."
+      }
+    },
+    "pr-visual-diff": {
+      "summary": "Captures the pages a PR touches on both branches, diffs them and writes the Visual changes section.",
+      "checks": [
+        "Brings up the base branch in a throwaway worktree and never touches yours",
+        "Freezes time, animations, video and randomness so unchanged pages diff to 0 pixels",
+        "Separates moved, added and removed content from real changes, with close-ups of each region"
+      ],
+      "evidence": {
+        "type": "image",
+        "src": "assets/evidence/prdiff.png",
+        "caption": "focus.png from capture.mjs on examples/before and examples/after: the CTA restyle was intended, the shrunken pricing buttons were not."
+      }
+    }
+  }
+}

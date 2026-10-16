@@ -21,13 +21,21 @@ to change from what might be a regression.
    dependencies installed by your lockfile's package manager. Your working tree is never
    touched.
 3. **Captures and diffs** each page × width with Playwright and pixelmatch, after
-   stabilizing (animations off, fonts loaded, network idle, optional frozen clock and
-   masks). Detects content shifts, size changes, new console errors and pages that start
-   returning 404.
-4. **Reviews the evidence.** The agent reads every compare image, describes the changes
-   in plain words, and flags anything that looks unintended.
-5. **Writes the PR section** with a table and side-by-side images. Pushing an assets
-   branch or editing the PR only happens if you say yes.
+   stabilizing: a virtual clock that freezes JS timers and animation frames identically on
+   both sides, seeded randomness, frozen video/GIFs/animations, and waits for fonts,
+   images and `aria-busy`. Unchanged pages diff at exactly 0 pixels on 116 of 120 tested
+   pairs (tailwindcss.com, swiperjs.com, playwright.dev, animate.style, an Astro blog and a
+   Next.js app), up from 13 of 32 live-site pairs differing before.
+4. **Separates cause from cascade.** Rows that only moved are recognised by row alignment
+   and shown as a blue band, so a taller hero is one red box plus "content below y≈482
+   moved down 71px", not a wall of red. Removed and added blocks are named, faint colour
+   tweaks below the visible threshold are flagged in amber, and `focus.png` shows each
+   changed region side by side at up to 2x. Also reports size changes, new console errors
+   and pages that start returning 404.
+5. **Reviews the evidence.** The agent reads every close-up and compare image, describes
+   the changes in plain words, and flags anything that looks unintended.
+6. **Writes the PR section** with a table, close-ups and side-by-side images. Uploading
+   images (gh `--attach`, an assets branch) or editing the PR only happens if you say yes.
 
 ## Try it
 
@@ -59,7 +67,7 @@ and the longer CTA pushes the secondary button onto a new line on mobile.
 
 ```bash
 node scripts/capture.mjs --base examples/before --head examples/after \
-  --pages /,/pricing,/about --full-page --freeze-time \
+  --pages /,/pricing,/about --full-page \
   --label-base main --label-head feat/hero-cta
 ```
 
@@ -67,7 +75,7 @@ Output in `./.knack/pr-visual-diff/`:
 
 ```
 summary.md   summary.json
-pages/home/375/{base,head,diff,compare}.png
+pages/home/375/{base,head,diff,compare,focus}.png
 pages/home/1280/...   pages/pricing/375/...   pages/pricing/1280/...   pages/about/...
 ```
 
@@ -75,15 +83,16 @@ pages/home/1280/...   pages/pricing/375/...   pages/pricing/1280/...   pages/abo
 
 | Page | Width | Result | Pixels changed | Notes |
 |---|---:|---|---:|---|
-| `/` | 375px | **changed** | 9.04% | size 375×969 → 375×1039; 3 regions; content below y≈360px shifted down 70px |
-| `/` | 1280px | **changed** | 1.84% | 6 regions; content below y≈328px shifted down 7px |
-| `/pricing` | 375px | **changed** | 6.29% | size 375×1249 → 375×1271; 4 regions; content below y≈520px shifted down 7px |
-| `/pricing` | 1280px | **changed** | 1.43% | 5 regions |
+| `/` | 375px | **changed** | 3.08% (+5.98% moved) | height 969 → 1039px; 2 changed regions; content from y≈482px moved down 71px |
+| `/` | 1280px | **changed** | 0.99% (+0.85% moved) | 1 changed region; content from y≈406px moved down 7px |
+| `/pricing` | 375px | **changed** | 3.02% (+3.53% moved) | height 1249 → 1271px; 3 changed regions; content from y≈555px moved down 7px; content from y≈886px moved down 16px |
+| `/pricing` | 1280px | **changed** | 1.23% (+0.20% moved) | 3 changed regions; content from y≈576px moved down 7px |
 | `/about` | 375px | unchanged | 0% |  |
 | `/about` | 1280px | unchanged | 0% |  |
 
-…followed by one `compare.png` per changed pair (base | head | diff, changed regions
-boxed). Numbers vary slightly by OS font rendering.
+…followed by, per changed pair, `focus.png` (the changed regions, base vs head, zoomed)
+and `compare.png` (base | head | diff). The pricing close-up shows the regression at a
+glance: the plan buttons lost their full width. Numbers vary slightly by OS font rendering.
 
 ## Scripts
 
@@ -92,7 +101,7 @@ boxed). Numbers vary slightly by OS font rendering.
 | `affected-pages.mjs` | Changed files → candidate routes with confidence and reasons |
 | `worktree-serve.mjs` | `start` base in a temp worktree, `serve` head, `list`, `stop --all` |
 | `capture.mjs` | Screenshots, diffs, compare images, `summary.md` / `summary.json` |
-| `publish-assets.mjs` | Optional: host images on an orphan branch (dry run unless `--push`) |
+| `publish-assets.mjs` | Optional: print the `gh --attach` upload command, or host images on an orphan branch (dry run unless `--push`) |
 
 All support `--help`.
 
@@ -104,7 +113,11 @@ All support `--help`.
   yourself (`npx playwright codegen --save-storage=auth.json <url>`).
 - Route detection is heuristic. Config-based routers and workspace packages need you
   (or the agent) to pick pages by hand; dynamic routes need real parameter values.
-- GitHub has no API to upload images into PR descriptions. Options are drag and drop
-  (works everywhere), an assets branch (scriptable, visible to everyone with repo access),
-  or your existing CI artifact hosting. See `references/pr-images.md`.
+- Getting images into the PR: drag and drop (works everywhere), `gh pr comment --attach`
+  (gh 2.99+, push access, github.com only), an assets branch, or your existing CI artifact
+  hosting. See `references/pr-images.md`.
+- Determinism covers timers, `requestAnimationFrame`, `Date`, `Math.random`, CSS and JS Web
+  Animations, video, GIFs and SMIL. Widgets driven by something else (one demo on
+  tailwindcss.com in our tests), canvas/WebGL and third-party embeds can still differ:
+  mask them. See `references/stabilization.md` for the measured flake rates.
 - Chromium only. Safari/Firefox rendering differences are out of scope.

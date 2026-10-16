@@ -19,14 +19,17 @@
  *   --script <name>      package.json script to run (default: dev, then start, serve, preview)
  *   --cmd "<command>"    Custom start command; "{port}" is replaced, PORT is also exported
  *   --no-install         Skip dependency install in the worktree
- *   --link-node-modules  Symlink your node_modules instead of installing (only if lockfile is unchanged)
+ *   --link-node-modules  Symlink your node_modules instead of installing (only if lockfile is unchanged;
+ *                        ignored for Next.js/Turbopack, which rejects out-of-project node_modules)
  *   --copy-env           Copy untracked .env* files from your tree into the worktree
  *   --static             Ignore package.json and serve the folder as static files
  *   --timeout <s>        Seconds to wait for the server to answer (default: 240)
  *   --repo <path>        Repository path (default: current directory)
  *   --json               Print machine-readable result on the last line
  *
- * Prints BASE_URL=... (start) or HEAD_URL=... (serve) when the server answers.
+ * Prints BASE_URL=... (start) or HEAD_URL=... (serve) when the server answers (warns on HTTP 5xx).
+ * Dev servers that detach themselves (astro dev under an AI agent, `cmd &` wrappers) are
+ * tracked by the PID listening on the port; servers that were already running are never stopped.
  * Your working tree is never modified: worktrees live in the OS temp dir and are
  * registered under .git/worktrees until `stop` removes them.
  */
@@ -50,7 +53,7 @@ function stateFile() {
 }
 const readState = () => { try { return JSON.parse(fs.readFileSync(stateFile(), 'utf8')); } catch { return []; } };
 const writeState = (s) => fs.writeFileSync(stateFile(), JSON.stringify(s, null, 2));
-const alive = (pid) => { try { process.kill(pid, 0); return true; } catch { return false; } };
+const alive = (pid) => { if (!pid) return false; try { process.kill(pid, 0); return true; } catch { return false; } };
 
 // ---------------------------------------------------------------- detection
 function detectPM(appDir, stopAt) {
@@ -159,22 +162,41 @@ async function probe(port) {
   return null;
 }
 
+function listenerPid(port) {
+  const r = spawnSync('lsof', ['-nP', `-iTCP:${port}`, '-sTCP:LISTEN', '-t'], { encoding: 'utf8' });
+  const pid = parseInt((r.stdout || '').trim().split('\n')[0], 10);
+  return Number.isFinite(pid) ? pid : null;
+}
+/** Seconds since a process started (ps etime: [[dd-]hh:]mm:ss), or null. */
+function processAgeSeconds(pid) {
+  const r = spawnSync('ps', ['-o', 'etime=', '-p', String(pid)], { encoding: 'utf8' });
+  const m = (r.stdout || '').trim().match(/^(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)$/);
+  return m ? (+(m[1] || 0)) * 86400 + (+(m[2] || 0)) * 3600 + (+m[3]) * 60 + (+m[4]) : null;
+}
 const tail = (file, n = 25) => { try { return fs.readFileSync(file, 'utf8').split('\n').slice(-n).join('\n'); } catch { return ''; } };
 const has = (bin) => spawnSync(process.platform === 'win32' ? 'where' : 'which', [bin]).status === 0;
 const fmtCmd = ([c, a], env = {}) => [...Object.entries(env).map(([k, v]) => `${k}=${v}`), c, ...a.map((x) => (/[\s"'{}]/.test(x) ? JSON.stringify(x) : x))].join(' ');
 
 async function waitUp(child, port, logFile, timeoutS) {
   const deadline = Date.now() + timeoutS * 1000;
-  let lastLog = Date.now();
+  let lastLog = Date.now(), exitedAt = 0;
+  let exitCode = null;
+  child.once('exit', (code) => { exitCode = code; });
   while (Date.now() < deadline) {
-    if (!alive(child.pid)) return { error: 'exited' };
+    if (!alive(child.pid)) {
+      // A clean exit can mean "I daemonized" (astro dev under an agent, `next start &` wrappers...).
+      // Keep probing for a while before giving up; a non-zero exit is a real failure.
+      if (exitCode !== null && exitCode !== 0) return { error: 'exited', code: exitCode };
+      if (!exitedAt) exitedAt = Date.now();
+      if (Date.now() - exitedAt > 30000) return { error: 'exited', code: exitCode };
+    }
     const hit = await probe(port);
-    if (hit) return hit;
+    if (hit) return { ...hit, daemonized: !!exitedAt || !alive(child.pid) };
     // Some servers ignore the port we asked for; read the real one from the log.
     const m = tail(logFile, 80).match(/https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1?\]):(\d{2,5})/g);
     if (m) {
       const other = +m[m.length - 1].split(':').pop();
-      if (other !== port) { const h2 = await probe(other); if (h2) return { ...h2, portMismatch: other }; }
+      if (other !== port) { const h2 = await probe(other); if (h2) return { ...h2, portMismatch: other, daemonized: !!exitedAt || !alive(child.pid) }; }
     }
     if (Date.now() - lastLog > 15000) { log(`waiting for http://localhost:${port} ... ${dim(`(${Math.round((deadline - Date.now()) / 1000)}s left)`)}`); lastLog = Date.now(); }
     await new Promise((r) => setTimeout(r, 750));
@@ -194,7 +216,7 @@ async function main() {
   const repo = repoRoot(opts.repo ? path.resolve(opts.repo) : process.cwd());
   const relDir = opts.dir ? path.normalize(opts.dir) : '.';
   const timeoutS = +(opts.timeout ?? 240);
-  const port = opts['dry-run'] ? (+opts.port || 4100) : await pickPort(opts.port);
+  const port = opts['dry-run'] && opts.port ? +opts.port : await pickPort(opts.port);
   let srcRoot = repo, base = null, id;
 
   if (cmd === 'start') {
@@ -237,7 +259,9 @@ async function main() {
   const probeDir = fs.existsSync(appDir) ? appDir : path.join(repo, relDir);
   const probeRoot = fs.existsSync(appDir) ? srcRoot : repo;
   const pkg = opts.static ? null : readPkg(probeDir);
-  const env = { PORT: String(port), BROWSER: 'none', FORCE_COLOR: '0', NO_COLOR: '1' };
+  // ASTRO_DEV_BACKGROUND=1: Astro 7+ detaches `astro dev` into a daemon when it detects an AI agent;
+  // this keeps it in the foreground so we own (and can stop) the process.
+  const env = { PORT: String(port), BROWSER: 'none', FORCE_COLOR: '0', NO_COLOR: '1', ASTRO_DEV_BACKGROUND: '1' };
   let runCmd, framework = 'static', installCmd = null, pmInfo = null;
   if (opts.cmd) {
     const s = String(opts.cmd).replaceAll('{port}', String(port));
@@ -274,6 +298,11 @@ async function main() {
     const nm = path.join(pmRoot, 'node_modules');
     const userNm = path.join(repo, srcRel, 'node_modules');
     const lockSame = pmInfo.lock && git(['diff', '--quiet', base.sha, '--', path.join(srcRel, pmInfo.lock)], repo, { allowFail: true }) !== null;
+    const turbopack = framework === 'next' && !/--webpack\b/.test(String(runCmd[1].join(' ')) + ' ' + (pkg?.scripts?.[opts.script || 'dev'] || ''));
+    if (opts['link-node-modules'] && turbopack) {
+      warn('--link-node-modules ignored: Next.js (Turbopack) refuses a node_modules symlinked from outside the project and serves HTTP 500. Installing instead.');
+      opts['link-node-modules'] = false;
+    }
     if (opts['link-node-modules']) {
       if (!lockSame) die(`--link-node-modules refused: ${pmInfo.lock || 'lockfile'} differs between ${base.short} and your tree. Drop the flag to install instead.`);
       if (!fs.existsSync(userNm)) die(`--link-node-modules: ${userNm} does not exist. Install deps in your tree first, or drop the flag.`);
@@ -284,7 +313,7 @@ async function main() {
     } else {
       installCmd = INSTALL[pmInfo.pm](pmInfo);
       plan.push(`(cd ${pmRoot} && ${fmtCmd(installCmd)})`);
-      if (lockSame && fs.existsSync(userNm)) log(dim(`Tip: lockfile is unchanged since base; --link-node-modules would skip this install.`));
+      if (lockSame && fs.existsSync(userNm) && !turbopack) log(dim(`Tip: lockfile is unchanged since base; --link-node-modules would skip this install.`));
       if (!opts['dry-run']) {
         log(`Installing dependencies: ${fmtCmd(installCmd)} ${dim('(in worktree)')}`);
         const r = spawnSync(installCmd[0], installCmd[1], { cwd: pmRoot, stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8', env: { ...process.env, CI: '1' } });
@@ -313,14 +342,32 @@ async function main() {
   log(`Starting ${framework} server on :${port} ${dim(`(log: ${logFile})`)}`);
   const up = await waitUp(child, port, logFile, timeoutS);
   if (up.error) {
-    const why = up.error === 'exited' ? 'The server process exited' : `Nothing answered on port ${port} within ${timeoutS}s`;
+    const why = up.error === 'exited' ? `The server process exited${up.code != null ? ` (code ${up.code})` : ''}` : `Nothing answered on port ${port} within ${timeoutS}s`;
     const out = tail(logFile);
     console.error(out);
     if (cmd === 'start' && !opts['copy-env'] && /\benv\b|environment variable|_URL\b|API_KEY|SECRET|is not defined/i.test(out)) warn('Looks like missing configuration. If your tree has .env files, re-run with --copy-env.');
     die(`${why}.\n${manual('', appDir, port, runCmd)}\nClean up with: node ${SELF} stop --id ${id}`);
   }
   if (up.portMismatch) { entry.port = up.portMismatch; warn(`Server ignored --port and is on :${up.portMismatch}.`); }
+  if (up.daemonized) {
+    // The process we spawned exited but something serves the port. Track the listener only if it
+    // started after we did; otherwise it is a server the user already had running (never stop it).
+    const lp = listenerPid(entry.port);
+    const age = lp ? processAgeSeconds(lp) : null;
+    if (lp && age !== null && age <= (Date.now() - Date.parse(entry.startedAt)) / 1000 + 2) {
+      entry.pid = lp;
+      warn(`The dev server detached itself into the background (pid ${lp}); tracking that process so \`stop\` can end it.`);
+    } else {
+      entry.pid = null;
+      entry.external = true;
+      warn(`Port ${entry.port} is served by a process that was already running${lp ? ` (pid ${lp})` : ''}. Using it, but \`stop\` will leave it alone.`);
+    }
+  }
   entry.url = up.url;
+  if (up.status >= 500) {
+    console.error(tail(logFile, 30));
+    warn(`The server answers, but / returned HTTP ${up.status}: the app is erroring (log tail above). Fix that before capturing, or every page will diff as an error page.`);
+  }
   writeState([...readState().filter((s) => s.id !== id), entry]);
   ok(`${cmd === 'start' ? 'Base' : 'Head'} is up: ${up.url} ${dim(`(HTTP ${up.status}${base ? `, ${base.ref} @ ${base.short}` : ''})`)}`);
   console.log(`${cmd === 'start' ? 'BASE_URL' : 'HEAD_URL'}=${up.url}`);
@@ -342,7 +389,7 @@ Or re-run with: --cmd "<your start command using {port}>"`;
 function list() {
   const s = readState();
   if (!s.length) return console.log('No servers started by worktree-serve.');
-  for (const e of s) console.log(`${e.id.padEnd(16)} ${alive(e.pid) ? 'running' : 'stopped'}  ${e.url || `:${e.port}`}  ${e.framework}  ${e.worktree || e.repo}`);
+  for (const e of s) console.log(`${e.id.padEnd(16)} ${e.external ? 'external' : e.pid && alive(e.pid) ? 'running' : 'stopped'}  ${e.url || `:${e.port}`}  ${e.framework}  ${e.worktree || e.repo}`);
 }
 
 function killTree(pid) {
@@ -358,13 +405,13 @@ function stop(opts) {
   if (!opts.all && !opts.id) die('Pass --id <id> or --all (see: node worktree-serve.mjs list).');
   if (!targets.length) { warn(opts.all ? 'Nothing to stop.' : `No server with id "${opts.id}".`); return; }
   for (const e of targets) {
-    if (alive(e.pid)) killTree(e.pid);
+    if (e.pid && alive(e.pid)) killTree(e.pid);
     if (e.worktree) {
       git(['worktree', 'remove', '--force', e.worktree], e.repo, { allowFail: true });
       fs.rmSync(e.worktree, { recursive: true, force: true });
       git(['worktree', 'prune'], e.repo, { allowFail: true });
     }
-    ok(`Stopped ${e.id}${e.worktree ? ' and removed its worktree' : ''}`);
+    ok(e.external ? `Forgot ${e.id} (left the server that was already running on :${e.port} alone)` : `Stopped ${e.id}${e.worktree ? ' and removed its worktree' : ''}`);
   }
   writeState(s.filter((e) => !targets.includes(e)));
 }

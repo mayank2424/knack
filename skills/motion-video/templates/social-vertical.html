@@ -17,8 +17,9 @@
   .hook h1 .hl { background: var(--pop); color: var(--pop-ink); padding: 0 .12em; border-radius: .12em; display: inline-block; }
   .tip { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; gap: 36px; }
   .num { width: 150px; height: 150px; border-radius: 50%; background: var(--pop); color: var(--pop-ink); display: grid; place-items: center; font-size: 84px; font-weight: 800; }
-  .tip h2 { margin: 0; font-size: 104px; line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
-  .tip p { margin: 0; font-size: 52px; line-height: 1.2; font-weight: 600; opacity: .75; }
+  .tip h2 { margin: 0; font-size: 128px; line-height: 1; letter-spacing: -0.04em; font-weight: 800; }
+  .tip p { margin: 0; font-size: 56px; line-height: 1.2; font-weight: 600; color: rgba(255,255,255,.72); text-wrap: balance; max-width: 760px; }
+  .tip h2, .hook h1, .cta h2 { text-wrap: balance; }
   .cta { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 40px; }
   .cta h2 { margin: 0; font-size: 120px; line-height: 1; letter-spacing: -0.045em; font-weight: 800; }
   .btn { font-size: 56px; font-weight: 800; background: var(--pop); color: var(--pop-ink); padding: 26px 44px; border-radius: 999px; }
@@ -49,22 +50,25 @@
   Motion.on((t) => { document.getElementById('blob').style.translate = `${Math.sin(t * 0.8) * 60}px ${Math.cos(t * 0.6) * 80}px`; });
 
   // Hook must land inside the first second; vertical viewers swipe fast.
-  Motion.from('#h1', { opacity: 0, y: 80, scale: 1.08 }, { start: 0.0, duration: 0.6, ease: 'snappy' });
+  // Negative start: frame 0 is already mid-entrance, so the feed poster (first frame) shows the hook.
+  Motion.from('#h1', { opacity: 0, y: 80, scale: 1.08 }, { start: -0.3, duration: 0.7, ease: 'strong' });
   Motion.from('#hl', { rotate: -8, scale: 0.6 }, { start: 0.35, duration: 0.7, ease: { stiffness: 260, damping: 14 } });
-  Motion.to('#hook', { start: 2.2, duration: 0.35, ease: 'inCubic', to: { opacity: 0, y: -60 } });
+  Motion.to('#hook', { start: 2.3, duration: 0.3, ease: 'inCubic', to: { opacity: 0, y: -90 } });
 
   // Tips: 2.4s each. Enter from below, exit upward (consistent direction = "scrolling" through ideas).
   ['#t1', '#t2', '#t3'].forEach((sel, i) => {
     const s = 2.5 + i * 2.4;
-    Motion.from(`${sel} .num`, { scale: 0, rotate: -90 }, { start: s, duration: 0.6, ease: { stiffness: 240, damping: 16 } });
-    Motion.from(`${sel} h2`, { opacity: 0, y: 60 }, { start: s + 0.1, duration: 0.55, ease: 'snappy' });
-    Motion.from(`${sel} p`, { opacity: 0, y: 40 }, { start: s + 0.25, duration: 0.55, ease: 'outCubic' });
-    Motion.to(sel, { start: s + 2.05, duration: 0.3, ease: 'inCubic', from: { opacity: 1, y: 0 }, to: { opacity: 0, y: -80 } });
+    // Never scale from 0: start at ~0.5 with opacity so the badge grows from something.
+    Motion.from(`${sel} .num`, { opacity: 0, scale: 0.5, rotate: -45 }, { start: s, duration: 0.6, ease: { stiffness: 240, damping: 18 } });
+    Motion.from(`${sel} h2`, { opacity: 0, y: 70 }, { start: s + 0.08, duration: 0.6, ease: 'strong' });
+    Motion.from(`${sel} p`, { opacity: 0, y: 40 }, { start: s + 0.2, duration: 0.6, ease: 'strong' });
+    // Exit overlaps the next entrance by ~0.15s: one continuous upward "scroll", no dead frames.
+    Motion.to(sel, { start: s + 2.1, duration: 0.3, ease: 'inCubic', from: { opacity: 1, y: 0 }, to: { opacity: 0, y: -90 } });
   });
 
   // CTA holds ≥ 2s.
-  Motion.from('#cta h2', { opacity: 0, y: 60 }, { start: 9.8, duration: 0.6, ease: 'snappy' });
-  Motion.from('#btn', { opacity: 0, scale: 0.7 }, { start: 10.1, duration: 0.7, ease: { stiffness: 220, damping: 14 } });
+  Motion.from('#cta h2', { opacity: 0, y: 70 }, { start: 9.65, duration: 0.6, ease: 'strong' });
+  Motion.from('#btn', { opacity: 0, scale: 0.8, y: 20 }, { start: 9.9, duration: 0.7, ease: { stiffness: 220, damping: 16 } });
 </script>
 </body>
 </html>

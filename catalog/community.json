@@ -2,35 +2,266 @@
   "$comment": "Curated popular third-party skills shown on the website. Stars are refreshed from the GitHub API at build time; `stars` here is the fallback. Add entries via PR (see CONTRIBUTING.md).",
   "updated": "2026-10-15",
   "skills": [
-    { "name": "frontend-design", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills/frontend-design", "category": "design", "description": "Distinctive, production-grade UI that avoids the generic AI look.", "install": "npx skills add anthropics/skills --skill frontend-design", "stars": 181215, "official": true },
-    { "name": "skill-creator", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills/skill-creator", "category": "dev", "description": "Author, evaluate and tune new skills, with benchmarking.", "install": "npx skills add anthropics/skills --skill skill-creator", "stars": 181215, "official": true },
-    { "name": "webapp-testing", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills/webapp-testing", "category": "dev", "description": "Test local web apps with Playwright: screenshots, logs, interactions.", "install": "npx skills add anthropics/skills --skill webapp-testing", "stars": 181215, "official": true },
-    { "name": "mcp-builder", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills/mcp-builder", "category": "dev", "description": "Design and build high-quality MCP servers.", "install": "npx skills add anthropics/skills --skill mcp-builder", "stars": 181215, "official": true },
-    { "name": "pdf · docx · xlsx · pptx", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills", "category": "docs", "description": "Read, create and edit PDFs, Word, Excel and PowerPoint files.", "install": "npx skills add anthropics/skills --skill pdf", "stars": 181215, "official": true },
-    { "name": "canvas-design", "author": "Anthropic", "repo": "anthropics/skills", "url": "https://github.com/anthropics/skills/tree/main/skills/canvas-design", "category": "design", "description": "Posters and visual art as PNG/PDF with a design philosophy.", "install": "npx skills add anthropics/skills --skill canvas-design", "stars": 181215, "official": true },
-    { "name": "Superpowers", "author": "Jesse Vincent", "repo": "obra/superpowers", "url": "https://github.com/obra/superpowers", "category": "dev", "description": "Brainstorming, planning, TDD, systematic debugging and subagent workflows.", "install": "npx skills add obra/superpowers", "stars": 299256 },
-    { "name": "Skills for Real Engineers", "author": "Matt Pocock", "repo": "mattpocock/skills", "url": "https://github.com/mattpocock/skills", "category": "dev", "description": "grill-me, tdd, improve-codebase-architecture, handoff and more.", "install": "npx skills add mattpocock/skills", "stars": 291588 },
-    { "name": "ui-ux-pro-max", "author": "nextlevelbuilder", "repo": "nextlevelbuilder/ui-ux-pro-max-skill", "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill", "category": "design", "description": "Design intelligence: styles, palettes and font pairings across stacks.", "install": "npx skills add nextlevelbuilder/ui-ux-pro-max-skill", "stars": 135930 },
-    { "name": "Production engineering skills", "author": "Addy Osmani", "repo": "addyosmani/agent-skills", "url": "https://github.com/addyosmani/agent-skills", "category": "dev", "description": "API design, CI/CD, code review and other production-grade practices.", "install": "npx skills add addyosmani/agent-skills", "stars": 106757 },
-    { "name": "taste-skill", "author": "Leonxlnx", "repo": "Leonxlnx/taste-skill", "url": "https://github.com/Leonxlnx/taste-skill", "category": "design", "description": "Art direction, references and a browser check for better-looking UIs.", "install": "npx skills add Leonxlnx/taste-skill", "stars": 96634 },
-    { "name": "impeccable", "author": "Paul Bakaus", "repo": "pbakaus/impeccable", "url": "https://github.com/pbakaus/impeccable", "category": "design", "description": "A design language that makes your agent better at design.", "install": "npx skills add pbakaus/impeccable", "stars": 81292 },
-    { "name": "HyperFrames", "author": "HeyGen", "repo": "heygen-com/hyperframes", "url": "https://github.com/heygen-com/hyperframes", "category": "media", "description": "Write HTML, render video. Includes skills for the HyperFrames CLI.", "install": "npx skills add heygen-com/hyperframes", "stars": 63870 },
-    { "name": "Marketing skills", "author": "Corey Haines", "repo": "coreyhaines31/marketingskills", "url": "https://github.com/coreyhaines31/marketingskills", "category": "productivity", "description": "CRO, copywriting, SEO audits and launch playbooks.", "install": "npx skills add coreyhaines31/marketingskills", "stars": 54787 },
-    { "name": "Emil Kowalski skills", "author": "Emil Kowalski", "repo": "emilkowalski/skills", "url": "https://github.com/emilkowalski/skills", "category": "design", "description": "Animation craft and review from the creator of Sonner and Vaul.", "install": "npx skills add emilkowalski/skills", "stars": 46302 },
-    { "name": "agent-browser", "author": "Vercel", "repo": "vercel-labs/agent-browser", "url": "https://github.com/vercel-labs/agent-browser", "category": "dev", "description": "A fast browser automation CLI built for agents.", "install": "npx skills add vercel-labs/agent-browser", "stars": 43992 },
-    { "name": "find-skills", "author": "Vercel", "repo": "vercel-labs/skills", "url": "https://github.com/vercel-labs/skills", "category": "productivity", "description": "Discover and install skills from your agent (`npx skills`).", "install": "npx skills add vercel-labs/skills --skill find-skills", "stars": 34988 },
-    { "name": "React best practices & web design guidelines", "author": "Vercel", "repo": "vercel-labs/agent-skills", "url": "https://github.com/vercel-labs/agent-skills", "category": "dev", "description": "Performance rules for React/Next.js plus UI review guidelines.", "install": "npx skills add vercel-labs/agent-skills", "stars": 32442 },
-    { "name": "playwright-cli", "author": "Microsoft", "repo": "microsoft/playwright-cli", "url": "https://github.com/microsoft/playwright-cli", "category": "dev", "description": "Drive Playwright from the CLI, and record or generate tests.", "install": "npx skills add microsoft/playwright-cli", "stars": 14189 },
-    { "name": "ui-skills", "author": "ibelick", "repo": "ibelick/ui-skills", "url": "https://github.com/ibelick/ui-skills", "category": "design", "description": "Baseline UI, fixing-accessibility and DESIGN.md skills for design engineers.", "install": "npx skills add ibelick/ui-skills", "stars": 9752 },
-    { "name": "better-* skills", "author": "Jakub Krehel", "repo": "jakubkrehel/skills", "url": "https://github.com/jakubkrehel/skills", "category": "design", "description": "Typography, color, layout and accessibility refinements.", "install": "npx skills add jakubkrehel/skills", "stars": 7934 },
-    { "name": "Trail of Bits security skills", "author": "Trail of Bits", "repo": "trailofbits/skills", "url": "https://github.com/trailofbits/skills", "category": "dev", "description": "Security research, vulnerability detection and audit workflows.", "install": "npx skills add trailofbits/skills", "stars": 7545 },
-    { "name": "Remotion skills", "author": "Remotion", "repo": "remotion-dev/skills", "url": "https://github.com/remotion-dev/skills", "category": "media", "description": "Best practices for making videos in React with Remotion.", "install": "npx skills add remotion-dev/skills", "stars": 5160 },
-    { "name": "web-quality-skills", "author": "Addy Osmani", "repo": "addyosmani/web-quality-skills", "url": "https://github.com/addyosmani/web-quality-skills", "category": "dev", "description": "Lighthouse, Core Web Vitals and accessibility optimization.", "install": "npx skills add addyosmani/web-quality-skills", "stars": 2942 },
-    { "name": "Supabase skills", "author": "Supabase", "repo": "supabase/agent-skills", "url": "https://github.com/supabase/agent-skills", "category": "dev", "description": "Supabase and Postgres best practices for agents.", "install": "npx skills add supabase/agent-skills", "stars": 2832 }
+    {
+      "name": "frontend-design",
+      "author": "Anthropic",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills/tree/main/skills/frontend-design",
+      "category": "design",
+      "description": "Distinctive, production-grade UI that avoids the generic AI look.",
+      "install": "npx skills add anthropics/skills --skill frontend-design",
+      "stars": 181215,
+      "official": true
+    },
+    {
+      "name": "skill-creator",
+      "author": "Anthropic",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills/tree/main/skills/skill-creator",
+      "category": "dev",
+      "description": "Author, evaluate and tune new skills, with benchmarking.",
+      "install": "npx skills add anthropics/skills --skill skill-creator",
+      "stars": 181215,
+      "official": true
+    },
+    {
+      "name": "webapp-testing",
+      "author": "Anthropic",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills/tree/main/skills/webapp-testing",
+      "category": "dev",
+      "description": "Test local web apps with Playwright: screenshots, logs, interactions.",
+      "install": "npx skills add anthropics/skills --skill webapp-testing",
+      "stars": 181215,
+      "official": true
+    },
+    {
+      "name": "mcp-builder",
+      "author": "Anthropic",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills/tree/main/skills/mcp-builder",
+      "category": "dev",
+      "description": "Design and build high-quality MCP servers.",
+      "install": "npx skills add anthropics/skills --skill mcp-builder",
+      "stars": 181215,
+      "official": true
+    },
+    {
+      "name": "pdf · docx · xlsx · pptx",
+      "author": "Anthropic",
+      "repo": "anthropics/skills",
+      "url": "https://github.com/anthropics/skills/tree/main/skills",
+      "category": "docs",
+      "description": "Read, create and edit PDFs, Word, Excel and PowerPoint files.",
+      "install": "npx skills add anthropics/skills --skill pdf",
+      "stars": 181215,
+      "official": true
+    },
+    {
+      "name": "Superpowers",
+      "author": "Jesse Vincent",
+      "repo": "obra/superpowers",
+      "url": "https://github.com/obra/superpowers",
+      "category": "dev",
+      "description": "Brainstorming, planning, TDD, systematic debugging and subagent workflows.",
+      "install": "npx skills add obra/superpowers",
+      "stars": 299256
+    },
+    {
+      "name": "Skills for Real Engineers",
+      "author": "Matt Pocock",
+      "repo": "mattpocock/skills",
+      "url": "https://github.com/mattpocock/skills",
+      "category": "dev",
+      "description": "grill-me, tdd, improve-codebase-architecture, handoff and more.",
+      "install": "npx skills add mattpocock/skills",
+      "stars": 291588
+    },
+    {
+      "name": "ui-ux-pro-max",
+      "author": "nextlevelbuilder",
+      "repo": "nextlevelbuilder/ui-ux-pro-max-skill",
+      "url": "https://github.com/nextlevelbuilder/ui-ux-pro-max-skill",
+      "category": "design",
+      "description": "Design intelligence: styles, palettes and font pairings across stacks.",
+      "install": "npx skills add nextlevelbuilder/ui-ux-pro-max-skill",
+      "stars": 135930
+    },
+    {
+      "name": "Production engineering skills",
+      "author": "Addy Osmani",
+      "repo": "addyosmani/agent-skills",
+      "url": "https://github.com/addyosmani/agent-skills",
+      "category": "dev",
+      "description": "API design, CI/CD, code review and other production-grade practices.",
+      "install": "npx skills add addyosmani/agent-skills",
+      "stars": 106757
+    },
+    {
+      "name": "taste-skill",
+      "author": "Leonxlnx",
+      "repo": "Leonxlnx/taste-skill",
+      "url": "https://github.com/Leonxlnx/taste-skill",
+      "category": "design",
+      "description": "Art direction, references and a browser check for better-looking UIs.",
+      "install": "npx skills add Leonxlnx/taste-skill",
+      "stars": 96634
+    },
+    {
+      "name": "impeccable",
+      "author": "Paul Bakaus",
+      "repo": "pbakaus/impeccable",
+      "url": "https://github.com/pbakaus/impeccable",
+      "category": "design",
+      "description": "A design language that makes your agent better at design.",
+      "install": "npx skills add pbakaus/impeccable",
+      "stars": 81292
+    },
+    {
+      "name": "HyperFrames",
+      "author": "HeyGen",
+      "repo": "heygen-com/hyperframes",
+      "url": "https://github.com/heygen-com/hyperframes",
+      "category": "media",
+      "description": "Write HTML, render video. Includes skills for the HyperFrames CLI.",
+      "install": "npx skills add heygen-com/hyperframes",
+      "stars": 63870
+    },
+    {
+      "name": "Marketing skills",
+      "author": "Corey Haines",
+      "repo": "coreyhaines31/marketingskills",
+      "url": "https://github.com/coreyhaines31/marketingskills",
+      "category": "productivity",
+      "description": "CRO, copywriting, SEO audits and launch playbooks.",
+      "install": "npx skills add coreyhaines31/marketingskills",
+      "stars": 54787
+    },
+    {
+      "name": "Emil Kowalski skills",
+      "author": "Emil Kowalski",
+      "repo": "emilkowalski/skills",
+      "url": "https://github.com/emilkowalski/skills",
+      "category": "design",
+      "description": "Animation craft and review from the creator of Sonner and Vaul.",
+      "install": "npx skills add emilkowalski/skills",
+      "stars": 46302
+    },
+    {
+      "name": "agent-browser",
+      "author": "Vercel",
+      "repo": "vercel-labs/agent-browser",
+      "url": "https://github.com/vercel-labs/agent-browser",
+      "category": "dev",
+      "description": "A fast browser automation CLI built for agents.",
+      "install": "npx skills add vercel-labs/agent-browser",
+      "stars": 43992
+    },
+    {
+      "name": "find-skills",
+      "author": "Vercel",
+      "repo": "vercel-labs/skills",
+      "url": "https://github.com/vercel-labs/skills",
+      "category": "productivity",
+      "description": "Discover and install skills from your agent (`npx skills`).",
+      "install": "npx skills add vercel-labs/skills --skill find-skills",
+      "stars": 34988
+    },
+    {
+      "name": "React best practices & web design guidelines",
+      "author": "Vercel",
+      "repo": "vercel-labs/agent-skills",
+      "url": "https://github.com/vercel-labs/agent-skills",
+      "category": "dev",
+      "description": "Performance rules for React/Next.js plus UI review guidelines.",
+      "install": "npx skills add vercel-labs/agent-skills",
+      "stars": 32442
+    },
+    {
+      "name": "playwright-cli",
+      "author": "Microsoft",
+      "repo": "microsoft/playwright-cli",
+      "url": "https://github.com/microsoft/playwright-cli",
+      "category": "dev",
+      "description": "Drive Playwright from the CLI, and record or generate tests.",
+      "install": "npx skills add microsoft/playwright-cli",
+      "stars": 14189
+    },
+    {
+      "name": "ui-skills",
+      "author": "ibelick",
+      "repo": "ibelick/ui-skills",
+      "url": "https://github.com/ibelick/ui-skills",
+      "category": "design",
+      "description": "Baseline UI, fixing-accessibility and DESIGN.md skills for design engineers.",
+      "install": "npx skills add ibelick/ui-skills",
+      "stars": 9752
+    },
+    {
+      "name": "better-* skills",
+      "author": "Jakub Krehel",
+      "repo": "jakubkrehel/skills",
+      "url": "https://github.com/jakubkrehel/skills",
+      "category": "design",
+      "description": "Typography, color, layout and accessibility refinements.",
+      "install": "npx skills add jakubkrehel/skills",
+      "stars": 7934
+    },
+    {
+      "name": "Trail of Bits security skills",
+      "author": "Trail of Bits",
+      "repo": "trailofbits/skills",
+      "url": "https://github.com/trailofbits/skills",
+      "category": "dev",
+      "description": "Security research, vulnerability detection and audit workflows.",
+      "install": "npx skills add trailofbits/skills",
+      "stars": 7545
+    },
+    {
+      "name": "Remotion skills",
+      "author": "Remotion",
+      "repo": "remotion-dev/skills",
+      "url": "https://github.com/remotion-dev/skills",
+      "category": "media",
+      "description": "Best practices for making videos in React with Remotion.",
+      "install": "npx skills add remotion-dev/skills",
+      "stars": 5160
+    },
+    {
+      "name": "web-quality-skills",
+      "author": "Addy Osmani",
+      "repo": "addyosmani/web-quality-skills",
+      "url": "https://github.com/addyosmani/web-quality-skills",
+      "category": "dev",
+      "description": "Lighthouse, Core Web Vitals and accessibility optimization.",
+      "install": "npx skills add addyosmani/web-quality-skills",
+      "stars": 2942
+    },
+    {
+      "name": "Supabase skills",
+      "author": "Supabase",
+      "repo": "supabase/agent-skills",
+      "url": "https://github.com/supabase/agent-skills",
+      "category": "dev",
+      "description": "Supabase and Postgres best practices for agents.",
+      "install": "npx skills add supabase/agent-skills",
+      "stars": 2832
+    }
   ],
   "lists": [
-    { "name": "awesome-claude-skills", "repo": "ComposioHQ/awesome-claude-skills", "url": "https://github.com/ComposioHQ/awesome-claude-skills" },
-    { "name": "skills.sh leaderboard", "url": "https://skills.sh" },
-    { "name": "Anthropic official plugins", "repo": "anthropics/claude-plugins-official", "url": "https://github.com/anthropics/claude-plugins-official" }
+    {
+      "name": "awesome-claude-skills",
+      "repo": "ComposioHQ/awesome-claude-skills",
+      "url": "https://github.com/ComposioHQ/awesome-claude-skills"
+    },
+    {
+      "name": "skills.sh leaderboard",
+      "url": "https://skills.sh"
+    },
+    {
+      "name": "Anthropic official plugins",
+      "repo": "anthropics/claude-plugins-official",
+      "url": "https://github.com/anthropics/claude-plugins-official"
+    }
   ]
 }

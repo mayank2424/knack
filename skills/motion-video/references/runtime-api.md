@@ -37,7 +37,7 @@
 
 ### `Motion.to(target, opts)`
 
-`target` is a selector, an Element, or an array or NodeList of elements.
+`target` is a selector, an Element, a NodeList, or an array that mixes elements and selectors (`['#l1', '#l2']`).
 
 ```js
 Motion.to('#card', {
@@ -82,9 +82,11 @@ This is an entrance: it animates *from* `fromProps` to the natural state (`opaci
 
 | Name | Character | Use for |
 |---|---|---|
-| `snappy` | Fast start, long soft settle | UI and text entrances (the default choice) |
+| `strong` | Strong ease-out, long soft landing (`0.16, 1, 0.3, 1`) | Text, cards and lockups: the premium default |
+| `strongInOut` | Decisive symmetric (`0.77, 0, 0.175, 1`) | Selection moves, swaps, quick on-screen repositioning |
+| `snappy` | Fast start, long soft settle | UI and text entrances |
 | `smooth` | Symmetric ease-in-out | Camera moves, morphs, position-to-position moves |
-| `outCubic`, `outQuart`, `outExpo` | Decelerate (gentle → strong) | Entrances |
+| `outCubic`, `outQuart`, `outQuint`, `outExpo` | Decelerate (gentle → strong) | Entrances |
 | `inCubic`, `inQuad` | Accelerate | Exits |
 | `inOutCubic`, `inOutQuart`, `inOutExpo` | Symmetric | Loops, transitions |
 | `outBack`, `inOutBack` | Slight overshoot | Playful pops, badges |
@@ -114,7 +116,9 @@ Motion.time                                                   // current t (read
 
 ### Patterns
 
-**Masked text rise.** Put each word in an `overflow: hidden` wrapper and tween the inner span from `y: '110%'` to `0`. See `templates/kinetic-type.html`.
+**Masked text rise.** Put each word or line in an `overflow: hidden` wrapper and tween the inner span from `y: '130%'` to `0` (exit to `'-130%'`). Use 130%, not 100–110%: the glyph box is taller than the line box, so smaller offsets leave ascender or descender slivers visible in the mask. See `templates/kinetic-type.html`.
+
+**Before the first tween.** A property holds its first tween's `from` value until that tween starts. To keep something hidden until a later "flash", add a tiny opacity tween first (see the ring in `templates/logo-sting.html`). A negative `start` begins mid-entrance at frame 0, which is how you make the first frame (the social poster) already show the hook.
 
 **Wipe reveal with a CSS variable:**
 ```css
@@ -138,6 +142,10 @@ const shot = { scale: s, x: W / 2 - (rx + rw / 2) * s, y: H / 2 - (ry + rh / 2) 
 
 **CSS `@keyframes`.** These are paused and seeked automatically, so `animation: spin 2s linear infinite` renders deterministically. Use `animation-delay` to schedule them.
 
+**Per-format CSS.** While rendering, `<html>` has the classes `knack-render` and `knack-out-<ext>` (`mp4`, `gif`, `webm`, `mov`, `png`). Hide grain in GIFs with `.knack-out-gif .grain { display: none; }`.
+
+**Fonts and images.** Before frame 0 the runtime loads every declared `@font-face` (all weights and unicode-range subsets) and decodes every `<img>`. That matters for canvas text in `Motion.on`, which otherwise draws in a fallback font, and for glyphs that only appear later (counters, `type`, `text` swaps).
+
 ## Preview player
 
 When you open the HTML in a browser, a control bar is added:
@@ -148,26 +156,33 @@ When you open the HTML in a browser, a control bar is added:
 ## Renderer CLI
 
 ```
-node scripts/render.mjs comp.html [-o out.mp4|.webm|.gif|.mov]
-  --still [t]          one PNG frame (default: middle)
+node scripts/render.mjs comp.html [-o out.mp4|.webm|.gif|.mov|frames/]
+  --still [t]          one PNG frame (default: middle); add --motion-blur N to preview blur
   --filmstrip [n]      contact sheet of n frames (default 12)
   --check              layout + timing lint (exit code 2 if issues)
   --fps N  --scale N  --from S  --to S  --workers N  --crf N
-  --audio file.mp3  --audio-fade S  --transparent  --gif-fps N  --gif-width N
+  --motion-blur N  --shutter DEG     sub-frame motion blur (default shutter 180)
+  --trc bt709|srgb  --dither  --10bit  color tag, anti-banding dither, HEVC Main10
+  --audio file.mp3  --audio-fade S  --transparent
+  --gif-fps N  --gif-width N  --gif-colors N  --gifski  --gif-quality N
 ```
 
 | Output | Codec | Notes |
 |---|---|---|
-| `.mp4` | H.264 yuv420p, CRF 18, faststart | Universal default. |
-| `.webm` | VP9 | Use with `--transparent` to get alpha. |
-| `.mov` | ProRes 4444 + alpha | For editors (Premiere, Final Cut, Resolve). Large files. |
-| `.gif` | Two-pass palette | Defaults to 20fps and ≤ 960px wide. Keep READMEs under ~10 MB. |
+| `.mp4` | H.264 High, yuv420p, CRF 18, aq-mode 3, BT.709 matrix + tags, faststart | Universal default. `--10bit` switches to HEVC Main10. |
+| `.webm` | VP9, BT.709 tags | Use with `--transparent` to get alpha. |
+| `.mov` | ProRes 4444 + alpha, BT.709 tags | For editors (Premiere, Final Cut, Resolve). Large files. |
+| `.gif` | Whole-clip palette, sierra2_4a dither, changed-rectangle frames | Captured directly at 20fps and ≤ 960px wide. Keep READMEs under ~10 MB. |
+| `dir/` | PNG sequence `frame-000000.png…` | Lossless, for editors or custom encodes. |
 
 What the `--check` lint reports:
 - tweens that run past `duration`
 - more than 2.5s of dead air at the end
 - text below 2% of frame height (with camera scale accounted for)
 - text that breaks the 4% safe margin
+- two visible text blocks overlapping (including mask slivers)
+- an empty first frame on vertical/square video (the feed poster)
+- `duration × fps` that isn't a whole number of frames
 - fonts that failed to load
 - page errors
 

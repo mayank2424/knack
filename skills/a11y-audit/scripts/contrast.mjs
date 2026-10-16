@@ -17,8 +17,11 @@
  *   --json         Machine-readable output
  *   --help         Show this help
  *
- * Suggestions keep hue and chroma (OKLCH) and move only lightness, so the brand
- * color stays recognizable. Exit code 0 if AA passes, 2 if it fails, 1 on error.
+ * Ratios are truncated, never rounded up (4.499 shows as 4.49 and fails), like the
+ * WebAIM checker. Suggestions keep the hue (OKLCH; grays stay neutral) and change
+ * lightness (chroma only if sRGB forces it), then take the closest passing 8-bit
+ * color in OKLab. ΔE is that distance; about 0.02 is just noticeable.
+ * Exit code 0 if AA passes, 2 if it fails, 1 on error.
  */
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -77,6 +80,8 @@ const luminance = ({ r, g, b }) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * 
 const ratio = (x, y) => { const a = luminance(x), b = luminance(y); return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05); };
 const over = (fg, bg) => ({ r: fg.r * fg.a + bg.r * (1 - fg.a), g: fg.g * fg.a + bg.g * (1 - fg.a), b: fg.b * fg.a + bg.b * (1 - fg.a), a: 1 });
 const hex = ({ r, g, b }) => '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('');
+// WCAG: never round a ratio up (4.499 is not 4.5). Truncate to 2 decimals, as the WebAIM checker does.
+const trunc2 = (x) => Math.floor(x * 100 + 1e-9) / 100;
 const round8 = (c) => ({ r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b), a: 1 });
 
 // ------------------------------------------------------------- OKLCH
@@ -112,21 +117,51 @@ function fitGamut(L, C, H) {
   return oklchToRgb({ L, C: lo, H }).rgb;
 }
 
-// Walk lightness away from the original in both directions; return the closest 8-bit color that passes.
+// OKLab distance (ΔE_OK); ~0.02 is about one just-noticeable difference.
+function deltaE(x, y) {
+  const a = rgbToOklch(x), b = rgbToOklch(y);
+  const ax = a.C * Math.cos((a.H * Math.PI) / 180), ay = a.C * Math.sin((a.H * Math.PI) / 180);
+  const bx = b.C * Math.cos((b.H * Math.PI) / 180), by = b.C * Math.sin((b.H * Math.PI) / 180);
+  return Math.hypot(a.L - b.L, ax - bx, ay - by);
+}
+// Hue component of the OKLab difference (ΔH), independent of lightness/chroma changes.
+function hueShift(x, y) {
+  const a = rgbToOklch(x), b = rgbToOklch(y);
+  const dh = (((b.H - a.H + 540) % 360) - 180) * Math.PI / 180;
+  return 2 * Math.sqrt(a.C * b.C) * Math.abs(Math.sin(dh / 2));
+}
+// Walk lightness away from the original in both directions (hue and chroma kept, chroma reduced only to stay
+// in sRGB), then polish the 8-bit result: try the ±3 neighbourhood per channel and keep the passing color
+// closest to the original in OKLab without shifting hue (grays stay neutral). Verified against an exhaustive 16.7M-color search: within a few % of the
+// true nearest passing color, without the hue drift the unconstrained optimum sometimes has.
 function nearest(color, other, target, which) {
   const o = rgbToOklch(color);
+  const pass = (cand) => (which === 'fg' ? ratio(cand, other) : ratio(other, cand)) >= target;
   const results = [];
   for (const dir of [-1, 1]) {
     for (let step = 1; step <= 1000; step++) {
       const L = o.L + dir * step * 0.001;
       if (L < 0 || L > 1) break;
       const rgb = fitGamut(L, o.C, o.H);
-      const cand = round8({ r: rgb[0] * 255, g: rgb[1] * 255, b: rgb[2] * 255 });
+      let cand = round8({ r: rgb[0] * 255, g: rgb[1] * 255, b: rgb[2] * 255 });
+      if (!pass(cand)) continue;
+      let best = deltaE(color, cand);
+      const base = cand;
+      const gray = Math.round(color.r) === Math.round(color.g) && Math.round(color.g) === Math.round(color.b);
+      for (let dr = -3; dr <= 3; dr++) for (let dg = -3; dg <= 3; dg++) for (let db = -3; db <= 3; db++) {
+        const n = { r: base.r + dr, g: base.g + dg, b: base.b + db, a: 1 };
+        if ([n.r, n.g, n.b].some((v) => v < 0 || v > 255) || !pass(n)) continue;
+        if (gray ? !(n.r === n.g && n.g === n.b) : hueShift(color, n) > 0.0015) continue; // keep grays gray, hue fixed
+        const d = deltaE(color, n);
+        if (d < best - 1e-9) { best = d; cand = n; }
+      }
       const r = which === 'fg' ? ratio(cand, other) : ratio(other, cand);
-      if (r >= target) { results.push({ hex: hex(cand), ratio: +r.toFixed(2), direction: dir < 0 ? 'darker' : 'lighter', deltaL: +(step * 0.001).toFixed(3), oklch: `oklch(${(L * 100).toFixed(1)}% ${o.C.toFixed(3)} ${o.H.toFixed(1)})` }); break; }
+      const ok = rgbToOklch(cand);
+      results.push({ hex: hex(cand), ratio: trunc2(r), direction: dir < 0 ? 'darker' : 'lighter', deltaE: +best.toFixed(3), deltaL: +Math.abs(ok.L - o.L).toFixed(3), oklch: `oklch(${(ok.L * 100).toFixed(1)}% ${ok.C.toFixed(3)} ${ok.H.toFixed(1)})` });
+      break;
     }
   }
-  return results.sort((a, b) => a.deltaL - b.deltaL);
+  return results.sort((a, b) => a.deltaE - b.deltaE);
 }
 
 // ---------------------------------------------------------------- main
@@ -135,7 +170,9 @@ const which = flags.fix === 'bg' ? 'bg' : 'fg';
 let bg = parse(pos[1]);
 if (bg.a < 1) { console.error('⚠ background is translucent; compositing it over white.'); bg = over(bg, { r: 255, g: 255, b: 255, a: 1 }); }
 const fgRaw = parse(pos[0]);
-const fg = fgRaw.a < 1 ? over(fgRaw, bg) : { ...fgRaw, a: 1 };
+// Browsers composite to 8-bit channels, so measure the color that is actually painted.
+const fg = round8(fgRaw.a < 1 ? over(fgRaw, bg) : { ...fgRaw, a: 1 });
+bg = round8(bg);
 const r = ratio(fg, bg);
 const levels = {
   'AA': large ? 3 : 4.5,
@@ -143,10 +180,8 @@ const levels = {
   'UI / large-text (3:1)': 3,
 };
 if (flags.target) levels[`custom (${flags.target}:1)`] = +flags.target;
-// Round to 2 decimals, but show 3 if rounding would make a failing ratio look like a pass (4.497 → "4.497").
-const crosses = Object.values(levels).some((t) => r < t && +r.toFixed(2) >= t);
-const shownStr = r.toFixed(crosses ? 3 : 2);
-const shown = +shownStr;
+const shown = trunc2(r);
+const shownStr = shown.toFixed(2);
 const checks = Object.entries(levels).map(([name, t]) => ({ level: name, target: t, pass: r >= t }));
 const targets = [...new Set([flags.target ? +flags.target : null, levels.AA, levels.AAA].filter(Boolean))];
 const suggestions = {};
@@ -161,8 +196,8 @@ if (flags.json) {
   for (const c of checks) console.log(`  ${c.pass ? col(32, 'PASS') : col(31, 'FAIL')}  ${c.level.padEnd(22)} needs ${c.target}:1`);
   for (const [t, list] of Object.entries(suggestions)) {
     if (!list.length) { console.log(`  No ${which} lightness reaches ${t} with this ${which === 'fg' ? 'background' : 'foreground'}; change the other color.`); continue; }
-    console.log(`\n  Nearest ${which} for ${t} (same hue, OKLCH lightness only):`);
-    for (const s of list) console.log(`    ${s.hex}  ${s.ratio.toFixed(2)}:1  ${s.direction.padEnd(7)} ΔL ${s.deltaL}  ${s.oklch}`);
+    console.log(`\n  Nearest ${which} for ${t} (same hue; ΔE = OKLab distance, 0.02 ≈ just noticeable):`);
+    for (const s of list) console.log(`    ${s.hex}  ${s.ratio.toFixed(2)}:1  ${s.direction.padEnd(7)} ΔE ${s.deltaE.toFixed(3)}  ${s.oklch}`);
   }
 }
 process.exitCode = r >= levels.AA ? 0 : 2;

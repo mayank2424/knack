@@ -8,7 +8,7 @@ Order of preference for every fix:
 2. **Visible text** over hidden labels. Voice-control users say what they see.
 3. **ARIA only when there is no native option.** No ARIA is better than bad ARIA: a wrong `role` or a stale `aria-expanded` is worse than none.
 
-Contents: [Keyboard pass](#keyboard-pass-rules) · [color-contrast](#color-contrast) · [image-alt](#image-alt) · [svg-img-alt](#svg-img-alt) · [label](#label) · [placeholder-label](#placeholder-label) · [select-name](#select-name) · [button-name](#button-name) · [link-name](#link-name) · [html-has-lang](#html-has-lang) · [document-title](#document-title) · [heading-order](#heading-order) · [page-has-heading-one](#page-has-heading-one) · [landmark-one-main](#landmark-one-main) · [region](#region) · [bypass](#bypass) · [list](#list) · [listitem](#listitem) · [duplicate-id-aria](#duplicate-id-aria) · [aria-hidden-focus](#aria-hidden-focus) · [aria-required-attr](#aria-required-attr) · [aria-valid-attr-value](#aria-valid-attr-value) · [nested-interactive](#nested-interactive) · [tabindex](#tabindex) · [meta-viewport](#meta-viewport) · [frame-title](#frame-title) · [scrollable-region-focusable](#scrollable-region-focusable) · [target-size](#target-size) · [aria-dialog-name](#aria-dialog-name) · [link-in-text-block](#link-in-text-block)
+Contents: [Keyboard pass](#keyboard-pass-rules) ([kbd-focus-removed](#kbd-focus-removed) · [kbd-focus-obscured](#kbd-focus-obscured) · [kbd-hover-only](#kbd-hover-only) · [kbd-change-on-input](#kbd-change-on-input) · [kbd-dialog-escape](#kbd-dialog-escape)) · [color-contrast](#color-contrast) · [image-alt](#image-alt) · [svg-img-alt](#svg-img-alt) · [label](#label) · [placeholder-label](#placeholder-label) · [select-name](#select-name) · [button-name](#button-name) · [link-name](#link-name) · [html-has-lang](#html-has-lang) · [document-title](#document-title) · [heading-order](#heading-order) · [page-has-heading-one](#page-has-heading-one) · [landmark-one-main](#landmark-one-main) · [region](#region) · [bypass](#bypass) · [list](#list) · [listitem](#listitem) · [duplicate-id-aria](#duplicate-id-aria) · [aria-hidden-focus](#aria-hidden-focus) · [aria-required-attr](#aria-required-attr) · [aria-valid-attr-value](#aria-valid-attr-value) · [nested-interactive](#nested-interactive) · [tabindex](#tabindex) · [meta-viewport](#meta-viewport) · [frame-title](#frame-title) · [scrollable-region-focusable](#scrollable-region-focusable) · [target-size](#target-size) · [aria-dialog-name](#aria-dialog-name) · [link-in-text-block](#link-in-text-block)
 
 ---
 
@@ -105,6 +105,86 @@ Focus jumps backwards on screen. Usually CSS `order`, `flex-direction: row-rever
 
 See [tabindex](#tabindex).
 
+## kbd-focus-removed
+
+Tab reaches the element, then a script throws focus away (`onfocus="blur()"`, `onFocus={e => e.target.blur()}`, a focus handler that calls `.focus()` on something else). Keyboard users lose their place and never see where they are (WCAG failure F55: 2.1.1, 2.4.7, 3.2.1). Usually written to hide the focus ring.
+
+```html
+<!-- before -->
+<a href="/news" onfocus="blur()">News</a>
+<!-- after: keep focus; hide the ring from mouse users only -->
+<a href="/news">News</a>
+<style> a:focus:not(:focus-visible) { outline: none; } a:focus-visible { outline: 3px solid #1d4ed8; } </style>
+```
+
+## kbd-focus-obscured
+
+When focused, the control is completely hidden under a sticky header, cookie bar, or chat widget (WCAG 2.2 SC 2.4.11). Two causes:
+
+1. The page scrolls the control under the layer. Fix with scroll padding equal to the layer's height:
+
+```css
+html { scroll-padding-top: 80px; scroll-padding-bottom: 96px; } /* sticky header / bottom bar heights */
+```
+
+2. The control is at the very end of the page and cannot scroll above a bottom bar at all. Scroll padding cannot help; leave room for the bar: `body { padding-bottom: 96px; }`, or make the banner non-fixed / dismissible and move focus into it first.
+
+Tailwind: `scroll-pt-20 scroll-pb-24` on `<html>`, `pb-24` on `<body>`. The audit Tabs forwards only; also Shift+Tab backwards through the page yourself, since a sticky *header* usually hides focus on the way up.
+
+## kbd-hover-only
+
+A submenu opens on mouse hover but there is no keyboard way to open it, so its links are unreachable (2.1.1).
+
+```css
+/* before */ .menu li:hover > ul { display: block; }
+/* after  */ .menu li:hover > ul, .menu li:focus-within > ul { display: block; }
+```
+
+Better for anything more than a couple of links: a disclosure button (APG "disclosure navigation menu").
+
+```jsx
+<li>
+  <a href="/products">Products</a>
+  <button aria-expanded={open} aria-controls="products-menu" onClick={() => setOpen(!open)}>
+    <span className="sr-only">Products submenu</span>▾
+  </button>
+  <ul id="products-menu" hidden={!open}>…</ul>
+</li>
+```
+
+Close it on Escape and when focus leaves. Tailwind: pair `group-hover:block` with `group-focus-within:block`.
+
+## kbd-change-on-input
+
+Choosing an option immediately navigates, submits, or opens a window (3.2.2 On Input). Keyboard users arrow through options and get taken away on the first keypress.
+
+```html
+<!-- before -->
+<select onchange="location.href = this.value">…</select>
+<!-- after -->
+<form action="/go">
+  <label for="dest">Go to</label>
+  <select id="dest" name="dest">…</select>
+  <button type="submit">Go</button>
+</form>
+```
+
+Filtering a list in place (no page load, focus stays put) is fine; announce the result count with `role="status"`.
+
+## kbd-dialog-escape
+
+The open modal ignores Escape. Not a WCAG failure by itself while a Close button is reachable, but every user expects it (APG dialog pattern). Native `<dialog>` opened with `showModal()` closes on Escape for free; custom modals need a keydown handler. In UI kits look for the prop that disables it (`disableEscapeKeyDown` in MUI, `onEscapeKeyDown={e => e.preventDefault()}` in Radix).
+
+## kbd-dialog-focus-return
+
+After the dialog closes, focus lands on `<body>` (or elsewhere) instead of the button that opened it, so keyboard and screen-reader users start over from the top (2.4.3).
+
+```js
+const trigger = document.activeElement;   // before opening
+dialog.showModal();
+dialog.addEventListener('close', () => trigger.focus(), { once: true });
+```
+
 ---
 
 ## color-contrast
@@ -113,12 +193,13 @@ Text needs 4.5:1 against its background (3:1 if ≥24px, or ≥18.66px bold). Ge
 
 ```bash
 node scripts/contrast.mjs "#a3a8b5" "#ffffff"
-#  Nearest fg for 4.5:1: #727683 4.53:1 darker
+#  Nearest fg for 4.5:1 (same hue; ΔE = OKLab distance, 0.02 ≈ just noticeable):
+#    #727684  4.52:1  darker  ΔE 0.164
 ```
 
 ```css
 /* before */ .lede { color: #a3a8b5; }
-/* after  */ .lede { color: #727683; }
+/* after  */ .lede { color: #727684; }
 ```
 
 Tailwind: on white, `text-gray-400` fails (≈2.5:1); `text-gray-500` passes on white (≈4.8:1), `text-gray-600` passes on `bg-gray-50`/`bg-gray-100`. Check dark mode separately (`dark:text-gray-400` on `gray-900` passes, `gray-500` on `gray-800` does not). Prefer fixing the design token (`--muted-foreground`) over individual classes. Disabled controls are exempt, placeholder text is not.

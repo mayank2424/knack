@@ -54,7 +54,7 @@ Pin down these six things. Infer whatever you can from the request and the repo,
 Write `storyboard.md` next to the composition. Use the beat-sheet format in `references/storyboard.md`. Each beat has a time range, the on-screen text or visual, the motion, and why the beat exists.
 
 These rules are not optional:
-- **Hook fast.** Something meaningful moves within 0.5s, and the core promise reads by 1s on social or 2s elsewhere.
+- **Hook fast.** Something meaningful moves within 0.5s, and the core promise reads by 1s on social or 2s elsewhere. On social, frame 0 is the poster: it should already show the hook.
 - **One idea per beat.** Give each beat one focal point. Nothing else should compete with it.
 - **Reading time.** Hold text for at least `0.3s × words + 0.8s` after it finishes entering.
 - **End card.** Hold the logo or CTA for at least 2s on a still final frame.
@@ -89,7 +89,7 @@ The core API is below. The full reference is `references/runtime-api.md`.
 
 ```js
 Motion.config({ width: 1920, height: 1080, fps: 30, duration: 10, background: '#0b0b10' });
-Motion.from('#title', { opacity: 0, y: 40 }, { start: 0.3, duration: 0.8, ease: 'snappy' }); // entrance
+Motion.from('#title', { opacity: 0, y: 40 }, { start: 0.3, duration: 0.8, ease: 'strong' }); // entrance
 Motion.to('#title', { start: 2.6, duration: 0.4, ease: 'inCubic', to: { opacity: 0, y: -30 } }); // exit
 Motion.to('.card', { start: 1, duration: 0.6, stagger: 0.08, from: { scale: 0.9 }, to: { scale: 1 } });
 Motion.to('#hero', { start: 0, duration: 1, ease: { stiffness: 170, damping: 18 }, from: {...}, to: {...} }); // spring
@@ -103,14 +103,25 @@ Animatable props:
 - Transforms: `x y z scale scaleX scaleY rotate rotateX rotateY skewX skewY`
 - Visual: `opacity`, `blur`, colors, any CSS length (`width: 0 → 520`), and CSS variables (`'--r': '0%' → '100%'`)
 
-Easing names: `snappy` (UI entrances), `smooth` (camera moves and morphs), `outCubic`, `inCubic`, `outExpo`, `outBack`, `anticipate`, a cubic-bezier array, or a spring object.
+Easing names: `strong` (the premium default for entrances: long, soft landing), `strongInOut` (decisive on-screen moves: selections, swaps), `snappy` (UI entrances), `smooth` (camera moves and morphs), `outCubic`, `inCubic` (exits), `outExpo`, `outBack`, `anticipate`, a cubic-bezier array, or a spring object. Targets can be a selector, an element, or an array mixing both (`['#a', '#b']`).
+
+### Avoid the "made by AI" look
+
+These are the tells people call out in generated videos. Don't ship them unless the brand demands it:
+- a purple-to-cyan gradient (as text fill or backdrop glow), everything centered, and the same fade-up on every element
+- skeleton bars standing in for a product (use real copy and real UI, or a real screenshot)
+- bouncy springs everywhere (one confident overshoot on a hero moment, at most), anything scaling from `0` (start at 0.5–0.95 with opacity)
+- slow crossfades between scenes; prefer a zoom-through (exit: scale up + blur ≤ 10px, `inCubic`, ~0.3s) or a masked hand-off where the next element starts while the last one leaves
+- one neutral palette + **one** accent, 2 type weights with real contrast (400 vs 700+), tight display tracking (−0.03 to −0.05em)
 
 ### Determinism rules (renders break if you ignore these)
 
 - **No wall clock.** Never use `Date.now`, `performance.now`, `setTimeout`, `requestAnimationFrame` or `Math.random`. Use `Motion.random(seed)` and `Motion.on(t => …)` instead.
 - **CSS `@keyframes` are fine.** The renderer seeks them. Class-triggered CSS `transition`s are not deterministic, so don't use them.
 - **Transforms compose.** Motion writes the individual `translate` / `rotate` / `scale` properties, so a CSS `transform: translate(-50%,-50%)` used for centering survives. Once you animate `rotateX`, `rotateY` or `skew*`, Motion owns `transform`, so center that element another way (inset + margin, or a wrapper).
-- **Fonts.** Load Google Fonts with `&display=block`. Local images are referenced relative to the HTML file.
+- **Fonts.** Load Google Fonts with `&display=block`. The runtime preloads every declared face before frame 0 (canvas text included). Local images are referenced relative to the HTML file.
+- **Masked text.** When text rises out of an `overflow: hidden` mask, travel `±130%`, not `±100%`: the glyph box is taller than the line box, so 100% leaves descender slivers in the mask (`--check` flags this as an overlap).
+- **Per-format CSS.** The renderer tags `<html>` with `knack-out-<ext>`. Always add `.knack-out-gif .grain { display: none; }`: per-frame grain makes a GIF ~50× bigger.
 - **Camera moves.** Animate one wrapper element (see `app-showcase`), not each child.
 - **Scaled-down content.** Mark screenshots and UI mockups with `data-knack-ignore` so the lint skips their small text.
 
@@ -128,19 +139,26 @@ node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --still 4.2
 
 1. Read the filmstrip PNG and judge it against `references/review-checklist.md`. Check hierarchy, collisions, empty frames, legibility, brand fit, and whether each beat reads on its own.
 2. Fix every `--check` warning unless you can explain why it's intentional.
-3. For transitions, render stills a few frames apart (e.g. 2.9, 3.0, 3.1) to catch overlaps and pops.
+3. For transitions, render stills a few frames apart (e.g. 2.9, 3.0, 3.1) to catch overlaps and pops. For fast moves, preview the blur too: `--still 0.6 --motion-blur 8`.
 4. Fix, re-run, and look again. Don't render the final video until a filmstrip looks right.
 
 ## 5. Render
 
 ```bash
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html                          # MP4 (H.264, CRF 18)
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o videos/<slug>/demo.gif # README/PR GIF
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html                          # MP4 (H.264, CRF 18, BT.709-tagged)
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o videos/<slug>/demo.gif # README/PR GIF (captured at 20fps, ≤960px)
 node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html -o out.mov               # ProRes 4444 + alpha
-node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --audio music.mp3        # mux audio, 1s fade-out
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --audio music.mp3        # mux audio (trimmed/padded), 1s fade-out
+node ${CLAUDE_SKILL_DIR}/scripts/render.mjs videos/<slug>/index.html --motion-blur 8           # film-style motion blur (8× render time)
 ```
 
-Other flags: `--fps 60`, `--scale 0.5` (fast drafts), `--from 2 --to 5` (render a range), `--workers 6`, `--transparent` (WebM/MOV with a transparent stage background), `--crf 23` (smaller file).
+Other flags: `--fps 60`, `--scale 2` (4K from a 1080p comp, crisp text) or `0.5` (fast drafts), `--from 2 --to 5` (range; audio is offset to match), `--workers 6`, `--transparent`, `--crf 23` (smaller), `-o frames/` (PNG sequence), `--gifski` (smaller GIFs if gifski is installed).
+
+Quality choices (each one measured; details in `references/formats.md`):
+- **Color.** Output is converted with the BT.709 matrix and tagged, so brand colors match the browser (mean ΔE2000 ≈ 0.2 in Chrome). Apple players (QuickTime, Safari, iOS) apply their own gamma to BT.709 and show midtones a little lighter; for files people will watch directly on Apple devices or in a web page, add `--trc srgb`, which measured exact in both Chrome and AVFoundation.
+- **Banding.** Big dark gradients and glows band in 8-bit. Add `--dither` (static ±1-level dither) or `--10bit` (HEVC Main10: smoothest and smallest; plays in Safari, Chrome, Edge, QuickTime, not Firefox on macOS/Linux).
+- **Motion blur.** `--motion-blur 8` (12–16 for whip pans) averages sub-frames over a 180° shutter, like a real camera. Use it for stings, whip pans and fast UI moves; skip it for calm typographic pieces, where it only costs render time. Static elements stay perfectly sharp.
+- **Frame rate.** 30fps for type and social. 60fps for camera pans, fast horizontal moves and stings (they judder at 30). Motion blur at 30fps is the cheaper alternative for most pieces.
 
 To make a transparent overlay, remove the stage background. Set `background: 'transparent'` in `config` and don't set a `#stage` background in CSS.
 
@@ -165,12 +183,13 @@ Read `references/motion-principles.md` for depth. Use it when choreographing any
   - Camera moves and big reveals: 900–1400ms.
   - Nothing important happens in under 150ms.
 - **Easing.**
-  - Entrances decelerate (`snappy`, `outCubic`, `outExpo`). Exits accelerate (`inCubic`).
-  - Moves from one on-screen place to another use `smooth`.
+  - Entrances decelerate (`strong`, `snappy`, `outCubic`, `outExpo`). Exits accelerate (`inCubic`) and take 60–70% of the entrance time.
+  - Moves from one on-screen place to another use `smooth` (camera) or `strongInOut` (UI selection, swaps).
   - Use linear only for progress bars, tickers and endless loops.
 - **Springs.** Use them for playful or physical moments. stiffness 120–260, damping 12–20. Lower damping gives more bounce, so use it sparingly.
 - **Stagger.** 40–90ms between siblings. Lead with the most important element. Cap the whole stagger at about 600ms.
 - **Direction is meaning.** Keep entrance and exit directions consistent within a piece (e.g. in from below, out through the top).
 - **Overlap.** Start the next beat 100–200ms before the previous one finishes. Gaps feel dead and hard cuts feel jumpy.
 - **Hierarchy through motion.** The hero element moves most and first. Supporting elements move less, later and with less distance.
-- **Restraint.** If everything moves, nothing matters. Keep 1–2 ambient motions (a drifting glow, grain) for life, and hold the rest still.
+- **Restraint.** If everything moves, nothing matters. Grain or one slow light is enough ambient life; never add a slow push or drift late in a scene just to fill it. Stillness beats filler motion.
+- **Audio sync.** With music, put major entrances on beats (120 BPM = every 0.5s; `Motion.config` time is seconds, so beat n is at `n * 60 / bpm`). Land the end card on a downbeat.

@@ -18,11 +18,16 @@ itself before handing you a file that fits GitHub's limits.
 - **Retina-sharp and smooth.** Time is virtualised, so every frame is captured at 2x with
   exact timing, even on a slow machine. No dropped frames, no soft VP8 blur.
 - **A cursor people can follow.** Headless browsers have no cursor; the recorder draws one
-  with human-like curved, eased movement, hand/I-beam shapes, press feedback and ripples.
+  at a legible size with a human velocity profile (minimum-jerk, gentle landing), motion
+  blur while it travels, hand/I-beam shapes, press feedback and ripples.
+- **Calm, framed zooms.** Zoom fits the target, scales straight in about a fixed point (no
+  sideways slide) and settles softly. `--no-zoom` gives a reduced-motion take.
 - **Self-checking.** A dry run screenshots every step; failures list similar elements with
   ready-to-paste selectors; every recording ends with a contact sheet the agent reads.
-- **Built for where demos go.** GIF (palette-optimised, size warnings at 10 MB), MP4 for
-  PRs and social, WebM. Idle-trimming, speed-up and length caps included.
+- **Built for where demos go.** MP4/WebM with BT.709 colour tags so brand colours match
+  the page (mean ΔE 0.3 in Chrome, was 5.6), GIF with a full-clip palette (no speckled
+  chrome or banded gradients), size warnings at 10 MB, a legibility estimate at README and
+  phone width. Idle-trimming, speed-up and length caps included.
 
 ## Example prompts
 
@@ -42,7 +47,7 @@ node scripts/record.mjs examples/flow.json     # records the bundled Orbit demo 
 
 You get `.knack/demo-recorder/orbit-demo.mp4`, `orbit-demo.gif` and `orbit-demo-sheet.png`
 (a 15-second clip: typing a task, zooming in to complete one, opening the ⌘K palette and
-switching to dark mode). About 45 seconds on an M-series Mac; MP4 ≈ 1.3 MB, GIF ≈ 3 MB.
+switching to dark mode). About 30 seconds on an M-series Mac; MP4 ≈ 1.3 MB, GIF ≈ 2.1 MB.
 
 Other entry points:
 

@@ -99,6 +99,7 @@ if (has('next')) {
       if (!m) return null;
       const segs = (m[1] || '').split('/');
       if (segs.some((s) => /^\(\.{1,3}\)/.test(s))) return null; // intercepting route
+      if (segs.some((s) => s.startsWith('_'))) return null; // _private folder: not routable
       return join(cleanSegs(segs));
     },
     scope(f) {
@@ -170,7 +171,8 @@ if (has('astro')) {
     name: 'Astro',
     route(f) {
       const m = f.match(/^src\/pages\/(.*)\.(astro|md|mdx|html)$/);
-      return m ? join(m[1].split('/').map((s) => (s === 'index' ? '' : s))) : null;
+      if (!m || m[1].split('/').some((s) => s.startsWith('_'))) return null; // _files and _dirs are excluded from routing
+      return join(m[1].split('/').map((s) => (s === 'index' ? '' : s)));
     },
     scope() { return null; },
   });
@@ -282,12 +284,21 @@ for (const f of files) {
 }
 
 // ---------------------------------------------------------------- analysis
-const GLOBAL_RE = /(^|\/)(tailwind\.config\.[cm]?[jt]s|postcss\.config\.[cm]?[jt]s|uno\.config\.[jt]s|panda\.config\.[jt]s|theme\.[jt]sx?|tokens?\.(json|css|scss|[jt]s)|globals?\.(s?css|less)|app\.(s?css|less)|index\.(s?css|less)|reset\.(s?css)|fonts?\.(s?css)|variables\.(s?css))$/;
+const GLOBAL_RE = /(^|\/)(tailwind\.config\.[cm]?[jt]s|postcss\.config\.[cm]?[jt]s|uno\.config\.[jt]s|panda\.config\.[jt]s|theme\.([jt]sx?|s?css|less)|tokens?\.(json|css|scss|[jt]s)|globals?\.(s?css|less)|app\.(s?css|less)|index\.(s?css|less)|reset\.(s?css)|fonts?\.(s?css)|variables\.(s?css))$/;
 const NON_VISUAL_RE = /(\.test\.|\.spec\.|__tests__\/|\.stories\.|\.snap$|(^|\/)README|\.md$|^\.github\/|(^|\/)(package-lock\.json|pnpm-lock\.yaml|yarn\.lock|bun\.lockb?)$|\.d\.ts$|(^|\/)(e2e|cypress|playwright)\/)/;
 
 const candidates = new Map(); // route -> {route, confidence, reasons[]}
 const RANK = { high: 3, medium: 2, low: 1 };
+// Rest params that may be empty (Astro/SvelteKit [...x], Next [[...x]]) also render the parent path.
+const OPTIONAL_REST = has('astro') || has('@sveltejs/kit') ? /\/\[\[?\.\.\.[^\]]+\]\]?$/ : /\/\[\[\.\.\.[^\]]+\]\]$/;
 function add(route, confidence, reason) {
+  if (OPTIONAL_REST.test(route)) {
+    const parent = route.replace(OPTIONAL_REST, '') || '/';
+    if (!isDynamic(parent)) addOne(parent, confidence, `${reason} (rest param, parent path)`);
+  }
+  addOne(route, confidence, reason);
+}
+function addOne(route, confidence, reason) {
   const c = candidates.get(route) || { route, confidence, dynamic: isDynamic(route), reasons: [] };
   if (RANK[confidence] > RANK[c.confidence]) c.confidence = confidence;
   if (c.reasons.length < 4 && !c.reasons.includes(reason)) c.reasons.push(reason);
@@ -345,6 +356,7 @@ for (const f of changedApp) {
     }
     frontier = next;
   }
+  if (reached && GLOBAL_RE.test(f)) globalHit = globalHit || `${f} (global style/config)`;
   if (!reached) {
     if (GLOBAL_RE.test(f) || /\.(s?css|less)$/.test(f) && !importers.has(f)) { globalHit = globalHit || `${f} (global style/config)`; }
     else if (/\.(woff2?|ttf|otf)$/.test(f) || /^public\//.test(f)) { globalHit = globalHit || `${f} (static asset)`; }
@@ -377,7 +389,9 @@ if (globalHit) {
 // ------------------------------------------------------------------ output
 const sorted = [...candidates.values()].sort((a, b) => RANK[b.confidence] - RANK[a.confidence] || a.route.localeCompare(b.route));
 const max = +(opts.max ?? 8);
-const pick = sorted.filter((c) => !c.dynamic && (c.confidence !== 'low' || globalHit)).slice(0, max);
+// Error pages (/404, /500) only when their own file changed: otherwise they just repeat the layout.
+const errorPage = (c) => /^\/(404|500|not-found|_error)\/?$/.test(c.route) && !c.reasons.some((r) => r.includes('(page file changed)'));
+const pick = sorted.filter((c) => !c.dynamic && !errorPage(c) && (c.confidence !== 'low' || globalHit)).slice(0, max);
 if (!pick.length) pick.push(...sorted.filter((c) => !c.dynamic).slice(0, Math.min(max, 3)));
 const result = {
   base: baseInfo && { ref: baseInfo.ref, sha: baseInfo.sha },

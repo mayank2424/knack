@@ -218,3 +218,8 @@ export function lineIndex(text) {
 
 export const round = (n, d = 2) => Math.round(n * 10 ** d) / 10 ** d;
 export const plural = (n, w, p = w + 's') => `${n} ${n === 1 ? w : p}`;
+
+/** Tests, stories and fixtures: skipped by default (they hold demo values and fake token sets). */
+const TEST_DIR = /(^|[\\/])(__tests__|__mocks__|__fixtures__|__stories__|fixtures?|tests?|e2e|cypress|playwright|stories|\.storybook)[\\/]/;
+const TEST_FILE = /\.(test|spec|e2e|cy)\.[cm]?[jt]sx?$|\.(stories|story)\.[\w.]+$/;
+export const isTestPath = (relPath) => TEST_DIR.test(relPath) || TEST_FILE.test(relPath);

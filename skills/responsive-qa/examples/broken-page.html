@@ -10,6 +10,19 @@
   Also contains intentional patterns that must NOT be flagged (marked "OK:"):
   a horizontally scrolling logo strip, an ellipsis filename, an sr-only label,
   a decorative aria-hidden word behind the hero, a scrollable code block and a sticky header.
+  Machine-readable expectations for scripts/selftest.mjs:
+  EXPECT viewport-meta       (page)            @320       BUG 1
+  EXPECT overlap             a.header-cta      @320-375   BUG 2
+  EXPECT image-overflow      img.hero-shot     @320-414   BUG 3
+  EXPECT horizontal-overflow p.endpoint        @320-414   BUG 4
+  EXPECT text-overflow       p.endpoint        @1280-1920 BUG 4b
+  EXPECT image-distorted     img.avatar        @all       BUG 5
+  EXPECT text-clipped        span.badge        @all       BUG 6
+  EXPECT horizontal-overflow table.compare     @320-768   BUG 7
+  EXPECT long-lines          p                 @1024-1920 BUG 8
+  EXPECT tap-target          div.social        @320-768   BUG 9
+  EXPECT tiny-text           p.legal           @320-414   BUG 10
+  EXPECT fixed-cover         div.cookie        @320-414   BUG 11
 -->
 <style>
   :root { --ink: #14152b; --muted: #5b5f78; --brand: #4f46e5; --line: #e6e8f2; --bg: #f7f8fc; }

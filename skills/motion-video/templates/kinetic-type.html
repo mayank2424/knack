@@ -2,52 +2,61 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="description" content="Kinetic typography: three punchy lines, masked word reveals, end lockup (16:9, 8s)" />
+<meta name="description" content="Kinetic typography: three lines where the words act out their meaning, masked reveals, overlapping seams, end lockup (16:9, 10s)" />
 <title>Kinetic type</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
-<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;700;800&display=block" rel="stylesheet" />
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;800&display=block" rel="stylesheet" />
 <script src="motion.js"></script>
 <style>
   :root {
-    --bg: #0c0b10;
+    --bg: #0e0d11;
     --ink: #f4f1ea;
-    --muted: #8a8696;
+    --muted: #7d7987;
     --accent: #ff5a36;
   }
   #stage { background: var(--bg); color: var(--ink); font-family: 'Inter Tight', sans-serif; }
   .line {
     position: absolute; left: 160px; right: 160px; top: 50%;
     transform: translateY(-50%);
-    font-size: 148px; font-weight: 800; letter-spacing: -0.045em; line-height: 1.02;
+    font-size: 156px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.02;
   }
-  /* Each word sits in an overflow:hidden mask so it can slide up from below. */
-  .line .mask { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.08em; margin-bottom: -0.08em; }
+  /* Each word sits in an overflow:hidden mask and rises from below. Travel ±130% (not 100%): the glyph
+     box is taller than the line box, so a 100% offset leaves descender slivers peeking into the mask. */
+  .line .mask { display: inline-block; overflow: hidden; vertical-align: top; padding: 0 0.04em 0.1em; margin: 0 -0.04em -0.1em; }
   .accent { color: var(--accent); }
+  .soft { font-weight: 400; color: var(--muted); }
+  /* The struck word: the line draws across it, then it dims. */
+  .strike { position: relative; display: inline-block; }
+  .strike::after { content: ''; position: absolute; left: -0.04em; right: -0.04em; top: 54%; height: 0.075em; background: var(--accent);
+    border-radius: 0.04em; transform-origin: left center; transform: scaleX(var(--s, 0)); opacity: var(--o, 1); }
   .grain {
     position: absolute; inset: -50%; opacity: .06; pointer-events: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
-  .bar { position: absolute; left: 160px; bottom: 140px; height: 6px; width: 0; background: var(--accent); border-radius: 3px; }
+  /* Per-frame grain makes GIFs ~50× bigger; the renderer tags <html> with the output format. */
+  .knack-out-gif .grain { display: none; }
   .lockup { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
-  .lockup h2 { margin: 0; font-size: 150px; font-weight: 800; letter-spacing: -0.04em; }
-  .lockup p { margin: 22px 0 0; font-size: 44px; font-weight: 500; color: var(--muted); letter-spacing: -0.01em; }
+  .lockup h2 { margin: 0; font-size: 150px; font-weight: 800; letter-spacing: -0.045em; line-height: 1; }
+  .lockup .mask { display: block; overflow: hidden; padding-bottom: .12em; margin-bottom: -.12em; }
+  .lockup .mask > span { display: inline-block; }
+  .lockup p { margin: 26px 0 0; font-size: 42px; font-weight: 500; color: var(--muted); letter-spacing: -0.01em; }
 </style>
 </head>
 <body>
 <div id="stage">
-  <div class="line" id="l1">Ship the idea.</div>
-  <div class="line" id="l2">Not the <span class="accent">meeting</span> about it.</div>
-  <div class="line" id="l3">Motion that <span class="accent">moves</span> people.</div>
-  <div class="bar" id="bar"></div>
-  <div class="lockup" id="lockup"><div><h2 id="brand">Your Brand</h2><p id="tag">yourbrand.com</p></div></div>
+  <div class="line" id="l1">Ship the <span class="accent">idea.</span></div>
+  <div class="line" id="l2"><span class="soft">Not the</span> <span class="strike" id="strike">meeting</span> <span class="soft">about it.</span></div>
+  <div class="line" id="l3">Motion that <span class="accent" id="moves">moves</span> people.</div>
+  <div class="lockup" id="lockup"><div><h2><span class="mask"><span id="brand">Your Brand</span></span></h2><p id="tag">yourbrand.com</p></div></div>
   <div class="grain"></div>
 </div>
 <script>
-  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 8, background: '#0c0b10' });
+  Motion.config({ width: 1920, height: 1080, fps: 30, duration: 10, background: '#0e0d11' });
 
-  // Wrap each word in a mask so it can rise from below the baseline.
+  // Wrap each word in a mask so it can rise from below the baseline. Returns the inner spans.
   function maskWords(sel) {
     const el = document.querySelector(sel);
+    el.setAttribute('aria-label', el.textContent.replace(/\s+/g, ' ').trim());
     const words = [];
     const walk = (node) => Array.from(node.childNodes).forEach((c) => {
       if (c.nodeType === 3) {
@@ -66,31 +75,35 @@
     return words;
   }
 
-  // Beat sheet (seconds): each line holds long enough to read
-  // (~0.3s per word + 1s), then exits before the next enters.
+  // Beat sheet (seconds). Seams overlap: the next line starts rising while the
+  // previous one is still leaving, so the eye is handed over instead of dropped.
   const beats = [
-    { sel: '#l1', in: 0.3, out: 2.2 },
-    { sel: '#l2', in: 2.5, out: 4.45 },
-    { sel: '#l3', in: 5.0, out: 6.4 },
+    { sel: '#l1', in: 0.2, out: 2.15 },
+    { sel: '#l2', in: 2.35, out: 4.95 },
+    { sel: '#l3', in: 5.15, out: 7.05 },
   ];
-
+  const words = {};
   beats.forEach(({ sel, in: tin, out }) => {
-    const words = maskWords(sel);
-    // Entrance: rise from 110% with a snappy curve, staggered 70ms.
-    Motion.to(words, { start: tin, duration: 0.75, stagger: 0.07, ease: 'snappy', from: { y: '110%' }, to: { y: '0%' } });
-    // Exit: faster than the entrance (exits should never steal attention).
-    Motion.to(words, { start: out, duration: 0.4, stagger: 0.03, ease: 'inCubic', to: { y: '-125%' } });
+    const w = (words[sel] = maskWords(sel));
+    Motion.to(w, { start: tin, duration: 0.85, stagger: 0.065, ease: 'strong', from: { y: '130%' }, to: { y: '0%' } });
+    Motion.to(w, { start: out, duration: 0.38, stagger: 0.025, ease: 'inCubic', to: { y: '-130%' } });
   });
 
-  // Accent bar grows under line 3, then retracts with the exit.
-  Motion.to('#bar', { start: 5.4, duration: 0.8, ease: 'smooth', from: { width: 0 }, to: { width: 520 } });
-  Motion.to('#bar', { start: 6.3, duration: 0.35, ease: 'inCubic', to: { width: 0, x: 520 } });
+  // Line 2 acts out its meaning: the accent stroke crosses out "meeting", which then dims.
+  Motion.to('#strike', { start: 3.25, duration: 0.5, ease: 'strongInOut', from: { '--s': 0 }, to: { '--s': 1 } });
+  Motion.to('#strike', { start: 3.6, duration: 0.5, ease: 'outCubic', from: { color: '#f4f1ea' }, to: { color: '#7d7987' } });
+  // The stroke is not inside a word mask, so it must leave with the line.
+  Motion.to('#strike', { start: 4.95, duration: 0.3, ease: 'inCubic', from: { '--o': 1 }, to: { '--o': 0 } });
 
-  // Lockup: scale-down settle with spring, tagline follows 150ms later.
-  Motion.to('#brand', { start: 6.6, duration: 1.0, ease: { stiffness: 140, damping: 18 }, from: { opacity: 0, scale: 1.25, blur: 12 }, to: { opacity: 1, scale: 1, blur: 0 } });
-  Motion.to('#tag', { start: 6.85, duration: 0.7, ease: 'outCubic', from: { opacity: 0, y: 24 }, to: { opacity: 1, y: 0 } });
+  // Line 3: "moves" whips in late from the right with a skew that straightens out (it moves; the rest rises).
+  const moves = words['#l3'][2];
+  Motion.to(moves, { start: 5.35, duration: 0.7, ease: 'strong', from: { x: 220, skewX: -16 }, to: { x: 0, skewX: 0 } });
 
-  // Grain jitters every frame for a filmic feel (deterministic via seeded PRNG).
+  // Lockup: brand rises from its mask with a whisper of de-blur; tagline follows 180ms later.
+  Motion.to('#brand', { start: 7.25, duration: 1.0, ease: 'strong', from: { y: '130%', blur: 6 }, to: { y: '0%', blur: 0 } });
+  Motion.from('#tag', { opacity: 0, y: 18 }, { start: 7.45, duration: 0.7, ease: 'strong' });
+
+  // Grain jitters at 24fps for a filmic feel (deterministic via seeded PRNG).
   const rnd = Motion.random(7);
   const offsets = Array.from({ length: 240 }, () => [rnd() * 100 - 50, rnd() * 100 - 50]);
   const grain = document.querySelector('.grain');

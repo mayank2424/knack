@@ -25,8 +25,16 @@ Read the filmstrip PNG, and stills at the transitions. Score each item pass or f
 - [ ] Springs are limited to hero moments, and nothing bounces more than once (unless the brand is playful).
 - [ ] Ambient motion is subtle and never distracts.
 
+## Craft (the "made by AI" tells)
+- [ ] No purple-to-cyan gradient text or backdrop glow, unless it's the brand.
+- [ ] Not everything is centered, and not every element uses the same fade-up.
+- [ ] Real copy or real UI, no skeleton bars posing as a product.
+- [ ] Nothing scales from 0; at most one spring overshoot in the piece.
+- [ ] Scene seams are a zoom-through or an overlapping hand-off, not a slow crossfade.
+- [ ] One accent color, and type weights with clear contrast.
+
 ## Story and brand
-- [ ] The first 1–2 seconds deliver the hook.
+- [ ] The first 1–2 seconds deliver the hook. On social, frame 0 already shows it (it's the poster).
 - [ ] Each beat carries exactly one idea and matches the storyboard.
 - [ ] Colors and fonts match the brand, or the stated look.
 - [ ] The end card shows a clear brand or CTA, held still for at least 2s.
@@ -36,3 +44,5 @@ Read the filmstrip PNG, and stills at the transitions. Score each item pass or f
 - [ ] `--check` passes, or each warning has a written justification.
 - [ ] Duration matches the platform target.
 - [ ] File size suits the destination (GIF ≤ 10 MB for GitHub, MP4 ≤ ~20 MB for most social).
+- [ ] Fast moves (whip pans, stings, flying elements) are rendered at 60fps or with `--motion-blur`.
+- [ ] Large dark gradients checked for banding; use `--dither` or `--10bit` if you see steps.

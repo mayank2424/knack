@@ -10,9 +10,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseArgs, UsageError, walk, rel, shown, c, lineIndex, plural } from './lib/util.mjs';
+import { parseArgs, UsageError, walk, rel, shown, c, lineIndex, plural, isTestPath } from './lib/util.mjs';
 import { loadTokens, CATEGORIES } from './tokens.mjs';
-import { extractFile, makeIgnore, SCAN_EXTS } from './lib/extract.mjs';
+import { extractFile, makeIgnore, isGenerated, SCAN_EXTS } from './lib/extract.mjs';
 import { buildIndex, classify, parseThresholds } from './lib/match.mjs';
 import { propose } from './lib/propose.mjs';
 import { printSummary, writeReports, toJson, unifiedDiff, STATUS } from './lib/report.mjs';
@@ -40,20 +40,26 @@ Fixing
 
 Matching
   --tokens <path>        Token source file/folder (repeatable). Default: auto-discover.
-  --threshold <k=v,…>    NEAR thresholds. color=ΔE2000 (default 4), size=px (2), pct=% (10),
-                         duration=% (15), weight=units (50).
+  --threshold <k=v,…>    NEAR thresholds. color=ΔE2000 (default 4), size=px (2) and pct=% (5) for
+                         spacing/radius, font=px (1) for font sizes, duration=% (15), weight=units (50).
   --ignore <values>      Extra raw values to ignore, e.g. 2px,#000,z:9999. Defaults ignore
                          0, 1px, 0.5px hairlines and z-index -1/0/1.
   --strict               Do not ignore hairlines / trivial z-indexes.
   --include <glob>       Only scan matching files (repeatable, comma-separated).
   --exclude <glob>       Skip matching files (repeatable). node_modules, dist, build, dot-folders
                          and .gitignored paths are always skipped.
-  --include-tests        Also scan tests/fixtures (*.test.*, *.spec.*, __tests__/), skipped by default.
+  --include-tests        Also scan tests, stories and fixtures (*.test.*, *.stories.*, __tests__/,
+                         fixtures/, stories/), skipped by default.
   --exec-config          Evaluate tailwind.config.* instead of reading it statically.
   --tailwind-defaults <m>  scales (default) | none.
   --json-vars            Trust that DTCG / Style Dictionary JSON tokens exist as var(--path).
   --rem <px>             Root font size for rem → px (default 16).
   -h, --help             Show this help.
+
+Skipped automatically: generated files (compiled Tailwind, @generated), JS/TS palette or theme
+objects, @font-face descriptors, and lines marked token-drift-ignore / stylelint-disable-line
+(or the line before with -next-line). Emails, OG images and React Native files are listed but
+not scored, and so are colors in plain JS strings.
 
 Examples
   node scan.mjs .                              # summary + .knack/token-drift/report.md
@@ -66,61 +72,77 @@ export async function scan(target, opts = {}) {
   const root = path.resolve(target);
   // token discovery always sees the whole project; --include/--exclude only limit what is scanned
   const ctx = await loadTokens(root, { ...opts, include: undefined, exclude: undefined });
-  const index = buildIndex(ctx.tokens);
+  const index = buildIndex(ctx.tokens, ctx.scopes, ctx.preprocessorReach, ctx.themeReach);
   const thresholds = parseThresholds(opts.threshold);
-  const env = { tailwind: ctx.tailwind, fragments: index.fragments, ignore: makeIgnore(opts.ignore, opts.strict) };
-  const TEST_FILE = /(^|[\\/])(__tests__|__mocks__|__fixtures__|fixtures)[\\/]|\.(test|spec)\.[cm]?[jt]sx?$/;
+  const env = { tailwind: ctx.tailwind, fragments: index.fragments, ignore: makeIgnore(opts.ignore, opts.strict), tokenDefSites: ctx.tokenDefSites };
   const files = walk(root, { exts: SCAN_EXTS, include: opts.include, exclude: opts.exclude })
-    .filter((f) => !ctx.tokenFiles.has(f) && (opts.includeTests || !TEST_FILE.test(path.relative(root, f))));
+    .filter((f) => !ctx.tokenFiles.has(f) && !ctx.generated.has(f) && (opts.includeTests || !isTestPath(path.relative(root, f))));
   const findings = [];
   const usage = {};
   const texts = new Map();
   const noVarFiles = [];
+  const skipped = { generated: [...ctx.generated].map((f) => rel(f, root)), themeFiles: [] };
   for (const file of files) {
     let text;
-    try { text = fs.readFileSync(file, 'utf8'); } catch { continue; }
+    try { text = ctx.texts?.get(file) ?? fs.readFileSync(file, 'utf8'); } catch { continue; }
     if (text.includes('\u0000')) continue;
+    if (isGenerated(text)) { skipped.generated.push(rel(file, root)); continue; }
     texts.set(file, text);
     const res = extractFile(file, text, env);
+    if (res.themeFile) skipped.themeFiles.push({ file: rel(file, root), count: res.themeFile });
+    if (res.ignored) skipped.ignoredByComment = (skipped.ignoredByComment || 0) + res.ignored;
     if (res.noVar && res.findings.length) noVarFiles.push({ file: rel(file, root), reason: res.noVar, count: res.findings.length });
     if (!res.findings.length && !Object.keys(res.usage).length) continue;
     const pos = lineIndex(text);
+    const pkg = ctx.scopes.pkgOf(file);
+    const twv = ctx.twVersionFor(file);
     for (const f of res.findings) {
       const { line, col } = pos(f.start);
-      f.line = line; f.col = col; f.rel = rel(file, root);
+      f.line = line; f.col = col; f.rel = rel(file, root); f.pkg = pkg; f.twv = twv;
       findings.push(f);
     }
     for (const [k, v] of Object.entries(res.usage)) usage[k] = (usage[k] || 0) + v;
   }
   findings.sort((a, b) => a.rel.localeCompare(b.rel) || a.start - b.start);
   classify(findings, index, thresholds);
-  return { ...summarize({ root, target, ctx, files, findings, usage, thresholds, texts }), noVarFiles };
+  return { ...summarize({ root, target, ctx, files, findings, usage, thresholds, texts }), noVarFiles, skipped };
 }
 
 function summarize({ root, target, ctx, files, findings, usage, thresholds, texts }) {
   const counts = { EXACT: 0, NEAR: 0, 'OFF-SCALE': 0 };
   const fixable = { EXACT: 0, NEAR: 0 };
   const byCategory = {};
-  for (const cat of CATEGORIES) byCategory[cat] = { tokenized: usage[cat] || 0, raw: 0, EXACT: 0, NEAR: 0, 'OFF-SCALE': 0, score: 0 };
+  // categories the project has no token for at all can't be "tokenized": list them, don't score them
+  const tokenCats = new Set(ctx.tokens.filter((t) => !t.localFile).map((t) => t.category)); // a lone file-local $var doesn't make a scale
+  const untracked = {};
+  for (const cat of CATEGORIES) byCategory[cat] = { tokenized: usage[cat] || 0, raw: 0, EXACT: 0, NEAR: 0, 'OFF-SCALE': 0, score: 0, noTokens: ctx.tokens.length > 0 && !tokenCats.has(cat) };
   const files2 = new Map();
+  const jsLiterals = { EXACT: 0, NEAR: 0, 'OFF-SCALE': 0 };
+  const noVarCounts = { EXACT: 0, NEAR: 0, 'OFF-SCALE': 0 };
   for (const f of findings) {
+    const bc = byCategory[f.category];
+    // colors in plain JS strings usually feed canvas/charts/data: listed, never scored
+    if (f.context === 'js-literal') { f.excluded = 'js-literal'; jsLiterals[f.status]++; continue; }
+    // emails, OG images, React Native: they can't use CSS variables, so they aren't scored either
+    if (f.noVar) { f.excluded = 'no-var'; noVarCounts[f.status]++; continue; }
+    bc.raw++; bc[f.status]++;
+    if (bc.noTokens) { f.untracked = true; f.excluded = 'no-tokens'; untracked[f.category] = (untracked[f.category] || 0) + 1; continue; }
     counts[f.status]++;
     if (f.fix && f.status !== 'OFF-SCALE') fixable[f.status]++;
-    const bc = byCategory[f.category];
-    bc.raw++; bc[f.status]++;
     const e = files2.get(f.rel) || { file: f.rel, total: 0, EXACT: 0, NEAR: 0, 'OFF-SCALE': 0 };
     e.total++; e[f.status]++;
     files2.set(f.rel, e);
   }
-  for (const v of Object.values(byCategory)) v.score = v.raw + v.tokenized ? Math.round((v.tokenized / (v.raw + v.tokenized)) * 100) : 100;
-  const tokenized = Object.values(usage).reduce((a, b) => a + b, 0);
-  const raw = findings.length;
+  for (const v of Object.values(byCategory)) v.score = v.noTokens ? null : v.raw + v.tokenized ? Math.round((v.tokenized / (v.raw + v.tokenized)) * 100) : 100;
+  const scored = Object.values(byCategory).filter((v) => !v.noTokens);
+  const tokenized = scored.reduce((a, v) => a + v.tokenized, 0);
+  const raw = scored.reduce((a, v) => a + v.raw, 0);
   const score = raw + tokenized ? Math.round((tokenized / (raw + tokenized)) * 1000) / 10 : 100;
   return {
     root, target: rel(root) === '.' ? path.basename(root) + '/' : shown(root) + '/', generatedAt: new Date().toISOString(),
     fileCount: files.length, tokenCount: ctx.tokens.length, tokens: ctx.tokens,
-    sources: ctx.sources.map((s) => ({ ...s, file: s.file ? rel(s.file, root) : null })), tailwind: { ...ctx.tailwind, configFile: ctx.tailwind.configFile ? rel(ctx.tailwind.configFile, root) : null },
-    warnings: ctx.warnings, thresholds, score: Math.round(score), scoreExact: score, tokenized, raw, counts, fixable, byCategory,
+    sources: ctx.sources.map((s) => ({ ...s, file: s.file ? rel(s.file, root) : null })), tailwind: { ...ctx.tailwind, configFile: ctx.tailwind.configFile ? rel(ctx.tailwind.configFile, root) : null, configFiles: (ctx.tailwind.configFiles || []).map((f) => rel(f, root)) },
+    packages: ctx.scopes.pkgs.size, warnings: ctx.warnings, thresholds, score: Math.round(score), scoreExact: score, tokenized, raw, counts, fixable, byCategory, untracked, jsLiterals, noVarCounts,
     byFile: [...files2.values()].sort((a, b) => b.total - a.total || a.file.localeCompare(b.file)),
     findings, texts,
   };
@@ -152,7 +174,7 @@ export function applyFixes(r, { mode = 'exact', dryRun = false } = {}) {
       after = after.slice(0, f.fix.start) + f.fix.text + after.slice(f.fix.end);
       lastStart = f.fix.start;
       n++;
-      if (f.token.dark) themed.push(`${f.rel}:${f.line} ${f.display || f.value} → ${f.fix.text} (dark: ${f.token.dark})`);
+      if (f.token.dark || f.token.themes) themed.push(`${f.rel}:${f.line} ${f.display || f.value} → ${f.fix.text} (${f.token.dark ? 'dark: ' + f.token.dark : f.token.themes})`);
     }
     const balance = (s) => ['{}', '()', '[]'].map(([o, cl]) => s.split(o).length - s.split(cl).length).join(',');
     if (balance(before) !== balance(after) || before.split('\n').length !== after.split('\n').length) {
@@ -190,7 +212,9 @@ async function main() {
   const proposal = a.propose ? propose(r.findings, r.tokens, r.thresholds, { all: r.tokenCount === 0 }) : null;
   const md = writeReports(r, outDir, { proposal });
   r.written = { md: shown(path.join(outDir, 'report.md')) };
-  r.argTarget = target;
+  // carry the flags that change what is scanned into the suggested next command
+  const passOn = [...(a.tokens || []).map((t) => `--tokens ${t}`), ...(a.include || []).map((g) => `--include "${g}"`), ...(a.exclude || []).map((g) => `--exclude "${g}"`), a['exec-config'] ? '--exec-config' : '', a['json-vars'] ? '--json-vars' : ''].filter(Boolean).join(' ');
+  r.argTarget = target + (passOn ? ' ' + passOn : '');
   const scriptRel = shown(path.join(here, 'scan.mjs'));
   const quietStdout = a.json || a.md;
 
@@ -201,7 +225,7 @@ async function main() {
       if (!quietStdout) {
         console.log(res.diff || c.dim('(no changes)'));
         console.log(`${c.bold('Dry run')}: ${plural(res.edits, 'value')} in ${plural(res.files.length, 'file')} would be rewritten (${fixMode === 'near' ? 'EXACT + NEAR' : 'EXACT only'}). Nothing was changed.`);
-        console.log(c.dim(`Diff saved to ${shown(path.join(outDir, 'fix.diff'))}. Apply with: node ${scriptRel} ${target} --fix${fixMode === 'near' ? '=near' : ''}`));
+        console.log(c.dim(`Diff saved to ${shown(path.join(outDir, 'fix.diff'))}. Apply with: node ${scriptRel} ${r.argTarget} --fix${fixMode === 'near' ? '=near' : ''}`));
       }
     } else {
       const after = await scan(target, opts);
